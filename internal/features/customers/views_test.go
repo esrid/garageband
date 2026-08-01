@@ -6,6 +6,7 @@ import (
 	"html"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 )
@@ -158,5 +159,155 @@ func TestVehicleLabelHandlesMissingParts(t *testing.T) {
 	// A vehicle can exist before its plate is known, e.g. created from a call.
 	if got := (Vehicle{Model: "Renault Clio"}).Label(); got != "Renault Clio" {
 		t.Errorf("model only = %q", got)
+	}
+}
+
+func profileFixture() Profile {
+	return Profile{
+		Organization: "Garage Central",
+		Customer: Customer{
+			ID: "c1", FirstName: "Claire", LastName: "Dupont",
+			Phone: "+33472000000", Email: "claire@example.fr",
+			HomeLocationName: "Atelier Gerland",
+		},
+		CanEdit: true,
+		Vehicles: []ProfileVehicle{{
+			ID: "v1", Plate: "AB-123-CD", Make: "Renault", Model: "Clio",
+			Year: 2019, VIN: "VF1RJA00012345678",
+		}},
+		Timeline: []Event{{
+			ID: "r1", Kind: EventRepair, At: time.Date(2026, 3, 12, 9, 0, 0, 0, time.UTC),
+			Title: "Remplacement plaquettes avant", VehicleLabel: "AB-123-CD",
+			Status: "completed", LocationName: "Atelier Gerland", AuthoredHere: true,
+			AmountCents: 148050, Currency: "EUR",
+		}},
+	}
+}
+
+func TestProfileShowsIdentityVehiclesAndHistory(t *testing.T) {
+	page := render(t, Show(profileFixture()))
+	mustContain(t, page,
+		"Claire Dupont", "+33472000000", "Atelier Gerland",
+		"Véhicules", "AB-123-CD", "Renault Clio · 2019", "VF1RJA00012345678",
+		"Historique", "Remplacement plaquettes avant",
+		"Réparation", "Terminée", "12 mars 2026",
+		`href="/customers"`,
+	)
+	// The dossier is ours, so no shared-read banner.
+	mustNotContain(t, page, "Dossier partagé, en lecture", "Partagé avec vous")
+}
+
+// The sharing rule only means something if the screen says what you may touch.
+func TestProfileOfASharedDossierExplainsTheLimits(t *testing.T) {
+	profile := profileFixture()
+	profile.CanEdit = false
+	profile.Customer.Shared = true
+	profile.Customer.HomeLocationName = "Atelier Vaise"
+	profile.Timeline[0].AuthoredHere = false
+	profile.Timeline[0].LocationName = "Atelier Vaise"
+	page := render(t, Show(profile))
+	mustContain(t, page,
+		"Partagé avec vous", "Dossier partagé, en lecture",
+		"vous pouvez y ajouter votre propre travail",
+		"Atelier Vaise", "Autre site, en lecture",
+	)
+}
+
+func TestProfileEmptySections(t *testing.T) {
+	page := render(t, Show(Profile{
+		Organization: "Garage Central", CanEdit: true,
+		Customer: Customer{ID: "c1", LastName: "Dupont"},
+	}))
+	mustContain(t, page,
+		"Aucun véhicule enregistré pour ce client.",
+		"Aucun rendez-vous ni réparation pour l'instant.",
+	)
+	// The memories section disappears entirely rather than showing a stub.
+	mustNotContain(t, page, "Ce que l'agent a retenu")
+}
+
+func TestProfileMemoriesAreShownWithTheirStanding(t *testing.T) {
+	profile := profileFixture()
+	profile.Memories = []Memory{
+		{Key: "Véhicule de courtoisie", Value: "En demande systématiquement", Status: "active", Confidence: 0.92},
+		{Key: "Horaires", Value: "Préfère le matin", Status: "superseded", Confidence: 0.4},
+		{Key: "Adresse", Value: "Ancienne adresse", Status: "rejected"},
+	}
+	page := render(t, Show(profile))
+	mustContain(t, page,
+		"Ce que l'agent a retenu", "À vérifier avant de s'en servir",
+		"Véhicule de courtoisie", "Retenu", "Confiance élevée",
+		"Remplacé", "Confiance faible", "Écarté",
+	)
+	// A missing score must not read as "no confidence".
+	if strings.Count(page, "Confiance") != 2 {
+		t.Errorf("confidence labels = %d, want 2", strings.Count(page, "Confiance"))
+	}
+}
+
+func TestFormatAmountFollowsFrenchTypography(t *testing.T) {
+	// The separators are non-breaking spaces on purpose: French typography puts
+	// one before the currency symbol and between thousands, and neither may wrap.
+	cases := map[int]string{
+		148050:  "1\u00a0480,50\u00a0€",
+		999:     "9,99\u00a0€",
+		100:     "1,00\u00a0€",
+		5:       "0,05\u00a0€",
+		1234567: "12\u00a0345,67\u00a0€",
+		0:       "", // nothing to show rather than a misleading 0,00 €
+	}
+	for cents, want := range cases {
+		if got := formatAmount(cents, "EUR"); got != want {
+			t.Errorf("formatAmount(%d) = %q, want %q", cents, got, want)
+		}
+	}
+	if got := formatAmount(1000, "CHF"); got != "10,00\u00a0CHF" {
+		t.Errorf("non-euro = %q", got)
+	}
+}
+
+func TestFormatDateIsFrenchAndSurvivesAZeroTime(t *testing.T) {
+	if got := formatDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)); got != "1 août 2026" {
+		t.Errorf("formatDate() = %q", got)
+	}
+	if got := formatDate(time.Time{}); got != "Date inconnue" {
+		t.Errorf("zero time = %q", got)
+	}
+}
+
+func TestEventLabelsCoverBothKinds(t *testing.T) {
+	repair := Event{Kind: EventRepair, Status: "awaiting_approval"}
+	if got := eventStatusLabel(repair); got != "En attente d'accord" {
+		t.Errorf("repair status = %q", got)
+	}
+	appointment := Event{Kind: EventAppointment, Status: "no_show"}
+	if got := eventStatusLabel(appointment); got != "Non venu" {
+		t.Errorf("appointment status = %q", got)
+	}
+	// "in_progress" exists for both and must not be mistranslated by kind.
+	if eventStatusLabel(Event{Kind: EventRepair, Status: "in_progress"}) != "En cours" ||
+		eventStatusLabel(Event{Kind: EventAppointment, Status: "in_progress"}) != "En cours" {
+		t.Error("in_progress should read the same for both kinds")
+	}
+	// An unknown status shows through rather than vanishing.
+	if got := eventStatusLabel(Event{Kind: EventRepair, Status: "surprise"}); got != "surprise" {
+		t.Errorf("unknown status = %q", got)
+	}
+	// A record with no description still renders a line.
+	if got := eventTitle(Event{Kind: EventRepair}); got != "Réparation" {
+		t.Errorf("empty title = %q", got)
+	}
+}
+
+func TestProfileVehicleLabelHandlesSparseData(t *testing.T) {
+	if got := (ProfileVehicle{Make: "Renault", Model: "Clio", Year: 2019}).Label(); got != "Renault Clio · 2019" {
+		t.Errorf("full = %q", got)
+	}
+	if got := (ProfileVehicle{Make: "Renault"}).Label(); got != "Renault" {
+		t.Errorf("make only = %q", got)
+	}
+	// A vehicle created from a plate lookup can have nothing else yet.
+	if got := (ProfileVehicle{Plate: "AB-123-CD"}).Label(); got != "Véhicule sans description" {
+		t.Errorf("plate only = %q", got)
 	}
 }
