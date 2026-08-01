@@ -245,6 +245,190 @@ func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
 	}
 }
 
+func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "catalog-schedule-owner@example.com")
+	memberID := createUser(t, fixtures, "catalog-schedule-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	store := locations.NewStore(runtime)
+	location, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier catalogue", CountryCode: "FR", Timezone: "Europe/Paris",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherLocation, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier secondaire", CountryCode: "FR", Timezone: "Europe/Paris",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var catalogItemID string
+	if err := fixtures.QueryRow(`
+		INSERT INTO catalog_items (
+		    tenant_id, kind, reference, name, description, price_kind,
+		    amount_cents, tax_basis, vat_basis_points, duration_minutes,
+		    location_scope, created_by_user_id, updated_by_user_id
+		) VALUES ($1, 'service', 'REV-01', 'Révision catalogue', 'Vidange et contrôles',
+		          'fixed', 12900, 'incl', 2000, 60, 'all', $2, $2)
+		RETURNING id::text`, tenantID, ownerID).Scan(&catalogItemID); err != nil {
+		t.Fatal(err)
+	}
+
+	schedule, err := store.Schedule(t.Context(), tenantID, ownerID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(schedule.CatalogItems) != 1 || schedule.CatalogItems[0].ID != catalogItemID {
+		t.Fatalf("catalog scheduling candidates = %#v", schedule.CatalogItems)
+	}
+	serviceID, err := store.LinkCatalogService(t.Context(), tenantID, ownerID, location.ID, catalogItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LinkCatalogService(t.Context(), tenantID, memberID, location.ID, catalogItemID); !errors.Is(err, locations.ErrForbidden) {
+		t.Fatalf("member link service = %v, want ErrForbidden", err)
+	}
+
+	var name string
+	var duration, price int
+	var active bool
+	if err := fixtures.QueryRow(`
+		SELECT name, duration_minutes, price_cents, active
+		FROM service_offerings WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID,
+	).Scan(&name, &duration, &price, &active); err != nil {
+		t.Fatal(err)
+	}
+	if name != "Révision catalogue" || duration != 60 || price != 12900 || !active {
+		t.Fatalf("linked service = name %q duration %d price %d active %v", name, duration, price, active)
+	}
+
+	// Linked fields cannot drift even through a direct SQL write.
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(), `
+			UPDATE service_offerings
+			SET name = 'Nom divergent', duration_minutes = 5, price_cents = 1, active = FALSE
+			WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(), `
+			UPDATE catalog_items
+			SET name = 'Révision synchronisée', duration_minutes = 75,
+			    price_kind = 'range', amount_cents = 13900, max_amount_cents = 16900,
+			    updated_by_user_id = $2
+			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var nullablePrice sql.NullInt64
+	if err := fixtures.QueryRow(`
+		SELECT name, duration_minutes, price_cents, active
+		FROM service_offerings WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID,
+	).Scan(&name, &duration, &nullablePrice, &active); err != nil {
+		t.Fatal(err)
+	}
+	if name != "Révision synchronisée" || duration != 75 || nullablePrice.Valid || !active {
+		t.Fatalf("synchronized service = name %q duration %d price %#v active %v", name, duration, nullablePrice, active)
+	}
+
+	if err := store.SetCatalogServiceEnabled(t.Context(), tenantID, ownerID, location.ID, serviceID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(), `
+			UPDATE catalog_items SET name = 'Révision toujours liée', updated_by_user_id = $2
+			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active {
+		t.Fatal("catalog refresh unexpectedly re-enabled a manually disabled service")
+	}
+	schedule, err = store.Schedule(t.Context(), tenantID, ownerID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(schedule.CatalogItems) != 1 || schedule.CatalogItems[0].ID != catalogItemID {
+		t.Fatalf("disabled service candidate = %#v", schedule.CatalogItems)
+	}
+	if _, err := store.LinkCatalogService(t.Context(), tenantID, ownerID, location.ID, catalogItemID); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `
+			UPDATE catalog_items
+			SET archived_at = now(), archived_by_user_id = $2, updated_by_user_id = $2
+			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID); err != nil {
+			return err
+		}
+		if err := tx.QueryRowContext(t.Context(), `
+			SELECT active FROM service_offerings WHERE tenant_id = $1 AND id = $2`,
+			tenantID, serviceID,
+		).Scan(&active); err != nil {
+			return err
+		}
+		if active {
+			return errors.New("archived catalog item left service active")
+		}
+		_, err := tx.ExecContext(t.Context(), `
+			UPDATE catalog_items
+			SET archived_at = NULL, archived_by_user_id = NULL, updated_by_user_id = $2
+			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if !active {
+		t.Fatal("restored catalog item did not reactivate its enabled service")
+	}
+
+	// Removing this site from the catalog scope preserves the link and history,
+	// but PostgreSQL makes it non-bookable immediately.
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `
+			UPDATE catalog_items SET location_scope = 'selected', updated_by_user_id = $2
+			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `
+			INSERT INTO catalog_item_locations (tenant_id, catalog_item_id, location_id)
+			VALUES ($1, $2, $3)`, tenantID, catalogItemID, otherLocation.ID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active {
+		t.Fatal("out-of-scope catalog service remained active")
+	}
+	if err := store.SetCatalogServiceEnabled(t.Context(), tenantID, ownerID, location.ID, serviceID, true); !errors.Is(err, locations.ErrCatalogServiceUnavailable) {
+		t.Fatalf("re-enable out-of-scope service = %v, want ErrCatalogServiceUnavailable", err)
+	}
+
+	schedule, err = store.Schedule(t.Context(), tenantID, ownerID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(schedule.Services) != 1 || schedule.Services[0].CatalogAvailable || schedule.Services[0].Active {
+		t.Fatalf("out-of-scope schedule = %#v", schedule.Services)
+	}
+}
+
 func createUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var userID string

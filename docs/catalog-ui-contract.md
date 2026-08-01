@@ -1,8 +1,10 @@
 # Catalog UI and HTTP contract
 
 The `catalog` feature is the organization-owned source of truth for prices that
-an AI agent may quote. `service_offerings` remains the scheduling contract until
-the service-administration slice deliberately links the two concepts.
+an AI agent may quote. A service or package with a duration can be linked to a
+location's `service_offerings` scheduling contract from that location's schedule
+screen; the features remain separate packages and share only the database
+contract.
 
 ## Routes
 
@@ -90,3 +92,18 @@ currently effective, non-archived matching items. It never returns an expired,
 future, wrong-location, or inaccessible price. Future telephone and internal
 assistant tools must call this contract rather than querying catalog tables or
 inventing a fallback amount.
+
+## Scheduling link contract
+
+An owner/admin may make an active service or package with a duration bookable
+at any location covered by the catalog item's scope. PostgreSQL synchronizes the
+linked scheduling name, description, duration, currency, and fixed amount after
+manual edits, import publication, and rollback. Non-fixed prices deliberately
+leave `service_offerings.price_cents` null; `catalog_item_id` is the durable
+price provenance and the catalog remains the quotation source.
+
+Disabling a link preserves the scheduling row, appointments, resource rules,
+and provenance. Archiving the item, removing the duration, changing it to an
+unsupported kind, or removing the location from its scope also makes the link
+non-bookable. Restoring catalog eligibility reactivates only links the garage
+did not explicitly disable.

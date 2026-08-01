@@ -23,6 +23,8 @@ permissions — everything below is what the handler owes them.
 | `POST` | `/locations/{id}/schedule/resources/{resourceID}/active` | activate/deactivate capacity without deleting history |
 | `POST` | `/locations/{id}/schedule/requirements` | upsert one resource kind/quantity required by a service |
 | `POST` | `/locations/{id}/schedule/requirements/delete` | return that service kind to manual selection |
+| `POST` | `/locations/{id}/schedule/services` | make one eligible catalog service/package bookable at this site |
+| `POST` | `/locations/{id}/schedule/services/{serviceID}/active` | enable/disable a catalog scheduling link without deleting history |
 | `POST` | `/locations/{id}/deactivate` | `Store.SetStatus(..., "inactive")` |
 | `POST` | `/locations/{id}/reactivate` | `Store.SetStatus(..., "active")` |
 
@@ -57,6 +59,14 @@ reservation cannot be deactivated, and a new/upscaled requirement cannot
 invalidate future appointments. Services without requirements retain explicit
 manual resource selection; services with at least one requirement are allocated
 automatically by the agenda store.
+
+The capacity section also connects catalog services/packages that have a
+duration and apply to this location. Linked name, description, duration,
+currency, and fixed price mirror the catalog in PostgreSQL. Range, “from”, and
+quote-only prices keep a null scheduling amount and retain `catalog_item_id` as
+their explicit provenance. Catalog archive/scope/kind/duration changes can make
+a link non-bookable; a garage's explicit disable remains disabled across later
+catalog edits.
 
 ## Filling IndexPage
 

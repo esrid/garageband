@@ -312,6 +312,9 @@ These are database contracts and ports, not working provider integrations.
   availability counts free capacity and booking atomically assigns a valid set
   without browser-provided resource ids. Deferred constraints reject
   under-allocated direct writes.
+- Catalog services/packages with a duration can be enabled per location. Their
+  scheduling name, duration, eligibility, and fixed-price projection stay
+  synchronized in PostgreSQL while the catalog id preserves price provenance.
 - PostgreSQL prevents overlapping weekly opening windows, bookings outside a
   configured schedule, bookings during closures, and closures over active
   bookings; weekdays without a window are closed once a schedule exists.
@@ -416,8 +419,6 @@ These are database contracts and ports, not working provider integrations.
 
 ### Scheduling and calendars
 
-- Link published catalog services to per-location scheduling services, keeping
-  duration, active state, and price provenance synchronized.
 - Google Calendar OAuth connection and synchronization.
 - Idempotent external event creation and reconciliation.
 - Rescheduling, cancellation, no-show, reminders, and confirmation workflows.
@@ -537,9 +538,9 @@ These are recommendations, not accepted scope:
    staging, confirmed publication, safe rollback, and quotable-price contract
    exist before an agent is allowed to answer pricing questions.
 4. **Partially complete:** appointment CRUD, schedule/capacity administration,
-   working-time enforcement, closures, and automatic multi-resource allocation
-   are implemented; connect catalog services to scheduling before an external
-   calendar.
+   working-time enforcement, closures, automatic multi-resource allocation,
+   and catalog-backed scheduling services are implemented; add the external
+   calendar connection and idempotent synchronization next.
 5. Implement the internal operations chat using explicit, authorized tools and
    fake model adapters.
 6. Add Google Calendar synchronization.

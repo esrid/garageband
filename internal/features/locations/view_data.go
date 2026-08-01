@@ -18,31 +18,33 @@ const StatusActive = "active"
 // constants are the single source of truth for what a handler must parse and
 // for the keys used in FieldErrors.
 const (
-	FieldName                = "name"
-	FieldSIRET               = "siret"
-	FieldAddressLine1        = "address_line1"
-	FieldAddressLine2        = "address_line2"
-	FieldPostalCode          = "postal_code"
-	FieldCity                = "city"
-	FieldCountry             = "country_code"
-	FieldTimezone            = "timezone"
-	FieldEmail               = "email"
-	FieldPhone               = "phone"
-	FieldWebsite             = "website"
-	FieldWeekday             = "weekday"
-	FieldOpensAt             = "opens_at"
-	FieldClosesAt            = "closes_at"
-	FieldClosureStartDate    = "closure_start_date"
-	FieldClosureStartTime    = "closure_start_time"
-	FieldClosureEndDate      = "closure_end_date"
-	FieldClosureEndTime      = "closure_end_time"
-	FieldClosureReason       = "closure_reason"
-	FieldResourceName        = "resource_name"
-	FieldResourceKind        = "resource_kind"
-	FieldResourceActive      = "resource_active"
-	FieldRequirementService  = "requirement_service_id"
-	FieldRequirementKind     = "requirement_kind"
-	FieldRequirementQuantity = "requirement_quantity"
+	FieldName                 = "name"
+	FieldSIRET                = "siret"
+	FieldAddressLine1         = "address_line1"
+	FieldAddressLine2         = "address_line2"
+	FieldPostalCode           = "postal_code"
+	FieldCity                 = "city"
+	FieldCountry              = "country_code"
+	FieldTimezone             = "timezone"
+	FieldEmail                = "email"
+	FieldPhone                = "phone"
+	FieldWebsite              = "website"
+	FieldWeekday              = "weekday"
+	FieldOpensAt              = "opens_at"
+	FieldClosesAt             = "closes_at"
+	FieldClosureStartDate     = "closure_start_date"
+	FieldClosureStartTime     = "closure_start_time"
+	FieldClosureEndDate       = "closure_end_date"
+	FieldClosureEndTime       = "closure_end_time"
+	FieldClosureReason        = "closure_reason"
+	FieldResourceName         = "resource_name"
+	FieldResourceKind         = "resource_kind"
+	FieldResourceActive       = "resource_active"
+	FieldRequirementService   = "requirement_service_id"
+	FieldRequirementKind      = "requirement_kind"
+	FieldRequirementQuantity  = "requirement_quantity"
+	FieldCatalogItem          = "catalog_item_id"
+	FieldCatalogServiceActive = "catalog_service_active"
 )
 
 // Notice kinds. The view derives the heading from the kind, so French copy
@@ -96,11 +98,13 @@ type SchedulePage struct {
 	Closures          []Closure
 	Resources         []WorkshopResource
 	Services          []SchedulingService
+	CatalogItems      []CatalogSchedulingItem
 	CanManage         bool
 	HourValues        OpeningHourInput
 	ClosureValues     ClosureInput
 	ResourceValues    ResourceInput
 	RequirementValues RequirementInput
+	CatalogItemValue  string
 	FieldErrors       map[string]string
 	Notice            Notice
 }
@@ -244,6 +248,44 @@ func resourceActionLabel(active bool) string {
 		return "Désactiver"
 	}
 	return "Réactiver"
+}
+
+func schedulingStatusLabel(active bool) string {
+	if active {
+		return "Réservable"
+	}
+	return "Non réservable"
+}
+
+func schedulingActionLabel(active bool) string {
+	if active {
+		return "Désactiver"
+	}
+	return "Activer"
+}
+
+func catalogPriceLabel(price CatalogPrice) string {
+	var amount string
+	switch price.Kind {
+	case "fixed":
+		amount = centsLabel(price.AmountCents)
+	case "from":
+		amount = "À partir de " + centsLabel(price.AmountCents)
+	case "range":
+		amount = centsLabel(price.AmountCents) + " à " + centsLabel(price.MaxAmountCents)
+	case "quote":
+		return "Sur devis"
+	default:
+		return "Prix du catalogue indisponible"
+	}
+	if price.TaxBasis == "excl" {
+		return amount + " HT"
+	}
+	return amount + " TTC"
+}
+
+func centsLabel(cents int64) string {
+	return fmt.Sprintf("%d,%02d €", cents/100, cents%100)
 }
 
 func weekdayNumber(option Option) int {

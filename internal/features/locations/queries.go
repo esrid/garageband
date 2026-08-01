@@ -11,6 +11,8 @@ import (
 
 var ErrForbidden = errors.New("location management is forbidden")
 
+var ErrCatalogServiceUnavailable = errors.New("catalog service is not schedulable at this location")
+
 // Location is the persistence model for a physical garage site.
 type Location struct {
 	ID           string
@@ -73,6 +75,7 @@ type Schedule struct {
 	Closures     []Closure
 	Resources    []WorkshopResource
 	Services     []SchedulingService
+	CatalogItems []CatalogSchedulingItem
 	CanManage    bool
 }
 
@@ -89,10 +92,32 @@ type ServiceRequirement struct {
 }
 
 type SchedulingService struct {
-	ID           string
-	Name         string
-	Duration     int
-	Requirements []ServiceRequirement
+	ID                 string
+	Name               string
+	Duration           int
+	Active             bool
+	CatalogItemID      string
+	CatalogReference   string
+	CatalogLinkEnabled bool
+	CatalogAvailable   bool
+	Price              CatalogPrice
+	Requirements       []ServiceRequirement
+}
+
+type CatalogSchedulingItem struct {
+	ID        string
+	Name      string
+	Reference string
+	Duration  int
+	Price     CatalogPrice
+}
+
+type CatalogPrice struct {
+	Kind           string
+	AmountCents    int64
+	MaxAmountCents int64
+	TaxBasis       string
+	VATBasisPoints int
 }
 
 type ResourceInput struct {
@@ -233,38 +258,212 @@ func (s *Store) Schedule(
 
 		serviceRows, err := tx.QueryContext(ctx, `
 			SELECT service.id::text, service.name, service.duration_minutes,
-			       requirement.resource_kind, requirement.quantity
+			       service.active, COALESCE(service.catalog_item_id::text, ''),
+			       service.catalog_link_enabled, COALESCE(item.reference, ''),
+			       COALESCE(item.price_kind, ''), COALESCE(item.amount_cents, 0),
+			       COALESCE(item.max_amount_cents, 0), COALESCE(item.tax_basis, ''),
+			       COALESCE(item.vat_basis_points, 0),
+			       COALESCE(
+			           item.archived_at IS NULL
+			           AND item.kind IN ('service', 'package')
+			           AND item.duration_minutes IS NOT NULL
+			           AND (
+			               item.location_scope = 'all'
+			               OR EXISTS (
+			                   SELECT 1 FROM catalog_item_locations item_location
+			                   WHERE item_location.tenant_id = item.tenant_id
+			                     AND item_location.catalog_item_id = item.id
+			                     AND item_location.location_id = service.location_id
+			               )
+			           ), FALSE
+			       ), requirement.resource_kind, requirement.quantity
 			FROM service_offerings service
+			LEFT JOIN catalog_items item
+			  ON item.tenant_id = service.tenant_id
+			 AND item.id = service.catalog_item_id
 			LEFT JOIN service_resource_requirements requirement
 			  ON requirement.tenant_id = service.tenant_id
 			 AND requirement.service_id = service.id
-			WHERE service.tenant_id = $1 AND service.location_id = $2 AND service.active
-			ORDER BY service.name, service.id, requirement.resource_kind`, tenantID, locationID)
+			WHERE service.tenant_id = $1 AND service.location_id = $2
+			  AND (service.active OR service.catalog_item_id IS NOT NULL)
+			ORDER BY service.active DESC, service.name, service.id, requirement.resource_kind`, tenantID, locationID)
 		if err != nil {
 			return err
 		}
 		serviceIndexes := make(map[string]int)
 		for serviceRows.Next() {
-			var id, name string
-			var duration int
+			var service SchedulingService
 			var kind sql.NullString
 			var quantity sql.NullInt64
-			if err := serviceRows.Scan(&id, &name, &duration, &kind, &quantity); err != nil {
+			if err := serviceRows.Scan(
+				&service.ID, &service.Name, &service.Duration, &service.Active,
+				&service.CatalogItemID, &service.CatalogLinkEnabled,
+				&service.CatalogReference, &service.Price.Kind,
+				&service.Price.AmountCents, &service.Price.MaxAmountCents,
+				&service.Price.TaxBasis, &service.Price.VATBasisPoints,
+				&service.CatalogAvailable, &kind, &quantity,
+			); err != nil {
 				return errors.Join(err, serviceRows.Close())
 			}
-			index, exists := serviceIndexes[id]
+			index, exists := serviceIndexes[service.ID]
 			if !exists {
 				index = len(schedule.Services)
-				serviceIndexes[id] = index
-				schedule.Services = append(schedule.Services, SchedulingService{ID: id, Name: name, Duration: duration})
+				serviceIndexes[service.ID] = index
+				schedule.Services = append(schedule.Services, service)
 			}
 			if kind.Valid {
 				schedule.Services[index].Requirements = append(schedule.Services[index].Requirements, ServiceRequirement{Kind: kind.String, Quantity: int(quantity.Int64)})
 			}
 		}
-		return errors.Join(serviceRows.Err(), serviceRows.Close())
+		if err := errors.Join(serviceRows.Err(), serviceRows.Close()); err != nil {
+			return err
+		}
+
+		if !schedule.CanManage {
+			return nil
+		}
+		catalogRows, err := tx.QueryContext(ctx, `
+			SELECT item.id::text, item.name, COALESCE(item.reference, ''),
+			       item.duration_minutes, item.price_kind,
+			       COALESCE(item.amount_cents, 0), COALESCE(item.max_amount_cents, 0),
+			       item.tax_basis, item.vat_basis_points
+			FROM catalog_items item
+			WHERE item.tenant_id = $1
+			  AND item.archived_at IS NULL
+			  AND item.kind IN ('service', 'package')
+			  AND item.duration_minutes IS NOT NULL
+			  AND (
+			      item.location_scope = 'all'
+			      OR EXISTS (
+			          SELECT 1 FROM catalog_item_locations item_location
+			          WHERE item_location.tenant_id = item.tenant_id
+			            AND item_location.catalog_item_id = item.id
+			            AND item_location.location_id = $2
+			      )
+			  )
+			  AND NOT EXISTS (
+			      SELECT 1 FROM service_offerings service
+			      WHERE service.tenant_id = item.tenant_id
+			        AND service.location_id = $2
+			        AND service.catalog_item_id = item.id
+			        AND service.catalog_link_enabled
+			  )
+			ORDER BY item.name, item.id`, tenantID, locationID)
+		if err != nil {
+			return err
+		}
+		for catalogRows.Next() {
+			var item CatalogSchedulingItem
+			if err := catalogRows.Scan(
+				&item.ID, &item.Name, &item.Reference, &item.Duration,
+				&item.Price.Kind, &item.Price.AmountCents, &item.Price.MaxAmountCents,
+				&item.Price.TaxBasis, &item.Price.VATBasisPoints,
+			); err != nil {
+				return errors.Join(err, catalogRows.Close())
+			}
+			schedule.CatalogItems = append(schedule.CatalogItems, item)
+		}
+		return errors.Join(catalogRows.Err(), catalogRows.Close())
 	})
 	return schedule, err
+}
+
+func (s *Store) LinkCatalogService(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	catalogItemID string,
+) (id string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO service_offerings (
+			    tenant_id, location_id, code, name, description,
+			    duration_minutes, price_cents, currency, active,
+			    catalog_item_id, catalog_link_enabled
+			)
+			SELECT item.tenant_id, location.id,
+			       'catalog-' || replace(item.id::text, '-', ''),
+			       item.name, item.description, item.duration_minutes,
+			       CASE WHEN item.price_kind = 'fixed' THEN item.amount_cents END,
+			       item.currency, TRUE, item.id, TRUE
+			FROM catalog_items item
+			JOIN locations location
+			  ON location.tenant_id = item.tenant_id AND location.id = $2
+			WHERE item.tenant_id = $1 AND item.id = $3
+			  AND item.archived_at IS NULL
+			  AND item.kind IN ('service', 'package')
+			  AND item.duration_minutes IS NOT NULL
+			  AND (
+			      item.location_scope = 'all'
+			      OR EXISTS (
+			          SELECT 1 FROM catalog_item_locations item_location
+			          WHERE item_location.tenant_id = item.tenant_id
+			            AND item_location.catalog_item_id = item.id
+			            AND item_location.location_id = location.id
+			      )
+			  )
+			ON CONFLICT (tenant_id, location_id, catalog_item_id)
+			    WHERE catalog_item_id IS NOT NULL
+			DO UPDATE SET catalog_link_enabled = TRUE
+			RETURNING id::text`, tenantID, locationID, catalogItemID).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCatalogServiceUnavailable
+		}
+		return err
+	})
+	return id, err
+}
+
+func (s *Store) SetCatalogServiceEnabled(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	serviceID string,
+	enabled bool,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			UPDATE service_offerings service
+			SET catalog_link_enabled = $4
+			WHERE service.tenant_id = $1 AND service.location_id = $2
+			  AND service.id = $3 AND service.catalog_item_id IS NOT NULL
+			  AND (
+			      NOT $4
+			      OR EXISTS (
+			          SELECT 1 FROM catalog_items item
+			          WHERE item.tenant_id = service.tenant_id
+			            AND item.id = service.catalog_item_id
+			            AND item.archived_at IS NULL
+			            AND item.kind IN ('service', 'package')
+			            AND item.duration_minutes IS NOT NULL
+			            AND (
+			                item.location_scope = 'all'
+			                OR EXISTS (
+			                    SELECT 1 FROM catalog_item_locations item_location
+			                    WHERE item_location.tenant_id = item.tenant_id
+			                      AND item_location.catalog_item_id = item.id
+			                      AND item_location.location_id = service.location_id
+			                )
+			            )
+			      )
+			  )`, tenantID, locationID, serviceID, enabled)
+		if err != nil {
+			return err
+		}
+		if err := exactlyOne(result); errors.Is(err, sql.ErrNoRows) && enabled {
+			return ErrCatalogServiceUnavailable
+		} else {
+			return err
+		}
+	})
 }
 
 func (s *Store) AddResource(

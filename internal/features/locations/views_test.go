@@ -226,10 +226,20 @@ func TestScheduleViewSeparatesWeeklyHoursAndClosures(t *testing.T) {
 		Organization: "Garage Central",
 		Location:     Location{ID: "loc-1", Name: "Atelier Gerland", Timezone: "Europe/Paris"},
 		Enabled:      true, CanManage: true,
-		OpeningHours:      []OpeningHour{{Weekday: 1, OpensAt: "08:00", ClosesAt: "12:00"}, {Weekday: 1, OpensAt: "14:00", ClosesAt: "18:00"}},
-		Closures:          []Closure{{ID: "closure-1", StartsAt: time.Date(2030, 8, 12, 10, 0, 0, 0, time.UTC), EndsAt: time.Date(2030, 8, 12, 12, 0, 0, 0, time.UTC), Reason: "Réunion"}},
-		Resources:         []WorkshopResource{{ID: "resource-1", Kind: "technician", Name: "Alice", Active: true}},
-		Services:          []SchedulingService{{ID: "service-1", Name: "Diagnostic", Duration: 45, Requirements: []ServiceRequirement{{Kind: "technician", Quantity: 1}}}},
+		OpeningHours: []OpeningHour{{Weekday: 1, OpensAt: "08:00", ClosesAt: "12:00"}, {Weekday: 1, OpensAt: "14:00", ClosesAt: "18:00"}},
+		Closures:     []Closure{{ID: "closure-1", StartsAt: time.Date(2030, 8, 12, 10, 0, 0, 0, time.UTC), EndsAt: time.Date(2030, 8, 12, 12, 0, 0, 0, time.UTC), Reason: "Réunion"}},
+		Resources:    []WorkshopResource{{ID: "resource-1", Kind: "technician", Name: "Alice", Active: true}},
+		Services: []SchedulingService{{
+			ID: "service-1", Name: "Diagnostic", Duration: 45, Active: true,
+			CatalogItemID: "catalog-1", CatalogReference: "DIAG-01",
+			CatalogLinkEnabled: true, CatalogAvailable: true,
+			Price:        CatalogPrice{Kind: "fixed", AmountCents: 8900, TaxBasis: "incl"},
+			Requirements: []ServiceRequirement{{Kind: "technician", Quantity: 1}},
+		}},
+		CatalogItems: []CatalogSchedulingItem{{
+			ID: "catalog-2", Name: "Vidange", Duration: 30,
+			Price: CatalogPrice{Kind: "from", AmountCents: 5900, TaxBasis: "incl"},
+		}},
 		HourValues:        OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "18:00"},
 		ClosureValues:     ClosureInput{StartsDate: "2030-08-12", StartsTime: "10:00", EndsDate: "2030-08-12", EndsTime: "12:00"},
 		ResourceValues:    ResourceInput{Kind: "technician"},
@@ -239,6 +249,7 @@ func TestScheduleViewSeparatesWeeklyHoursAndClosures(t *testing.T) {
 		"Horaires hebdomadaires", "Lundi", "08:00–12:00", "14:00–18:00",
 		"Fermetures exceptionnelles", "Réunion", "Ajouter la plage", "Ajouter la fermeture",
 		"Capacité de l’atelier", "Alice", "Diagnostic", "1 × Technicien",
+		"Prestations réservables", "89,00 € TTC", "DIAG-01", "Vidange · 30 min · À partir de 59,00 € TTC",
 		"/locations/loc-1/schedule/hours", "/locations/loc-1/schedule/closures",
 	)
 }

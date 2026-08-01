@@ -499,6 +499,72 @@ templ ScheduleView(page SchedulePage) {
 					</div>
 					<div class="divider my-0"></div>
 					<div class="grid gap-3">
+						<div class="grid gap-1">
+							<h3 class="text-sm font-semibold">Prestations réservables</h3>
+							<p class="text-sm opacity-70">Le nom, la durée et le prix restent pilotés par le catalogue. Désactiver ici conserve les rendez-vous et l’historique.</p>
+						</div>
+						if len(page.Services) == 0 {
+							<p class="text-sm opacity-60">Aucune prestation n’est encore réservable dans ce site.</p>
+						} else {
+							<ul class="grid gap-2 sm:grid-cols-2">
+								for _, service := range page.Services {
+									<li class={ "grid gap-2 rounded-box border border-base-300 p-3", templ.KV("opacity-60", !service.Active) }>
+										<div class="flex items-start justify-between gap-3">
+											<div class="grid gap-0.5">
+												<span class="text-sm font-medium">{ service.Name }</span>
+												<span class="text-xs opacity-60">{ strconv.Itoa(service.Duration) } min · { schedulingStatusLabel(service.Active) }</span>
+											</div>
+											if service.CatalogItemID != "" {
+												<span class="badge badge-outline badge-sm">Catalogue</span>
+											}
+										</div>
+										if service.CatalogItemID != "" {
+											<div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+												<a href={ templ.URL("/catalog/" + service.CatalogItemID) } class="link">{ catalogPriceLabel(service.Price) }</a>
+												if service.CatalogReference != "" {
+													<span class="font-mono opacity-60">{ service.CatalogReference }</span>
+												}
+											</div>
+											if !service.CatalogAvailable {
+												<p class="text-warning text-xs">Le catalogue ne permet plus cette prestation dans ce site.</p>
+											}
+											if page.CanManage {
+												<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/services/" + service.ID + "/active") }>
+													<input type="hidden" name={ FieldCatalogServiceActive } value={ strconv.FormatBool(!service.CatalogLinkEnabled) }/>
+													<button type="submit" class="btn btn-ghost btn-sm min-h-11 sm:min-h-9" disabled?={ !service.CatalogAvailable && !service.CatalogLinkEnabled }>{ schedulingActionLabel(service.CatalogLinkEnabled) }</button>
+												</form>
+											}
+										} else {
+											<span class="text-xs opacity-60">Prestation historique non liée au catalogue</span>
+										}
+									</li>
+								}
+							</ul>
+						}
+						if page.CanManage {
+							if len(page.CatalogItems) == 0 {
+								<p class="text-xs opacity-60">Toutes les prestations du catalogue avec une durée sont déjà reliées, ou aucune ne s’applique à ce site.</p>
+							} else {
+								<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/services") } class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end" novalidate>
+									<label class="form-control grid gap-1">
+										<span class="label-text text-sm font-medium">Ajouter depuis le catalogue</span>
+										<select name={ FieldCatalogItem } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldCatalogItem)) } required>
+											<option value="">Choisir une prestation</option>
+											for _, item := range page.CatalogItems {
+												<option value={ item.ID } selected?={ item.ID == page.CatalogItemValue }>{ item.Name } · { strconv.Itoa(item.Duration) } min · { catalogPriceLabel(item.Price) }</option>
+											}
+										</select>
+										if page.HasError(FieldCatalogItem) {
+											<span class="text-error text-xs">{ page.Error(FieldCatalogItem) }</span>
+										}
+									</label>
+									<button type="submit" class="btn min-h-11">Rendre réservable</button>
+								</form>
+							}
+						}
+					</div>
+					<div class="divider my-0"></div>
+					<div class="grid gap-3">
 						<h3 class="text-sm font-semibold">Besoins par prestation</h3>
 						if len(page.Services) == 0 {
 							<p class="text-sm opacity-60">Aucune prestation de planning active. Ajoutez d’abord les prestations proposées par ce site.</p>
@@ -538,7 +604,9 @@ templ ScheduleView(page SchedulePage) {
 										<select name={ FieldRequirementService } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldRequirementService)) }>
 											<option value="">Choisir</option>
 											for _, service := range page.Services {
-												<option value={ service.ID } selected?={ service.ID == page.RequirementValues.ServiceID }>{ service.Name }</option>
+												if service.Active {
+													<option value={ service.ID } selected?={ service.ID == page.RequirementValues.ServiceID }>{ service.Name }</option>
+												}
 											}
 										</select>
 										if page.HasError(FieldRequirementService) {

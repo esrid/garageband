@@ -130,6 +130,17 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 		RETURNING id::text`, tenantID, location.ID).Scan(&serviceID); err != nil {
 		t.Fatal(err)
 	}
+	var catalogItemID string
+	if err := fixtures.QueryRow(`
+		INSERT INTO catalog_items (
+		    tenant_id, kind, reference, name, price_kind, amount_cents,
+		    tax_basis, vat_basis_points, duration_minutes, location_scope,
+		    created_by_user_id, updated_by_user_id
+		) VALUES ($1, 'service', 'FREINS-01', 'Contrôle des freins', 'fixed', 4900,
+		          'incl', 2000, 30, 'all', $2, $2)
+		RETURNING id::text`, tenantID, ownerID).Scan(&catalogItemID); err != nil {
+		t.Fatal(err)
+	}
 	ownerHandler := locationHandler(store, locations.Principal{UserID: ownerID, TenantID: tenantID})
 	base := "/locations/" + location.ID + "/schedule"
 
@@ -156,6 +167,12 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "requirement-saved") {
 		t.Fatalf("add requirement = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
 	}
+	response = postLocationForm(ownerHandler, base+"/services", url.Values{
+		locations.FieldCatalogItem: {catalogItemID},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "catalog-service-linked") {
+		t.Fatalf("link catalog service = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
 	response = postLocationForm(ownerHandler, base+"/closures", url.Values{
 		locations.FieldClosureStartDate: {"2030-08-12"}, locations.FieldClosureStartTime: {"10:00"},
 		locations.FieldClosureEndDate: {"2030-08-12"}, locations.FieldClosureEndTime: {"12:00"},
@@ -167,8 +184,23 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	response = getLocationPage(ownerHandler, base)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "08:00–12:00") ||
 		!strings.Contains(response.Body.String(), "Réunion d&#39;équipe") ||
-		!strings.Contains(response.Body.String(), "Alice") || !strings.Contains(response.Body.String(), "1 × Technicien") {
+		!strings.Contains(response.Body.String(), "Alice") || !strings.Contains(response.Body.String(), "1 × Technicien") ||
+		!strings.Contains(response.Body.String(), "Contrôle des freins") || !strings.Contains(response.Body.String(), "49,00 € TTC") {
 		t.Fatalf("configured schedule = %d %q", response.Code, response.Body.String())
+	}
+	var linkedServiceID string
+	if err := fixtures.QueryRow(`
+		SELECT id::text FROM service_offerings
+		WHERE tenant_id = $1 AND location_id = $2 AND catalog_item_id = $3`,
+		tenantID, location.ID, catalogItemID,
+	).Scan(&linkedServiceID); err != nil {
+		t.Fatal(err)
+	}
+	response = postLocationForm(ownerHandler, base+"/services/"+linkedServiceID+"/active", url.Values{
+		locations.FieldCatalogServiceActive: {"false"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "catalog-service-updated") {
+		t.Fatalf("disable catalog service = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
 	}
 	response = postLocationForm(ownerHandler, base+"/hours", url.Values{
 		locations.FieldWeekday: {"1"}, locations.FieldOpensAt: {"18:00"}, locations.FieldClosesAt: {"08:00"},
@@ -188,6 +220,12 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	})
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("member add resource HTTP = %d body %q", response.Code, response.Body.String())
+	}
+	response = postLocationForm(memberHandler, base+"/services", url.Values{
+		locations.FieldCatalogItem: {catalogItemID},
+	})
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("member link catalog service HTTP = %d body %q", response.Code, response.Body.String())
 	}
 }
 

@@ -122,6 +122,10 @@ func (h *handler) showSchedule(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le besoin de la prestation a été enregistré."}
 	case "requirement-deleted":
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le besoin de la prestation a été retiré."}
+	case "catalog-service-linked":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "La prestation du catalogue est maintenant réservable dans ce site."}
+	case "catalog-service-updated":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "La disponibilité de la prestation a été modifiée."}
 	}
 	h.renderSchedule(w, r, page, http.StatusOK)
 }
@@ -271,6 +275,57 @@ func (h *handler) deleteRequirement(w http.ResponseWriter, r *http.Request) {
 	h.scheduleRedirect(w, r, locationID, "requirement-deleted")
 }
 
+func (h *handler) linkCatalogService(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		h.renderCatalogServiceError(w, r, principal, locationID, "", ErrCatalogServiceUnavailable)
+		return
+	}
+	catalogItemID := strings.TrimSpace(r.FormValue(FieldCatalogItem))
+	if !uuidPattern.MatchString(catalogItemID) {
+		h.renderCatalogServiceError(w, r, principal, locationID, catalogItemID, ErrCatalogServiceUnavailable)
+		return
+	}
+	if _, err := h.store.LinkCatalogService(
+		r.Context(), principal.TenantID, principal.UserID, locationID, catalogItemID,
+	); err != nil {
+		h.renderCatalogServiceError(w, r, principal, locationID, catalogItemID, err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "catalog-service-linked")
+}
+
+func (h *handler) setCatalogServiceActive(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	serviceID := r.PathValue("serviceID")
+	if !uuidPattern.MatchString(serviceID) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	enabled, err := strconv.ParseBool(strings.TrimSpace(r.FormValue(FieldCatalogServiceActive)))
+	if err != nil {
+		http.Error(w, "État de prestation invalide.", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.SetCatalogServiceEnabled(
+		r.Context(), principal.TenantID, principal.UserID, locationID, serviceID, enabled,
+	); err != nil {
+		h.renderCatalogServiceError(w, r, principal, locationID, "", err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "catalog-service-updated")
+}
+
 func (h *handler) schedulePage(r *http.Request, principal Principal, locationID string) (SchedulePage, error) {
 	schedule, err := h.store.Schedule(r.Context(), principal.TenantID, principal.UserID, locationID)
 	if err != nil {
@@ -284,7 +339,8 @@ func (h *handler) schedulePage(r *http.Request, principal Principal, locationID 
 		Organization: schedule.Organization, Location: schedule.Location,
 		Enabled: schedule.Enabled, OpeningHours: schedule.OpeningHours,
 		Closures: schedule.Closures, Resources: schedule.Resources,
-		Services: schedule.Services, CanManage: schedule.CanManage,
+		Services: schedule.Services, CatalogItems: schedule.CatalogItems,
+		CanManage:  schedule.CanManage,
 		HourValues: OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "18:00"},
 		ClosureValues: ClosureInput{
 			StartsDate: now.Format(DateLayout), StartsTime: "12:00",
@@ -294,6 +350,36 @@ func (h *handler) schedulePage(r *http.Request, principal Principal, locationID 
 		RequirementValues: RequirementInput{Kind: "technician", Quantity: 1},
 		FieldErrors:       map[string]string{},
 	}, nil
+}
+
+func (h *handler) renderCatalogServiceError(
+	w http.ResponseWriter,
+	r *http.Request,
+	principal Principal,
+	locationID string,
+	catalogItemID string,
+	err error,
+) {
+	if errors.Is(err, ErrForbidden) || errors.Is(err, sql.ErrNoRows) {
+		h.scheduleStoreError(w, r, err)
+		return
+	}
+	page, loadErr := h.schedulePage(r, principal, locationID)
+	if loadErr != nil {
+		h.storeError(w, r, loadErr)
+		return
+	}
+	page.CatalogItemValue = catalogItemID
+	page.FieldErrors = map[string]string{}
+	if errors.Is(err, ErrCatalogServiceUnavailable) {
+		page.FieldErrors[FieldCatalogItem] = "Cette prestation n’est plus active, n’a pas de durée ou ne s’applique pas à ce site."
+		page.Notice = Notice{Kind: NoticeInvalid, Message: "Actualisez le catalogue avant de rendre cette prestation réservable."}
+		h.renderSchedule(w, r, page, http.StatusConflict)
+		return
+	}
+	slog.Error("link catalog service", "err", err)
+	page.Notice = Notice{Kind: NoticeError, Message: "La prestation réservable n’a pas pu être enregistrée."}
+	h.renderSchedule(w, r, page, http.StatusInternalServerError)
 }
 
 func parseOpeningHour(r *http.Request) (OpeningHourInput, map[string]string) {
