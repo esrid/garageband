@@ -45,6 +45,12 @@ preserving fixed/from/range/quote, HT/TTC, duration, and reference semantics.
 Read executions run immediately, are still audited, and have no fake
 confirmation timestamp.
 
+`search_customers` reuses the customer search contract for names, companies,
+phones, emails, plates, and VINs, then applies the conversation location again:
+only a customer owned by that site or actively shared to it is returned. This
+extra filter matters for owners who can access several sites at once; their
+conversation scope is narrower than their membership scope.
+
 ## Confirmation, concurrency, and audit
 
 A write call first produces canonical validated arguments and a human-readable
@@ -70,7 +76,7 @@ RLS independently enforces ownership and location access.
 
 ## Current limitation
 
-This tracer bullet intentionally exposes one reversible write tool, one catalog
-read tool, and a fake model adapter. Customer, vehicle, and appointment tools;
-real model providers; richer model follow-up turns; and stricter
+This tracer bullet intentionally exposes one reversible write tool, catalog and
+customer/vehicle read tools, and a fake model adapter. Customer corrections and
+appointment tools; real model providers; richer model follow-up turns; and stricter
 destructive-action policies remain separate slices.

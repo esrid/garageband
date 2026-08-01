@@ -73,10 +73,34 @@ func (p *DemonstrationProvider) Stream(_ context.Context, request Request) (Stre
 			Done: true,
 		}}}, nil
 	}
+	if (strings.Contains(lower, "client") || strings.Contains(lower, "plaque") ||
+		strings.Contains(lower, "immatriculation") || strings.Contains(lower, "vin")) &&
+		hasTool(request.Tools, "search_customers") {
+		query := demonstrationCustomerQuery(last)
+		encoded, err := json.Marshal(map[string]string{"query": query})
+		if err != nil {
+			return nil, err
+		}
+		hash := sha256.Sum256([]byte(last))
+		return &sliceStream{chunks: []Chunk{{ToolCalls: []ToolCall{{
+			ID:   "demo-" + hex.EncodeToString(hash[:8]),
+			Name: "search_customers", Arguments: encoded,
+		}}, Done: true}}}, nil
+	}
 	return &sliceStream{chunks: []Chunk{{
 		Text: "Le modèle de démonstration peut seulement préparer une modification explicite de l’e-mail, du téléphone international ou du site web de l’établissement sélectionné. Aucune action n’est effectuée sans votre confirmation.",
 		Done: true,
 	}}}, nil
+}
+
+func demonstrationCustomerQuery(message string) string {
+	lower := strings.ToLower(message)
+	for _, marker := range []string{"client ", "cliente ", "plaque ", "immatriculation ", "vin "} {
+		if index := strings.LastIndex(lower, marker); index >= 0 {
+			return strings.Trim(strings.TrimSpace(message[index+len(marker):]), "?.!,;:\"'«»")
+		}
+	}
+	return strings.Trim(strings.TrimSpace(message), "?.!,;:\"'«»")
 }
 
 func demonstrationCatalogQuery(message string) string {

@@ -74,6 +74,8 @@ func executionStatusLabel(status string) string {
 
 func toolLabel(name string) string {
 	switch name {
+	case "search_customers":
+		return "Recherche client et véhicule"
 	case "search_catalog":
 		return "Consultation du catalogue"
 	case "update_location_contact":

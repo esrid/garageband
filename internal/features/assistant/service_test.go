@@ -8,6 +8,7 @@ import (
 
 	"github.com/esrid/garageband/internal/features/assistant"
 	"github.com/esrid/garageband/internal/features/catalog"
+	"github.com/esrid/garageband/internal/features/customers"
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -264,17 +265,71 @@ func TestAssistantReadsOnlyCurrentlyQuotableCatalogPrices(t *testing.T) {
 	}
 }
 
+func TestAssistantSearchesCustomersOnlyInConversationLocation(t *testing.T) {
+	fixture := newAssistantFixture(t)
+	var customerID string
+	if err := fixture.fixtures.QueryRow(`
+		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
+		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
+		fixture.tenantID, fixture.locationA,
+	).Scan(&customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.fixtures.Exec(`
+		INSERT INTO vehicles (tenant_id, location_id, customer_id, registration_plate, make, model)
+		VALUES ($1, $2, $3, 'AA-123-AA', 'Renault', 'Clio')`,
+		fixture.tenantID, fixture.locationA, customerID); err != nil {
+		t.Fatal(err)
+	}
+	var otherCustomerID string
+	if err := fixture.fixtures.QueryRow(`
+		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
+		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
+		fixture.tenantID, fixture.locationB,
+	).Scan(&otherCustomerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.fixtures.Exec(`
+		INSERT INTO vehicles (tenant_id, location_id, customer_id, registration_plate, make, model)
+		VALUES ($1, $2, $3, 'BB-456-BB', 'Peugeot', '208')`,
+		fixture.tenantID, fixture.locationB, otherCustomerID); err != nil {
+		t.Fatal(err)
+	}
+	conversationID, err := fixture.service.Send(
+		t.Context(), fixture.tenantID, fixture.ownerID, "", fixture.locationA,
+		"Trouve le client Alice Martin",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := fixture.store.Workspace(t.Context(), fixture.tenantID, fixture.ownerID, conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer := workspace.Messages[len(workspace.Messages)-1].Content
+	if !strings.Contains(answer, "Alice Martin") || !strings.Contains(answer, "AA-123-AA · Renault Clio") {
+		t.Fatalf("customer search answer = %q", answer)
+	}
+	if strings.Contains(answer, "BB-456-BB") {
+		t.Fatalf("customer search leaked another location: %q", answer)
+	}
+	if len(workspace.Executions) != 1 || workspace.Executions[0].ToolName != customers.ToolSearchCustomers {
+		t.Fatalf("customer search audit = %#v", workspace.Executions)
+	}
+}
+
 type assistantFixture struct {
-	fixtures     *db.DB
-	store        *assistant.Store
-	service      *assistant.Service
-	tools        *assistanttools.Registry
-	catalogStore *catalog.Store
-	tenantID     string
-	ownerID      string
-	memberID     string
-	locationA    string
-	locationB    string
+	fixtures      *db.DB
+	store         *assistant.Store
+	service       *assistant.Service
+	tools         *assistanttools.Registry
+	catalogStore  *catalog.Store
+	customerStore *customers.Store
+	tenantID      string
+	ownerID       string
+	memberID      string
+	locationA     string
+	locationB     string
 }
 
 func newAssistantFixture(t *testing.T) assistantFixture {
@@ -309,9 +364,11 @@ func newAssistantFixture(t *testing.T) assistantFixture {
 	}
 	store := assistant.NewStore(runtime)
 	catalogStore := catalog.NewStore(runtime)
-	tools := assistanttools.NewRegistry(locationStore, catalogStore)
+	customerStore := customers.NewStore(runtime)
+	tools := assistanttools.NewRegistry(locationStore, catalogStore, customerStore)
 	return assistantFixture{
-		fixtures: fixtures, store: store, tools: tools, catalogStore: catalogStore,
+		fixtures: fixtures, store: store, tools: tools,
+		catalogStore: catalogStore, customerStore: customerStore,
 		service: assistant.NewService(
 			store, llm.NewDemonstrationProvider(),
 			tools,

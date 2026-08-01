@@ -402,6 +402,9 @@ These are database contracts and ports, not working provider integrations.
 - A shared read-only catalog tool reuses `Store.Quotable` and answers only with
   currently effective prices for the conversation's accessible site. Read
   executions are audited without pretending they received human confirmation.
+- Customer/vehicle lookup supports names, contacts, plates, and VINs, then
+  narrows results to records owned by or actively shared with the conversation
+  site even when the employee can access several locations.
 - Consequential actions persist a human-readable before/after preview and wait
   for explicit confirm/reject before changing data.
 - Optimistic version checks prevent a stale confirmation from overwriting a
@@ -413,8 +416,9 @@ These are database contracts and ports, not working provider integrations.
 
 ## In progress
 
-- The operations assistant has complete location-contact and catalog-price
-  tracer bullets. Its customer and scheduling tools are the next expansion;
+- The operations assistant has complete location-contact, catalog-price, and
+  customer/vehicle lookup tracer bullets. Scheduling and customer corrections
+  are the next expansion;
   external provider integrations remain separate later slices.
 
 ## Planned
@@ -491,8 +495,7 @@ These are database contracts and ports, not working provider integrations.
 
 ### Garage operations assistant
 
-- Add customer/vehicle lookup, appointment, and other operational read tools
-  behind the shared registry.
+- Add appointment and other operational read tools behind the shared registry.
 - Add confirmed customer corrections and appointment management using the same
   per-tool authorization, optimistic concurrency, audit, and receipt contract.
 - Select and inject real model adapters; retain the local demonstration adapter
@@ -558,8 +561,8 @@ These are recommendations, not accepted scope:
    calendar connection and idempotent synchronization next.
 5. **Partially complete:** the internal operations chat, fake model adapter,
    confirmed location-contact tool, immutable audit, and idempotent recovery
-   plus catalog quotation exist; add customer and scheduling tools before a
-   real model.
+   plus catalog quotation and customer/vehicle lookup exist; add customer
+   correction and scheduling tools before a real model.
 6. Add Google Calendar synchronization.
 7. Implement one end-to-end telephone provider tracer bullet reusing the same
    customer, catalog, and scheduling tools with fake LLM and speech adapters.
