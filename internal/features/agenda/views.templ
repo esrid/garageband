@@ -247,20 +247,15 @@ templ Form(page FormPage) {
 										required
 									/>
 								}
-								@field(page, FieldResource, "Ressource", true, "Le pont, le technicien ou l'équipement occupé.", true) {
-									<select
-										id={ FieldResource }
-										name={ FieldResource }
-										class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldResource)) }
-										aria-invalid={ ariaInvalid(page.HasError(FieldResource)) }
-										aria-describedby={ describedBy(FieldResource, true, page.HasError(FieldResource)) }
-										required
-									>
-										<option value="">Choisir une ressource</option>
+								@field(page, FieldResource, "Ressources", true, "Sélectionnez tout ce que l’intervention immobilise : technicien, pont et équipement.", true) {
+									<div id={ FieldResource } class={ "grid gap-2 rounded-box border p-3 sm:grid-cols-2", templ.KV("border-error", page.HasError(FieldResource)), templ.KV("border-base-300", !page.HasError(FieldResource)) } role="group" aria-invalid={ ariaInvalid(page.HasError(FieldResource)) } aria-describedby={ describedBy(FieldResource, true, page.HasError(FieldResource)) }>
 										for _, option := range page.Resources {
-											<option value={ option.Value } selected?={ option.Value == page.Values.ResourceID }>{ option.Label }</option>
+											<label class="label min-h-11 cursor-pointer justify-start gap-3 rounded-btn px-2 hover:bg-base-200">
+												<input type="checkbox" name={ FieldResource } value={ option.Value } class="checkbox checkbox-sm" checked?={ page.Values.ResourceSelected(option.Value) }/>
+												<span class="label-text">{ option.Label }</span>
+											</label>
 										}
-									</select>
+									</div>
 								}
 							</div>
 							if page.IsNew() {
@@ -281,7 +276,7 @@ templ Form(page FormPage) {
 									} else if !page.OpenThisDay {
 										<p class="text-sm opacity-70">L’atelier est fermé ce jour-là.</p>
 									} else if len(page.AvailableSlots) == 0 {
-										<p class="text-sm opacity-70">Aucun créneau libre pour cette ressource.</p>
+										<p class="text-sm opacity-70">Aucun créneau libre pour cet ensemble de ressources.</p>
 									} else {
 										<div class="flex flex-wrap gap-2">
 											for _, slot := range page.AvailableSlots {

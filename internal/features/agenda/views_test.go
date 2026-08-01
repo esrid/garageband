@@ -132,9 +132,22 @@ func formFixture() FormPage {
 		Customer:  CustomerRef{ID: "c1", Label: "Claire Dupont"},
 		Vehicles:  []Option{{Value: "v1", Label: "AB-123-CD · Renault Clio"}},
 		Services:  []Option{{Value: "s1", Label: "Révision annuelle · 1 h 30"}},
-		Resources: []Option{{Value: "r1", Label: "Pont 1"}},
+		Resources: []Option{{Value: "r1", Label: "Pont 1"}, {Value: "r2", Label: "Technicien 1"}},
 		Values:    FormValues{Date: "2026-03-12", StartTime: "09:00"},
 	}
+}
+
+func TestFormCanSelectEveryResourceOccupiedByAnAppointment(t *testing.T) {
+	form := formFixture()
+	form.Values.ResourceIDs = []string{"r1", "r2"}
+	page := render(t, Form(form))
+	if got := strings.Count(page, `name="resource_id"`); got != 2 {
+		t.Fatalf("resource checkboxes = %d, want 2", got)
+	}
+	if got := strings.Count(page, `checked`); got != 2 {
+		t.Fatalf("checked resources = %d, want 2", got)
+	}
+	mustContain(t, page, "Pont 1", "Technicien 1", "tout ce que l’intervention immobilise")
 }
 
 func TestFormPostsEveryFieldTheBackendParses(t *testing.T) {
@@ -174,7 +187,7 @@ func TestFormValidationErrorsAreTiedToTheirFields(t *testing.T) {
 		"Indiquez une heure de début.", "Choisissez la ressource occupée.",
 		`id="start_time-error"`, `id="resource_id-error"`,
 		`aria-describedby="start_time-error"`,
-		"select-error", "input-error",
+		"border-error", "input-error",
 	)
 	if got := strings.Count(page, `aria-invalid="true"`); got != 2 {
 		t.Errorf("aria-invalid=true count = %d, want 2", got)

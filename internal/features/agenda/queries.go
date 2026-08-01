@@ -33,14 +33,15 @@ func (e *ConflictError) Error() string {
 }
 
 type SaveInput struct {
-	LocationID string
-	CustomerID string
-	VehicleID  string
-	ServiceID  string
-	ResourceID string
-	Date       string
-	StartTime  string
-	Note       string
+	LocationID  string
+	CustomerID  string
+	VehicleID   string
+	ServiceID   string
+	ResourceID  string
+	ResourceIDs []string
+	Date        string
+	StartTime   string
+	Note        string
 }
 
 type AvailabilitySlot struct {
@@ -64,7 +65,7 @@ func (s *Store) Availability(
 	userID string,
 	locationID string,
 	serviceID string,
-	resourceID string,
+	resourceIDs []string,
 	dateValue string,
 ) (result AvailabilityResult, err error) {
 	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
@@ -96,16 +97,16 @@ func (s *Store) Availability(
 			}
 			return err
 		}
-		var resourceExists bool
+		var resourceCount int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT EXISTS (
-			    SELECT 1 FROM bookable_resources
-			    WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active
-			)`, tenantID, locationID, resourceID).Scan(&resourceExists); err != nil {
+			SELECT count(*) FROM bookable_resources
+			WHERE tenant_id = $1 AND location_id = $2 AND id::text = ANY($3::text[]) AND active`,
+			tenantID, locationID, resourceIDs,
+		).Scan(&resourceCount); err != nil {
 			return err
 		}
-		if !resourceExists {
-			return &FieldError{Field: FieldResource, Message: "Choisissez une ressource disponible dans cet établissement."}
+		if resourceCount == 0 || resourceCount != len(resourceIDs) {
+			return &FieldError{Field: FieldResource, Message: "Choisissez uniquement des ressources disponibles dans cet établissement."}
 		}
 
 		weekday := int(day.Weekday())
@@ -149,12 +150,12 @@ func (s *Store) Availability(
 			FROM candidates candidate
 			WHERE candidate.slot_start >= now()
 			  AND NOT EXISTS (
-			      SELECT 1 FROM appointments appointment
-			      WHERE appointment.tenant_id = $1
-			        AND appointment.location_id = $2
-			        AND appointment.resource_id = $3
-			        AND appointment.status IN ('pending', 'confirmed', 'in_progress')
-			        AND appointment.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			      SELECT 1 FROM appointment_resource_reservations reservation
+			      WHERE reservation.tenant_id = $1
+			        AND reservation.location_id = $2
+			        AND reservation.resource_id::text = ANY($3::text[])
+			        AND reservation.status IN ('pending', 'confirmed', 'in_progress')
+			        AND reservation.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
 			  )
 			  AND NOT EXISTS (
 			      SELECT 1 FROM location_closures closure
@@ -162,7 +163,7 @@ func (s *Store) Availability(
 			        AND closure.closed_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
 			  )
 			ORDER BY candidate.slot_start
-			LIMIT 96`, tenantID, locationID, resourceID, day.Format(DateLayout), weekday, totalMinutes)
+			LIMIT 96`, tenantID, locationID, resourceIDs, day.Format(DateLayout), weekday, totalMinutes)
 		if err != nil {
 			return err
 		}
@@ -235,7 +236,15 @@ func (s *Store) Day(
 			           ''
 			       ),
 			       COALESCE(service.name, ''),
-			       COALESCE(resource.name, ''),
+			       COALESCE((
+			           SELECT string_agg(reserved_resource.name, ', ' ORDER BY reserved_resource.name)
+			           FROM appointment_resource_reservations reservation
+			           JOIN bookable_resources reserved_resource
+			             ON reserved_resource.tenant_id = reservation.tenant_id
+			            AND reserved_resource.id = reservation.resource_id
+			           WHERE reservation.tenant_id = appointment.tenant_id
+			             AND reservation.appointment_id = appointment.id
+			       ), resource.name, ''),
 			       appointment.status,
 			       appointment.source,
 			       COALESCE(appointment.customer_note, '')
@@ -368,6 +377,27 @@ func (s *Store) Form(
 			page.Values.VehicleID = vehicle.String
 			page.Values.ServiceID = service.String
 			page.Values.ResourceID = resource.String
+			resourceRows, err := tx.QueryContext(ctx, `
+				SELECT resource_id::text
+				FROM appointment_resource_reservations
+				WHERE tenant_id = $1 AND appointment_id = $2
+				ORDER BY resource_id`, tenantID, appointmentID)
+			if err != nil {
+				return err
+			}
+			for resourceRows.Next() {
+				var resourceID string
+				if err := resourceRows.Scan(&resourceID); err != nil {
+					return errors.Join(err, resourceRows.Close())
+				}
+				page.Values.ResourceIDs = append(page.Values.ResourceIDs, resourceID)
+			}
+			if err := errors.Join(resourceRows.Err(), resourceRows.Close()); err != nil {
+				return err
+			}
+			if len(page.Values.ResourceIDs) == 0 && resource.Valid {
+				page.Values.ResourceIDs = []string{resource.String}
+			}
 			page.Values.Date = startsAt.In(location.Timezone).Format(DateLayout)
 			page.Values.StartTime = startsAt.In(location.Timezone).Format("15:04")
 			page.Cancellable = status != "cancelled" && status != "completed"
@@ -436,17 +466,13 @@ func (s *Store) Save(
 			}
 			return err
 		}
-		var resourceName string
-		if err := tx.QueryRowContext(ctx, `
-			SELECT name FROM bookable_resources
-			WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active`,
-			tenantID, input.LocationID, input.ResourceID,
-		).Scan(&resourceName); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return &FieldError{Field: FieldResource, Message: "Choisissez une ressource disponible dans cet établissement."}
-			}
+		resourceIDs := selectedResourceIDs(input)
+		resourceNames, err := lockSelectedResources(ctx, tx, tenantID, input.LocationID, resourceIDs)
+		if err != nil {
 			return err
 		}
+		input.ResourceID = resourceIDs[0]
+		resourceName := strings.Join(resourceNames, ", ")
 		endsAt := startsAt.Add(time.Duration(duration+before+after) * time.Minute)
 
 		if appointmentID == "" {
@@ -467,19 +493,36 @@ func (s *Store) Save(
 				}
 				return err
 			}
+			if err := insertAppointmentResources(
+				ctx, tx, tenantID, input.LocationID, appointmentID,
+				resourceIDs, startsAt, endsAt, "pending",
+			); err != nil {
+				if isExclusionViolation(err) {
+					return &ConflictError{Resource: resourceName, StartsAt: startsAt, EndsAt: endsAt}
+				}
+				return err
+			}
 			return nil
 		}
 
-		result, err := tx.ExecContext(ctx, `
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM appointment_resource_reservations
+			WHERE tenant_id = $1 AND appointment_id = $2`, tenantID, appointmentID); err != nil {
+			return err
+		}
+
+		var appointmentStatus string
+		err = tx.QueryRowContext(ctx, `
 			UPDATE appointments
 			SET service_id = $1, resource_id = $2, starts_at = $3, ends_at = $4,
 			    customer_note = NULLIF($5, ''), updated_at = now()
 			WHERE tenant_id = $6 AND id = $7
 			  AND location_id = $8 AND customer_id = $9 AND vehicle_id = $10
-			  AND status NOT IN ('cancelled', 'completed')`,
+			  AND status NOT IN ('cancelled', 'completed')
+			RETURNING status`,
 			input.ServiceID, input.ResourceID, startsAt, endsAt, input.Note,
 			tenantID, appointmentID, input.LocationID, input.CustomerID, input.VehicleID,
-		)
+		).Scan(&appointmentStatus)
 		if err != nil {
 			if isExclusionViolation(err) {
 				return &ConflictError{Resource: resourceName, StartsAt: startsAt, EndsAt: endsAt}
@@ -489,16 +532,104 @@ func (s *Store) Save(
 			}
 			return err
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
+		if err := insertAppointmentResources(
+			ctx, tx, tenantID, input.LocationID, appointmentID,
+			resourceIDs, startsAt, endsAt, appointmentStatus,
+		); err != nil {
+			if isExclusionViolation(err) {
+				return &ConflictError{Resource: resourceName, StartsAt: startsAt, EndsAt: endsAt}
+			}
 			return err
-		}
-		if affected != 1 {
-			return sql.ErrNoRows
 		}
 		return nil
 	})
 	return date, err
+}
+
+func selectedResourceIDs(input SaveInput) []string {
+	values := input.ResourceIDs
+	if len(values) == 0 && input.ResourceID != "" {
+		values = []string{input.ResourceID}
+	}
+	seen := make(map[string]struct{}, len(values))
+	resourceIDs := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		resourceIDs = append(resourceIDs, value)
+	}
+	return resourceIDs
+}
+
+func lockSelectedResources(
+	ctx context.Context,
+	tx *sql.Tx,
+	tenantID string,
+	locationID string,
+	resourceIDs []string,
+) (names []string, err error) {
+	if len(resourceIDs) == 0 {
+		return nil, &FieldError{Field: FieldResource, Message: "Choisissez au moins une ressource."}
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT name
+		FROM bookable_resources
+		WHERE tenant_id = $1 AND location_id = $2
+		  AND id::text = ANY($3::text[]) AND active
+		ORDER BY id
+		FOR UPDATE`, tenantID, locationID, resourceIDs)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, errors.Join(err, rows.Close())
+		}
+		names = append(names, name)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	if len(names) != len(resourceIDs) {
+		return nil, &FieldError{Field: FieldResource, Message: "Choisissez uniquement des ressources disponibles dans cet établissement."}
+	}
+	return names, nil
+}
+
+func insertAppointmentResources(
+	ctx context.Context,
+	tx *sql.Tx,
+	tenantID string,
+	locationID string,
+	appointmentID string,
+	resourceIDs []string,
+	startsAt time.Time,
+	endsAt time.Time,
+	status string,
+) error {
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO appointment_resource_reservations (
+		    tenant_id, location_id, appointment_id, resource_id,
+		    starts_at, ends_at, status
+		)
+		SELECT $1, $2, $3, resource.id, $5, $6, $7
+		FROM unnest($4::text[]) selected(resource_id)
+		JOIN bookable_resources resource
+		  ON resource.tenant_id = $1 AND resource.location_id = $2
+		 AND resource.id::text = selected.resource_id
+		ON CONFLICT (appointment_id, resource_id) DO UPDATE
+		SET starts_at = EXCLUDED.starts_at,
+		    ends_at = EXCLUDED.ends_at,
+		    status = EXCLUDED.status`,
+		tenantID, locationID, appointmentID, resourceIDs, startsAt, endsAt, status)
+	return err
 }
 
 func (s *Store) Cancel(

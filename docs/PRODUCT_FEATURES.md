@@ -304,7 +304,10 @@ These are database contracts and ports, not working provider integrations.
   buffers rather than trusted from browser input.
 - The booking form searches 15-minute candidates inside location opening
   hours, removing exceptional closures and active bookings for the selected
-  resource without mutating the agenda.
+  resources without mutating the agenda.
+- One appointment can reserve a technician, bay, and equipment together.
+  PostgreSQL rejects overlap on every reservation, mirrors appointment
+  time/status into them, and releases all capacity on cancellation.
 - PostgreSQL prevents overlapping weekly opening windows, bookings outside a
   configured schedule, bookings during closures, and closures over active
   bookings; weekdays without a window are closed once a schedule exists.
@@ -409,7 +412,8 @@ These are database contracts and ports, not working provider integrations.
 
 ### Scheduling and calendars
 
-- Multi-resource allocation across technician, bay, and equipment requirements.
+- Automatic resource requirements per service so agents can allocate a valid
+  technician, bay, and equipment set without a human choosing each one.
 - Google Calendar OAuth connection and synchronization.
 - Idempotent external event creation and reconciliation.
 - Rescheduling, cancellation, no-show, reminders, and confirmation workflows.
@@ -529,8 +533,9 @@ These are recommendations, not accepted scope:
    staging, confirmed publication, safe rollback, and quotable-price contract
    exist before an agent is allowed to answer pricing questions.
 4. **Partially complete:** appointment CRUD, schedule administration,
-   working-time enforcement, closures, and single-resource availability search
-   are implemented; add multi-resource allocation before an external calendar.
+   working-time enforcement, closures, and manual multi-resource availability
+   are implemented; add automatic service requirements before an external
+   calendar.
 5. Implement the internal operations chat using explicit, authorized tools and
    fake model adapters.
 6. Add Google Calendar synchronization.

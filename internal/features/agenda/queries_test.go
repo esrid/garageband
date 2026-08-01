@@ -15,15 +15,16 @@ import (
 )
 
 type agendaFixture struct {
-	fixtures   *db.DB
-	store      *agenda.Store
-	tenantID   string
-	userID     string
-	locationID string
-	customerID string
-	vehicleID  string
-	serviceID  string
-	resourceID string
+	fixtures         *db.DB
+	store            *agenda.Store
+	tenantID         string
+	userID           string
+	locationID       string
+	customerID       string
+	vehicleID        string
+	serviceID        string
+	resourceID       string
+	secondResourceID string
 }
 
 func TestAgendaUsesLocationTimezoneAndReportsResourceConflict(t *testing.T) {
@@ -89,6 +90,74 @@ func TestAgendaUsesLocationTimezoneAndReportsResourceConflict(t *testing.T) {
 	}
 }
 
+func TestAppointmentReservesEverySelectedResource(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	input := fixture.input("2026-08-12", "09:00")
+	input.ResourceIDs = []string{fixture.resourceID, fixture.secondResourceID}
+	input.ResourceID = fixture.resourceID
+	if _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input); err != nil {
+		t.Fatal(err)
+	}
+	var reservationCount int
+	if err := fixture.fixtures.QueryRow(`
+		SELECT count(*) FROM appointment_resource_reservations
+		WHERE tenant_id = $1`, fixture.tenantID).Scan(&reservationCount); err != nil {
+		t.Fatal(err)
+	}
+	if reservationCount != 2 {
+		t.Fatalf("reservations = %d, want 2", reservationCount)
+	}
+	if _, err := fixture.fixtures.Exec(`
+		UPDATE appointment_resource_reservations
+		SET ends_at = ends_at + interval '15 minutes'
+		WHERE tenant_id = $1 AND resource_id = $2`,
+		fixture.tenantID, fixture.secondResourceID); err == nil {
+		t.Fatal("reservation diverging from its appointment unexpectedly accepted")
+	}
+	day, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(day.Appointments) != 1 || !strings.Contains(day.Appointments[0].ResourceName, "Pont principal") ||
+		!strings.Contains(day.Appointments[0].ResourceName, "Valise diagnostic") {
+		t.Fatalf("multi-resource day = %#v", day.Appointments)
+	}
+	form, err := fixture.store.Form(t.Context(), fixture.tenantID, fixture.userID, day.Appointments[0].ID, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(form.Values.ResourceIDs) != 2 {
+		t.Fatalf("selected resources = %#v", form.Values.ResourceIDs)
+	}
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
+		VALUES ($1, $2, 3, '08:00', '14:00')`, fixture.tenantID, fixture.locationID)
+	availability, err := fixture.store.Availability(
+		t.Context(), fixture.tenantID, fixture.userID, fixture.locationID,
+		fixture.serviceID, []string{fixture.secondResourceID}, "2026-08-12",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(availability.Slots) == 0 || availability.Slots[0].StartsAt.Format("15:04") != "10:15" {
+		t.Fatalf("secondary-resource availability = %#v", availability.Slots)
+	}
+	conflicting := fixture.input("2026-08-12", "09:30")
+	conflicting.ResourceID = fixture.secondResourceID
+	conflicting.ResourceIDs = []string{fixture.secondResourceID}
+	_, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting)
+	var conflict *agenda.ConflictError
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Resource, "Valise diagnostic") {
+		t.Fatalf("secondary-resource conflict = %#v, err %v", conflict, err)
+	}
+	if _, _, err := fixture.store.Cancel(t.Context(), fixture.tenantID, fixture.userID, day.Appointments[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting); err != nil {
+		t.Fatalf("resource stayed occupied after cancellation: %v", err)
+	}
+}
+
 func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	if _, err := fixture.store.Save(
@@ -146,7 +215,7 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 	}
 	availability, err := fixture.store.Availability(
 		t.Context(), fixture.tenantID, fixture.userID, fixture.locationID,
-		fixture.serviceID, fixture.resourceID, "2026-08-12",
+		fixture.serviceID, []string{fixture.resourceID}, "2026-08-12",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +292,7 @@ func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
 	form := url.Values{
 		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
 		agenda.FieldVehicle: {fixture.vehicleID}, agenda.FieldService: {fixture.serviceID},
-		agenda.FieldResource: {fixture.resourceID}, agenda.FieldDate: {"2026-08-12"},
+		agenda.FieldResource: {fixture.resourceID, fixture.secondResourceID}, agenda.FieldDate: {"2026-08-12"},
 	}
 	request := httptest.NewRequest(http.MethodPost, "/agenda/availability", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -248,10 +317,10 @@ func (fixture agendaFixture) input(date string, start string) agenda.SaveInput {
 		CustomerID: fixture.customerID,
 		VehicleID:  fixture.vehicleID,
 		ServiceID:  fixture.serviceID,
-		ResourceID: fixture.resourceID,
-		Date:       date,
-		StartTime:  start,
-		Note:       "Client attendra sur place",
+		ResourceID: fixture.resourceID, ResourceIDs: []string{fixture.resourceID},
+		Date:      date,
+		StartTime: start,
+		Note:      "Client attendra sur place",
 	}
 }
 
@@ -292,6 +361,10 @@ func newAgendaFixture(t *testing.T) agendaFixture {
 	fixture.resourceID = insertReturningID(t, fixtures, `
 		INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
 		VALUES ($1, $2, 'bay', 'Pont principal') RETURNING id::text`,
+		fixture.tenantID, fixture.locationID)
+	fixture.secondResourceID = insertReturningID(t, fixtures, `
+		INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
+		VALUES ($1, $2, 'equipment', 'Valise diagnostic') RETURNING id::text`,
 		fixture.tenantID, fixture.locationID)
 	return fixture
 }

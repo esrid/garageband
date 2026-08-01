@@ -139,12 +139,25 @@ type Slot struct {
 
 // FormValues holds the editable fields, keyed like the POST body.
 type FormValues struct {
-	Date       string // DateLayout
-	StartTime  string // "15:04"
-	VehicleID  string
-	ServiceID  string
-	ResourceID string
-	Note       string
+	Date        string // DateLayout
+	StartTime   string // "15:04"
+	VehicleID   string
+	ServiceID   string
+	ResourceID  string
+	ResourceIDs []string
+	Note        string
+}
+
+func (v FormValues) ResourceSelected(resourceID string) bool {
+	if len(v.ResourceIDs) == 0 {
+		return v.ResourceID == resourceID
+	}
+	for _, selectedID := range v.ResourceIDs {
+		if selectedID == resourceID {
+			return true
+		}
+	}
+	return false
 }
 
 // FormPage backs the booking form; the same screen creates and edits.

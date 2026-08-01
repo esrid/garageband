@@ -106,15 +106,16 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input := SaveInput{
-		LocationID: strings.TrimSpace(r.FormValue(FieldLocation)),
-		CustomerID: strings.TrimSpace(r.FormValue(FieldCustomer)),
-		VehicleID:  strings.TrimSpace(r.FormValue(FieldVehicle)),
-		ServiceID:  strings.TrimSpace(r.FormValue(FieldService)),
-		ResourceID: strings.TrimSpace(r.FormValue(FieldResource)),
-		Date:       strings.TrimSpace(r.FormValue(FieldDate)),
-		StartTime:  strings.TrimSpace(r.FormValue(FieldStartTime)),
-		Note:       strings.TrimSpace(r.FormValue(FieldNote)),
+		LocationID:  strings.TrimSpace(r.FormValue(FieldLocation)),
+		CustomerID:  strings.TrimSpace(r.FormValue(FieldCustomer)),
+		VehicleID:   strings.TrimSpace(r.FormValue(FieldVehicle)),
+		ServiceID:   strings.TrimSpace(r.FormValue(FieldService)),
+		ResourceIDs: formResourceIDs(r),
+		Date:        strings.TrimSpace(r.FormValue(FieldDate)),
+		StartTime:   strings.TrimSpace(r.FormValue(FieldStartTime)),
+		Note:        strings.TrimSpace(r.FormValue(FieldNote)),
 	}
+	input.ResourceID = firstResourceID(input.ResourceIDs)
 	if !uuidPattern.MatchString(input.LocationID) ||
 		(input.CustomerID != "" && !uuidPattern.MatchString(input.CustomerID)) {
 		http.NotFound(w, r)
@@ -125,15 +126,15 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 		h.handleReadError(w, r, "load availability form", err)
 		return
 	}
-	page.Values = FormValues{Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID, ServiceID: input.ServiceID, ResourceID: input.ResourceID, Note: input.Note}
+	page.Values = FormValues{Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID, ServiceID: input.ServiceID, ResourceID: input.ResourceID, ResourceIDs: input.ResourceIDs, Note: input.Note}
 	page.AvailabilitySearched = true
-	if !uuidPattern.MatchString(input.ServiceID) || !uuidPattern.MatchString(input.ResourceID) || input.Date == "" {
+	if !uuidPattern.MatchString(input.ServiceID) || !validResourceIDs(input.ResourceIDs) || input.Date == "" {
 		page.FieldErrors = map[string]string{}
 		if !uuidPattern.MatchString(input.ServiceID) {
 			page.FieldErrors[FieldService] = "Choisissez une prestation."
 		}
-		if !uuidPattern.MatchString(input.ResourceID) {
-			page.FieldErrors[FieldResource] = "Choisissez une ressource."
+		if !validResourceIDs(input.ResourceIDs) {
+			page.FieldErrors[FieldResource] = "Choisissez au moins une ressource."
 		}
 		if input.Date == "" {
 			page.FieldErrors[FieldDate] = "Choisissez une date."
@@ -142,7 +143,7 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, Form(page), http.StatusUnprocessableEntity)
 		return
 	}
-	availability, err := h.store.Availability(r.Context(), principal.TenantID, principal.UserID, input.LocationID, input.ServiceID, input.ResourceID, input.Date)
+	availability, err := h.store.Availability(r.Context(), principal.TenantID, principal.UserID, input.LocationID, input.ServiceID, input.ResourceIDs, input.Date)
 	if err != nil {
 		var fieldError *FieldError
 		if errors.As(err, &fieldError) {
@@ -184,15 +185,16 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 		return
 	}
 	input := SaveInput{
-		LocationID: strings.TrimSpace(r.FormValue(FieldLocation)),
-		CustomerID: strings.TrimSpace(r.FormValue(FieldCustomer)),
-		VehicleID:  strings.TrimSpace(r.FormValue(FieldVehicle)),
-		ServiceID:  strings.TrimSpace(r.FormValue(FieldService)),
-		ResourceID: strings.TrimSpace(r.FormValue(FieldResource)),
-		Date:       strings.TrimSpace(r.FormValue(FieldDate)),
-		StartTime:  strings.TrimSpace(r.FormValue(FieldStartTime)),
-		Note:       strings.TrimSpace(r.FormValue(FieldNote)),
+		LocationID:  strings.TrimSpace(r.FormValue(FieldLocation)),
+		CustomerID:  strings.TrimSpace(r.FormValue(FieldCustomer)),
+		VehicleID:   strings.TrimSpace(r.FormValue(FieldVehicle)),
+		ServiceID:   strings.TrimSpace(r.FormValue(FieldService)),
+		ResourceIDs: formResourceIDs(r),
+		Date:        strings.TrimSpace(r.FormValue(FieldDate)),
+		StartTime:   strings.TrimSpace(r.FormValue(FieldStartTime)),
+		Note:        strings.TrimSpace(r.FormValue(FieldNote)),
 	}
+	input.ResourceID = firstResourceID(input.ResourceIDs)
 	fieldErrors := validateInput(input)
 	if len(fieldErrors) != 0 {
 		h.renderSubmitted(w, r, principal, appointmentID, input, fieldErrors,
@@ -281,7 +283,8 @@ func (h *handler) renderSubmitted(
 	}
 	page.Values = FormValues{
 		Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID,
-		ServiceID: input.ServiceID, ResourceID: input.ResourceID, Note: input.Note,
+		ServiceID: input.ServiceID, ResourceID: input.ResourceID,
+		ResourceIDs: input.ResourceIDs, Note: input.Note,
 	}
 	page.FieldErrors = fieldErrors
 	page.Notice = notice
@@ -295,10 +298,19 @@ func validateInput(input SaveInput) map[string]string {
 		FieldCustomer: input.CustomerID,
 		FieldVehicle:  input.VehicleID,
 		FieldService:  input.ServiceID,
-		FieldResource: input.ResourceID,
 	} {
 		if !uuidPattern.MatchString(value) {
 			errorsByField[field] = "Choisissez une valeur valide."
+		}
+	}
+	if len(input.ResourceIDs) == 0 {
+		errorsByField[FieldResource] = "Choisissez au moins une ressource."
+	} else {
+		for _, resourceID := range input.ResourceIDs {
+			if !uuidPattern.MatchString(resourceID) {
+				errorsByField[FieldResource] = "Choisissez uniquement des ressources valides."
+				break
+			}
 		}
 	}
 	if input.Date == "" {
@@ -311,6 +323,42 @@ func validateInput(input SaveInput) map[string]string {
 		errorsByField[FieldNote] = "La note est trop longue."
 	}
 	return errorsByField
+}
+
+func formResourceIDs(r *http.Request) []string {
+	seen := make(map[string]struct{})
+	var resourceIDs []string
+	for _, value := range r.Form[FieldResource] {
+		resourceID := strings.TrimSpace(value)
+		if resourceID == "" {
+			continue
+		}
+		if _, duplicate := seen[resourceID]; duplicate {
+			continue
+		}
+		seen[resourceID] = struct{}{}
+		resourceIDs = append(resourceIDs, resourceID)
+	}
+	return resourceIDs
+}
+
+func firstResourceID(resourceIDs []string) string {
+	if len(resourceIDs) == 0 {
+		return ""
+	}
+	return resourceIDs[0]
+}
+
+func validResourceIDs(resourceIDs []string) bool {
+	if len(resourceIDs) == 0 {
+		return false
+	}
+	for _, resourceID := range resourceIDs {
+		if !uuidPattern.MatchString(resourceID) {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *handler) resolve(w http.ResponseWriter, r *http.Request) (Principal, bool) {

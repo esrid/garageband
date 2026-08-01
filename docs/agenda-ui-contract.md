@@ -69,7 +69,7 @@ agenda.FormPage{
     Customer:  agenda.CustomerRef{ID: customer.ID, Label: name},
     Vehicles:  vehicleOptions,   // that customer's vehicles only
     Services:  serviceOptions,   // the location's service_offerings, duration in the label
-    Resources: resourceOptions,  // the location's active bookable_resources
+    Resources: resourceOptions,  // all active bookable_resources at the location
     Values:    agenda.FormValues{Date: "2026-03-12", StartTime: "09:00", …},
     Cancellable: appointment.Status != "cancelled" && appointment.Status != "completed",
 }
@@ -97,11 +97,13 @@ against their control.
 ## Availability and working time
 
 The availability endpoint accepts the current form body so customer notes and
-identifiers do not leak into a query string. It generates candidates every 15
-minutes inside the selected location's local opening windows, then removes
-slots overlapping an active appointment or an exceptional closure. Service
-duration and both buffers define the occupied length; the browser never sends
-that duration.
+identifiers do not leak into a query string. The form may select every resource
+the intervention immobilizes (for example a technician, a bay, and diagnostic
+equipment). It generates candidates every 15 minutes inside the selected
+location's local opening windows, then removes a slot when any selected
+resource has an active reservation or the location has an exceptional closure.
+Service duration and both buffers define the occupied length; the browser never
+sends that duration.
 
 A search is advisory, not a reservation. The appointment insert remains the
 authority and its PostgreSQL exclusion constraint resolves concurrent booking
@@ -111,9 +113,12 @@ location, weekdays without a window are closed. Locations with no weekly
 schedule retain legacy writes but return no suggested slots until an owner or
 admin configures one.
 
-The current appointment model reserves one `bookable_resource`. Technician,
-bay, and equipment combinations require a later multi-resource allocation
-slice rather than pretending one resource satisfies every service.
+`appointments.resource_id` remains the primary resource for compatibility, but
+`appointment_resource_reservations` is the capacity authority and contains one
+row for every selected resource. PostgreSQL exclusion constraints reject an
+overlap on primary or additional resources, and appointment status/time changes
+are copied to every reservation by a trigger. A reservation cannot forge a
+different interval or status from its appointment.
 
 ## Permissions
 
@@ -123,6 +128,6 @@ button is not a check.
 
 ## Not covered here
 
-Opening-hours administration, multi-resource allocation, rescheduling by drag,
-week and month views, reminders, and Google Calendar synchronisation are
-separate slices.
+Automatic service-to-resource requirements, rescheduling by drag, week and
+month views, reminders, and Google Calendar synchronisation are separate
+slices.
