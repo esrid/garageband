@@ -14,13 +14,17 @@ func TestTenantRLSIsolation(t *testing.T) {
 
 	tenantA := insertTenant(t, d, "alpha")
 	tenantB := insertTenant(t, d, "bravo")
+	userA := insertUser(t, d, "alpha-rls@example.com")
+	userB := insertUser(t, d, "bravo-rls@example.com")
+	insertMembership(t, d, tenantA, userA)
+	insertMembership(t, d, tenantB, userB)
 	insertLocation(t, d, tenantA, "alpha-shop")
 	insertLocation(t, d, tenantB, "bravo-shop")
 
-	assertVisibleLocations := func(tenantID string, want int) {
+	assertVisibleLocations := func(tenantID, userID string, want int) {
 		t.Helper()
 		var got int
-		err := d.WithinTenant(t.Context(), tenantID, func(tx *sql.Tx) error {
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 				return err
 			}
@@ -36,10 +40,10 @@ func TestTenantRLSIsolation(t *testing.T) {
 			t.Fatalf("tenant %s sees %d locations, want %d", tenantID, got, want)
 		}
 	}
-	assertVisibleLocations(tenantA, 1)
-	assertVisibleLocations(tenantB, 1)
+	assertVisibleLocations(tenantA, userA, 1)
+	assertVisibleLocations(tenantB, userB, 1)
 
-	err := d.WithinTenant(t.Context(), tenantA, func(tx *sql.Tx) error {
+	err := d.WithinTenantUser(t.Context(), tenantA, userA, func(tx *sql.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
@@ -123,6 +127,95 @@ func TestUserScopedWorkspaceDiscoveryIsRLSIsolated(t *testing.T) {
 		}
 		if updated != 0 {
 			t.Fatalf("user-scoped context updated %d tenant rows, want 0", updated)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
+	d := dbtest.Open(t)
+	role := dbtest.RuntimeRole(t, d)
+	ownerID := insertUser(t, d, "rls-location-owner@example.com")
+	memberID := insertUser(t, d, "rls-location-member@example.com")
+	outsiderID := insertUser(t, d, "rls-location-outsider@example.com")
+	tenantID := insertTenant(t, d, "rls-location")
+	insertMembershipRole(t, d, tenantID, ownerID, "owner")
+	insertMembershipRole(t, d, tenantID, memberID, "member")
+
+	var locationID string
+	err := d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(t.Context(), `
+			INSERT INTO locations (tenant_id, slug, name, timezone)
+			VALUES ($1, 'owner-site', 'Owner site', 'Europe/Paris')
+			RETURNING id`, tenantID).Scan(&locationID)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = d.WithinTenantUser(t.Context(), tenantID, memberID, func(tx *sql.Tx) error {
+		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+			return err
+		}
+		var visible int
+		if err := tx.QueryRowContext(
+			t.Context(), `SELECT COUNT(*) FROM locations`,
+		).Scan(&visible); err != nil {
+			return err
+		}
+		if visible != 1 {
+			t.Fatalf("member sees %d locations, want 1", visible)
+		}
+		_, err := tx.ExecContext(t.Context(), `
+			INSERT INTO locations (tenant_id, slug, name)
+			VALUES ($1, 'member-site', 'Member site')`, tenantID)
+		return err
+	})
+	if err == nil {
+		t.Fatal("member unexpectedly created a location")
+	}
+
+	err = d.WithinTenantUser(t.Context(), tenantID, outsiderID, func(tx *sql.Tx) error {
+		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+			return err
+		}
+		var visible int
+		if err := tx.QueryRowContext(
+			t.Context(), `SELECT COUNT(*) FROM locations`,
+		).Scan(&visible); err != nil {
+			return err
+		}
+		if visible != 0 {
+			t.Fatalf("outsider sees %d locations, want 0", visible)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(
+			t.Context(), `DELETE FROM locations WHERE id = $1`, locationID,
+		)
+		if err != nil {
+			return err
+		}
+		deleted, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if deleted != 0 {
+			t.Fatalf("owner hard-deleted %d locations, want 0", deleted)
 		}
 		return nil
 	})
@@ -282,10 +375,16 @@ func insertUser(t *testing.T, database interface {
 func insertMembership(t *testing.T, database interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }, tenantID, userID string) {
+	insertMembershipRole(t, database, tenantID, userID, "owner")
+}
+
+func insertMembershipRole(t *testing.T, database interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, tenantID, userID, role string) {
 	t.Helper()
 	if _, err := database.Exec(`
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
-		VALUES ($1, $2, 'owner')`, tenantID, userID); err != nil {
+		VALUES ($1, $2, $3)`, tenantID, userID, role); err != nil {
 		t.Fatal(err)
 	}
 }

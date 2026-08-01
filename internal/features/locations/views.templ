@@ -1,0 +1,526 @@
+package locations
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+// pendingHandle renders the submit-pending script once per page. Every form
+// here is a plain POST and works unchanged without it.
+var pendingHandle = templ.NewOnceHandle()
+
+// Index lists the organization's physical sites.
+templ Index(page IndexPage) {
+	@ui.Layout(ui.PageInfo{Title: "Sites du garage", NoIndex: true}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Sites du garage</h1>
+				<p class="text-sm opacity-70">
+					Espace : <span class="font-medium">{ page.Organization }</span>
+				</p>
+			</header>
+			@notice(page.Notice)
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<p class="max-w-md text-sm opacity-70">
+					Un seul site suffit pour faire tourner votre garage. N'en ajoutez d'autres
+					que si vous recevez des clients dans plusieurs ateliers.
+				</p>
+				if page.CanManage {
+					<a href="/locations/new" class="btn btn-primary min-h-11 shrink-0">Ajouter un site</a>
+				}
+			</div>
+			if !page.CanManage {
+				<div role="status" class="alert items-start text-left">
+					@infoIcon()
+					<span class="text-sm">
+						Vous consultez ces sites en lecture seule. Seul un propriétaire de
+						l'espace peut les modifier.
+					</span>
+				</div>
+			}
+			if len(page.Locations) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2">
+						<h2 class="card-title text-base">Aucun site pour l'instant</h2>
+						<p class="text-sm opacity-70">
+							Votre garage a besoin d'au moins un site pour recevoir des appels et
+							des rendez-vous.
+						</p>
+					</div>
+				</div>
+			} else {
+				<ul class="grid gap-3">
+					for _, location := range page.Locations {
+						<li>
+							@locationCard(location, page.CanManage)
+						</li>
+					}
+				</ul>
+				if page.HasInactive() {
+					<p class="text-xs opacity-70">
+						Un site désactivé ne reçoit plus ni appels ni rendez-vous, mais son
+						historique reste consultable. Vous pouvez le rouvrir à tout moment.
+					</p>
+				}
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// locationCard leads with what identifies a site — its name, whether it is open
+// and where it is — and keeps the rest as quiet secondary text.
+templ locationCard(location Location, canManage bool) {
+	<article
+		class={ "card card-border border-base-300",
+			templ.KV("bg-base-100", isActive(location)),
+			templ.KV("border-dashed bg-base-200", !isActive(location)) }
+	>
+		<div class="card-body gap-3 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">{ location.Name }</h2>
+				if isActive(location) {
+					<span class="badge badge-success badge-sm">Actif</span>
+				} else {
+					<span class="badge badge-sm">Inactif</span>
+				}
+			</div>
+			<p class="text-sm opacity-70">
+				if len(addressLines(location)) == 0 {
+					Adresse non renseignée
+				} else {
+					for index, line := range addressLines(location) {
+						if index > 0 {
+							<span class="opacity-50">{ ", " }</span>
+						}
+						{ line }
+					}
+				}
+			</p>
+			if len(metaFacts(location)) > 0 {
+				<p class="text-xs opacity-60">
+					for index, fact := range metaFacts(location) {
+						if index > 0 {
+							<span aria-hidden="true">{ " · " }</span>
+						}
+						{ fact }
+					}
+				</p>
+			}
+			@setupMeter(location)
+			if canManage {
+				<div class="mt-1 flex flex-col gap-2 sm:flex-row">
+					<a href={ templ.URL("/locations/" + location.ID) } class="btn btn-sm min-h-11 sm:min-h-9">
+						Configurer<span class="sr-only">{ " " + location.Name }</span>
+					</a>
+					if isActive(location) {
+						<form method="post" action={ templ.URL("/locations/" + location.ID + "/deactivate") } data-pending-form>
+							<button type="submit" class="btn btn-ghost btn-sm min-h-11 w-full sm:min-h-9 sm:w-auto" data-pending-label="Désactivation…">
+								Désactiver<span class="sr-only">{ " " + location.Name }</span>
+							</button>
+						</form>
+					} else {
+						<form method="post" action={ templ.URL("/locations/" + location.ID + "/reactivate") } data-pending-form>
+							<button type="submit" class="btn btn-sm min-h-11 w-full sm:min-h-9 sm:w-auto" data-pending-label="Réouverture…">
+								Réactiver<span class="sr-only">{ " " + location.Name }</span>
+							</button>
+						</form>
+					}
+				</div>
+			}
+		</div>
+	</article>
+}
+
+// setupMeter shows how ready a site is. The count and the list of what is
+// missing carry the meaning, so it never relies on the bar alone.
+templ setupMeter(location Location) {
+	{{ setup := setupOf(location) }}
+	<div class="grid gap-1">
+		<div class="flex items-center gap-2 text-xs">
+			<progress
+				class={ "progress h-1.5 w-20 shrink-0", templ.KV("progress-success", setup.Complete()) }
+				value={ setupValue(setup) }
+				max={ setupMax(setup) }
+				aria-label={ "Configuration du site " + location.Name }
+			></progress>
+			<span class="opacity-70">
+				if setup.Complete() {
+					Configuration complète
+				} else {
+					Configuration { setupCount(setup) }
+				}
+			</span>
+		</div>
+		if !setup.Complete() {
+			<p class="text-xs opacity-60">Il manque : { missingLabels(setup.Missing) }.</p>
+		}
+	</div>
+}
+
+// Form adds a site or edits an existing one; both use the same screen.
+templ Form(page FormPage) {
+	@ui.Layout(ui.PageInfo{Title: formTitle(page), NoIndex: true}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
+				<p class="text-sm opacity-70">
+					if page.IsNew() {
+						Un site est un atelier où vos clients se rendent. Vous pourrez le
+						modifier à tout moment.
+					} else {
+						Ces informations servent à vos clients et à votre agent téléphonique.
+					}
+				</p>
+			</header>
+			@notice(page.Notice)
+			if !page.CanManage {
+				@readOnlyLocation(page)
+			} else {
+				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Identité du site</h2>
+							<div class="grid gap-4 sm:grid-cols-2">
+								@field(page, FieldName, "Nom du site", true, "Par exemple : Atelier principal, ou le nom de la rue.", true) {
+									<input
+										id={ FieldName }
+										name={ FieldName }
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldName)) }
+										value={ page.Values.Name }
+										aria-invalid={ ariaInvalid(page.HasError(FieldName)) }
+										aria-describedby={ describedBy(FieldName, true, page.HasError(FieldName)) }
+										required
+									/>
+								}
+								@field(page, FieldSIRET, "SIRET", false, "14 chiffres. Chaque établissement a le sien.", true) {
+									<input
+										id={ FieldSIRET }
+										name={ FieldSIRET }
+										class={ "input min-h-11 w-full font-mono tracking-wider", templ.KV("input-error", page.HasError(FieldSIRET)) }
+										value={ page.Values.SIRET }
+										inputmode="numeric"
+										maxlength="14"
+										aria-invalid={ ariaInvalid(page.HasError(FieldSIRET)) }
+										aria-describedby={ describedBy(FieldSIRET, true, page.HasError(FieldSIRET)) }
+									/>
+								}
+							</div>
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Adresse</h2>
+							<div class="grid gap-4 sm:grid-cols-2">
+								@field(page, FieldAddressLine1, "Adresse", true, "", true) {
+									<input
+										id={ FieldAddressLine1 }
+										name={ FieldAddressLine1 }
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldAddressLine1)) }
+										value={ page.Values.AddressLine1 }
+										autocomplete="address-line1"
+										aria-invalid={ ariaInvalid(page.HasError(FieldAddressLine1)) }
+										aria-describedby={ describedBy(FieldAddressLine1, false, page.HasError(FieldAddressLine1)) }
+										required
+									/>
+								}
+								@field(page, FieldAddressLine2, "Complément d'adresse", false, "Bâtiment, étage ou zone d'activité.", true) {
+									<input
+										id={ FieldAddressLine2 }
+										name={ FieldAddressLine2 }
+										class="input min-h-11 w-full"
+										value={ page.Values.AddressLine2 }
+										autocomplete="address-line2"
+										aria-describedby={ describedBy(FieldAddressLine2, true, false) }
+									/>
+								}
+								@field(page, FieldPostalCode, "Code postal", true, "", false) {
+									<input
+										id={ FieldPostalCode }
+										name={ FieldPostalCode }
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldPostalCode)) }
+										value={ page.Values.PostalCode }
+										inputmode="numeric"
+										autocomplete="postal-code"
+										aria-invalid={ ariaInvalid(page.HasError(FieldPostalCode)) }
+										aria-describedby={ describedBy(FieldPostalCode, false, page.HasError(FieldPostalCode)) }
+										required
+									/>
+								}
+								@field(page, FieldCity, "Ville", true, "", false) {
+									<input
+										id={ FieldCity }
+										name={ FieldCity }
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldCity)) }
+										value={ page.Values.City }
+										autocomplete="address-level2"
+										aria-invalid={ ariaInvalid(page.HasError(FieldCity)) }
+										aria-describedby={ describedBy(FieldCity, false, page.HasError(FieldCity)) }
+										required
+									/>
+								}
+								@field(page, FieldCountry, "Pays", true, "", false) {
+									<select
+										id={ FieldCountry }
+										name={ FieldCountry }
+										class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldCountry)) }
+										aria-invalid={ ariaInvalid(page.HasError(FieldCountry)) }
+										aria-describedby={ describedBy(FieldCountry, false, page.HasError(FieldCountry)) }
+										required
+									>
+										for _, option := range countryOptions {
+											<option value={ option.Value } selected?={ option.Value == page.Values.CountryCode }>{ option.Label }</option>
+										}
+									</select>
+								}
+								@field(page, FieldTimezone, "Fuseau horaire", true, "Sert à placer les rendez-vous à la bonne heure.", false) {
+									<select
+										id={ FieldTimezone }
+										name={ FieldTimezone }
+										class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldTimezone)) }
+										aria-invalid={ ariaInvalid(page.HasError(FieldTimezone)) }
+										aria-describedby={ describedBy(FieldTimezone, true, page.HasError(FieldTimezone)) }
+										required
+									>
+										for _, option := range timezoneOptions {
+											<option value={ option.Value } selected?={ option.Value == page.Values.Timezone }>{ option.Label }</option>
+										}
+									</select>
+								}
+							</div>
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Contact</h2>
+							<p class="text-sm opacity-70">
+								Ce que vos clients voient, et ce que votre agent téléphonique peut
+								donner au téléphone.
+							</p>
+							<div class="grid gap-4 sm:grid-cols-2">
+								@field(page, FieldPhone, "Téléphone", false, "Format international, par exemple +33472000000.", false) {
+									<input
+										id={ FieldPhone }
+										name={ FieldPhone }
+										type="tel"
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldPhone)) }
+										value={ page.Values.PhoneE164 }
+										inputmode="tel"
+										autocomplete="tel"
+										aria-invalid={ ariaInvalid(page.HasError(FieldPhone)) }
+										aria-describedby={ describedBy(FieldPhone, true, page.HasError(FieldPhone)) }
+									/>
+								}
+								@field(page, FieldEmail, "E-mail", false, "", false) {
+									<input
+										id={ FieldEmail }
+										name={ FieldEmail }
+										type="email"
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldEmail)) }
+										value={ page.Values.Email }
+										inputmode="email"
+										autocomplete="email"
+										aria-invalid={ ariaInvalid(page.HasError(FieldEmail)) }
+										aria-describedby={ describedBy(FieldEmail, false, page.HasError(FieldEmail)) }
+									/>
+								}
+								@field(page, FieldWebsite, "Site web", false, "Commence par https://.", true) {
+									<input
+										id={ FieldWebsite }
+										name={ FieldWebsite }
+										type="url"
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldWebsite)) }
+										value={ page.Values.WebsiteURL }
+										placeholder="https://"
+										inputmode="url"
+										aria-invalid={ ariaInvalid(page.HasError(FieldWebsite)) }
+										aria-describedby={ describedBy(FieldWebsite, true, page.HasError(FieldWebsite)) }
+									/>
+								}
+							</div>
+						</div>
+					</section>
+					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<a href="/locations" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Enregistrement…">
+							if page.IsNew() {
+								Ajouter le site
+							} else {
+								Enregistrer les modifications
+							}
+						</button>
+					</div>
+				</form>
+				if !page.IsNew() {
+					@lifecycleSection(page)
+				}
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// lifecycleSection keeps deactivation away from the save button: its own
+// bordered block, outside the edit form, with its own wording.
+templ lifecycleSection(page FormPage) {
+	<section
+		class={ "card card-border", templ.KV("border-error/40 bg-base-100", page.Active),
+			templ.KV("border-base-300 bg-base-100", !page.Active) }
+		aria-labelledby="lifecycle-heading"
+	>
+		<div class="card-body gap-3 p-5">
+			<h2 id="lifecycle-heading" class="text-base font-semibold">
+				if page.Active {
+					Fermer ce site
+				} else {
+					Rouvrir ce site
+				}
+			</h2>
+			if page.Active {
+				<p class="text-sm opacity-70">
+					Un site désactivé ne reçoit plus ni appels ni rendez-vous. Son historique
+					reste consultable et vous pouvez le rouvrir quand vous voulez. Rien n'est
+					supprimé.
+				</p>
+				<form method="post" action={ templ.URL("/locations/" + page.ID + "/deactivate") } data-pending-form>
+					<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Désactivation…">
+						Désactiver ce site
+					</button>
+				</form>
+			} else {
+				<p class="text-sm opacity-70">
+					Ce site est fermé. Le rouvrir lui rend les appels et les rendez-vous.
+				</p>
+				<form method="post" action={ templ.URL("/locations/" + page.ID + "/reactivate") } data-pending-form>
+					<button type="submit" class="btn min-h-11 w-full sm:w-auto" data-pending-label="Réouverture…">
+						Réactiver ce site
+					</button>
+				</form>
+			}
+		</div>
+	</section>
+}
+
+// readOnlyLocation is what a member without management rights sees: the same
+// information, presented as facts instead of disabled controls.
+templ readOnlyLocation(page FormPage) {
+	<div class="grid gap-4">
+		<div role="status" class="alert items-start text-left">
+			@infoIcon()
+			<span class="text-sm">
+				Vous consultez ce site en lecture seule. Seul un propriétaire de l'espace
+				peut le modifier.
+			</span>
+		</div>
+		<div class="card card-border border-base-300 bg-base-100">
+			<div class="card-body p-5">
+				<dl class="grid gap-3 text-sm sm:grid-cols-2">
+					@readOnlyRow("Nom du site", page.Values.Name, true)
+					@readOnlyRow("SIRET", page.Values.SIRET, false)
+					@readOnlyRow("Téléphone", page.Values.PhoneE164, false)
+					@readOnlyRow("Adresse", page.Values.AddressLine1, true)
+					@readOnlyRow("Complément d'adresse", page.Values.AddressLine2, true)
+					@readOnlyRow("Code postal", page.Values.PostalCode, false)
+					@readOnlyRow("Ville", page.Values.City, false)
+					@readOnlyRow("Pays", page.Values.CountryCode, false)
+					@readOnlyRow("Fuseau horaire", page.Values.Timezone, false)
+					@readOnlyRow("E-mail", page.Values.Email, false)
+					@readOnlyRow("Site web", page.Values.WebsiteURL, true)
+				</dl>
+			</div>
+		</div>
+	</div>
+}
+
+templ readOnlyRow(label string, value string, wide bool) {
+	<div class={ templ.KV("sm:col-span-2", wide) }>
+		<dt class="text-xs opacity-60">{ label }</dt>
+		<dd>
+			if value == "" {
+				<span class="opacity-60">Non renseigné</span>
+			} else {
+				{ value }
+			}
+		</dd>
+	</div>
+}
+
+// field wraps one control with its label, its required/optional marker, its
+// hint and its inline error. The ids match what describedBy builds.
+templ field(page FormPage, key string, label string, required bool, hint string, wide bool) {
+	<div class={ "grid content-start gap-1", templ.KV("sm:col-span-2", wide) }>
+		<label class="label flex-wrap justify-start gap-2 font-medium text-base-content" for={ key }>
+			{ label }
+			if required {
+				<span class="text-xs font-normal opacity-60">Requis</span>
+			} else {
+				<span class="text-xs font-normal opacity-60">Optionnel</span>
+			}
+		</label>
+		{ children... }
+		if hint != "" {
+			<p id={ key + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
+		}
+		if page.HasError(key) {
+			<p id={ key + "-error" } role="alert" class="label text-xs leading-snug font-medium whitespace-normal text-error">
+				{ page.Error(key) }
+			</p>
+		}
+	</div>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			if n.Kind == NoticeSuccess {
+				@successIcon()
+			} else {
+				@warningIcon()
+			}
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
+
+templ successIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+	</svg>
+}
+
+templ infoIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"></path>
+	</svg>
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}

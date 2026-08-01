@@ -102,6 +102,48 @@ func (d *DB) WithinTenant(
 	return tx.Commit()
 }
 
+// WithinTenantUser runs fn with both the tenant and authenticated user set as
+// transaction-local PostgreSQL context. Tenant-owned writes whose RLS policy
+// depends on a membership role must use this scope.
+func (d *DB) WithinTenantUser(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	fn func(*sql.Tx) error,
+) (err error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return ErrTenantRequired
+	}
+	if strings.TrimSpace(userID) == "" {
+		return ErrUserRequired
+	}
+	if fn == nil {
+		return errors.New("tenant transaction function is required")
+	}
+	tx, err := d.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil &&
+			!errors.Is(rollbackErr, sql.ErrTxDone) {
+			err = errors.Join(err, rollbackErr)
+		}
+	}()
+
+	if _, err = tx.ExecContext(ctx, `
+		SELECT set_config('app.current_tenant_id', $1, true),
+		       set_config('app.current_user_id', $2, true)`,
+		tenantID, userID,
+	); err != nil {
+		return err
+	}
+	if err = fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // WithinUser runs fn with a transaction-local user identity. It is used only
 // for pre-tenant workspace discovery; tenant data access still requires
 // WithinTenant.
@@ -147,6 +189,28 @@ func (d *DB) WithinNewTenant(
 	ctx context.Context,
 	fn func(tx *sql.Tx, tenantID string) error,
 ) (err error) {
+	return d.withinNewTenant(ctx, "", fn)
+}
+
+// WithinNewTenantUser provisions a tenant while exposing the creating user to
+// role-aware RLS policies. The callback must insert that user's membership
+// before inserting other tables whose writes require an owner/admin role.
+func (d *DB) WithinNewTenantUser(
+	ctx context.Context,
+	userID string,
+	fn func(tx *sql.Tx, tenantID string) error,
+) error {
+	if strings.TrimSpace(userID) == "" {
+		return ErrUserRequired
+	}
+	return d.withinNewTenant(ctx, userID, fn)
+}
+
+func (d *DB) withinNewTenant(
+	ctx context.Context,
+	userID string,
+	fn func(tx *sql.Tx, tenantID string) error,
+) (err error) {
 	if fn == nil {
 		return errors.New("tenant transaction function is required")
 	}
@@ -171,6 +235,15 @@ func (d *DB) WithinNewTenant(
 		tenantID,
 	); err != nil {
 		return err
+	}
+	if userID != "" {
+		if _, err = tx.ExecContext(
+			ctx,
+			`SELECT set_config('app.current_user_id', $1, true)`,
+			userID,
+		); err != nil {
+			return err
+		}
 	}
 	if err = fn(tx, tenantID); err != nil {
 		return err

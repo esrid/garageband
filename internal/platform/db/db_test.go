@@ -85,3 +85,46 @@ func TestWithinUserRequiresID(t *testing.T) {
 		t.Fatalf("got %v, want ErrUserRequired", err)
 	}
 }
+
+func TestWithinTenantUser(t *testing.T) {
+	d := dbtest.Open(t)
+	const tenantID = "0198a421-8b51-7f34-a723-4c1b49a4174e"
+	const userID = "0198a421-8b51-7f34-a723-4c1b49a4174f"
+
+	var gotTenant, gotUser string
+	err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+		return tx.QueryRow(`
+			SELECT current_setting('app.current_tenant_id'),
+			       current_setting('app.current_user_id')`,
+		).Scan(&gotTenant, &gotUser)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTenant != tenantID || gotUser != userID {
+		t.Fatalf(
+			"principal context: got tenant %q user %q, want tenant %q user %q",
+			gotTenant, gotUser, tenantID, userID,
+		)
+	}
+}
+
+func TestWithinTenantUserRequiresPrincipal(t *testing.T) {
+	d := dbtest.Open(t)
+	callback := func(*sql.Tx) error { return nil }
+	if err := d.WithinTenantUser(
+		t.Context(), "", "0198a421-8b51-7f34-a723-4c1b49a4174f", callback,
+	); !errors.Is(err, db.ErrTenantRequired) {
+		t.Fatalf("missing tenant: got %v, want ErrTenantRequired", err)
+	}
+	if err := d.WithinTenantUser(
+		t.Context(), "0198a421-8b51-7f34-a723-4c1b49a4174e", "", callback,
+	); !errors.Is(err, db.ErrUserRequired) {
+		t.Fatalf("missing user: got %v, want ErrUserRequired", err)
+	}
+	if err := d.WithinNewTenantUser(
+		t.Context(), "", func(*sql.Tx, string) error { return nil },
+	); !errors.Is(err, db.ErrUserRequired) {
+		t.Fatalf("new tenant missing user: got %v, want ErrUserRequired", err)
+	}
+}

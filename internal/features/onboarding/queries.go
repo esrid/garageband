@@ -76,7 +76,7 @@ func (s *Store) FinalizeDraft(
 	if !validSIRET(input.SIRET) || len(input.CountryCode) != 2 {
 		return "", ErrInvalidGarage
 	}
-	err = s.db.WithinNewTenant(ctx, func(tx *sql.Tx, newTenantID string) error {
+	err = s.db.WithinNewTenantUser(ctx, userID, func(tx *sql.Tx, newTenantID string) error {
 		var sourceKind, sourceValue, provider, status string
 		var profile []byte
 		var existingTenantID sql.NullString

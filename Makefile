@@ -21,7 +21,6 @@ $(TAILWIND):
 	curl -sSfL -o $@ https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/tailwindcss-$(TAILWIND_OS)-$(TAILWIND_ARCH)
 	chmod +x $@
 	curl -sSfL -o $(TAILWIND_DIR)/daisyui.mjs https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui.mjs
-	curl -sSfL -o $(TAILWIND_DIR)/daisyui-theme.mjs https://github.com/saadeghi/daisyui/releases/download/$(DAISYUI_VERSION)/daisyui-theme.mjs
 
 css: $(TAILWIND)
 	$(TAILWIND) -i web/css/app.css -o web/static/app.css --minify

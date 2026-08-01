@@ -1,0 +1,144 @@
+package locations_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/esrid/garageband/internal/features/locations"
+	"github.com/esrid/garageband/internal/platform/dbtest"
+)
+
+func TestLocationHTTPFlowAndPermissions(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "handler-owner@example.com")
+	memberID := createUser(t, database, "handler-member@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	addMembership(t, database, tenantID, memberID, "member")
+	store := locations.NewStore(database)
+
+	ownerHandler := locationHandler(store, locations.Principal{
+		UserID: ownerID, TenantID: tenantID,
+	})
+	response := getLocationPage(ownerHandler, "/locations")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Garage") {
+		t.Fatalf("index = %d %q", response.Code, response.Body.String())
+	}
+
+	valid := url.Values{
+		locations.FieldName:         {"Atelier Sud"},
+		locations.FieldSIRET:        {"12345678901234"},
+		locations.FieldAddressLine1: {"1 rue du Sud"},
+		locations.FieldPostalCode:   {"97200"},
+		locations.FieldCity:         {"Fort-de-France"},
+		locations.FieldCountry:      {"FR"},
+		locations.FieldTimezone:     {"America/Martinique"},
+		locations.FieldEmail:        {"sud@example.com"},
+		locations.FieldPhone:        {"+596596123456"},
+		locations.FieldWebsite:      {"https://garage.example.com/sud"},
+	}
+	response = postLocationForm(ownerHandler, "/locations", valid)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/locations?saved=created" {
+		t.Fatalf("create = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
+	overview, err := store.Overview(t.Context(), tenantID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(overview.Locations) != 1 {
+		t.Fatalf("created locations = %d, want 1", len(overview.Locations))
+	}
+	locationID := overview.Locations[0].ID
+
+	response = postLocationForm(
+		ownerHandler, "/locations/"+locationID+"/deactivate", nil,
+	)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("deactivate = %d body %q", response.Code, response.Body.String())
+	}
+	location, _, err := store.Get(t.Context(), tenantID, ownerID, locationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if location.Status != "inactive" {
+		t.Fatalf("deactivated status = %q", location.Status)
+	}
+
+	memberHandler := locationHandler(store, locations.Principal{
+		UserID: memberID, TenantID: tenantID,
+	})
+	response = postLocationForm(memberHandler, "/locations", valid)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("member create = %d, want 403", response.Code)
+	}
+	response = getLocationPage(memberHandler, "/locations")
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "lecture seule") {
+		t.Fatalf("member index = %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestLocationHTTPValidationDoesNotWrite(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "invalid-handler-owner@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	store := locations.NewStore(database)
+	handler := locationHandler(store, locations.Principal{
+		UserID: ownerID, TenantID: tenantID,
+	})
+
+	response := postLocationForm(handler, "/locations", url.Values{
+		locations.FieldName:     {""},
+		locations.FieldCountry:  {"France"},
+		locations.FieldTimezone: {"Mars/Olympus_Mons"},
+		locations.FieldEmail:    {"not-an-email"},
+		locations.FieldPhone:    {"0596123456"},
+		locations.FieldWebsite:  {"javascript:alert(1)"},
+	})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid create = %d body %q", response.Code, response.Body.String())
+	}
+	overview, err := store.Overview(t.Context(), tenantID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(overview.Locations) != 0 {
+		t.Fatalf("invalid submission created %d locations", len(overview.Locations))
+	}
+}
+
+func locationHandler(store *locations.Store, principal locations.Principal) http.Handler {
+	mux := http.NewServeMux()
+	locations.Register(
+		mux,
+		store,
+		func(next http.Handler) http.Handler { return next },
+		func(context.Context) (locations.Principal, bool) { return principal, true },
+	)
+	return mux
+}
+
+func getLocationPage(handler http.Handler, target string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, target, nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func postLocationForm(
+	handler http.Handler,
+	target string,
+	values url.Values,
+) *httptest.ResponseRecorder {
+	encoded := ""
+	if values != nil {
+		encoded = values.Encode()
+	}
+	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(encoded))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}

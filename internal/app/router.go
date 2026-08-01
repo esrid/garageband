@@ -7,6 +7,7 @@ import (
 
 	"github.com/esrid/garageband/internal/features/auth"
 	"github.com/esrid/garageband/internal/features/dashboard"
+	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/features/onboarding"
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -59,6 +60,18 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 				})
 			}
 			return result, nil
+		},
+	)
+	locations.Register(
+		mux,
+		locations.NewStore(database),
+		auth.RequireTenant,
+		func(ctx context.Context) (locations.Principal, bool) {
+			user, userOK := auth.UserFrom(ctx)
+			tenantID, tenantOK := auth.TenantFrom(ctx)
+			return locations.Principal{
+				UserID: user.ID, TenantID: tenantID,
+			}, userOK && tenantOK
 		},
 	)
 
