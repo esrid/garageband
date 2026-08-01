@@ -35,10 +35,11 @@ build: generate
 	go build -o bin/web ./cmd/web
 	go build -o bin/migrate ./cmd/migrate
 
-# test/vet need templ only: a fresh clone must not require the network just to
-# run the suite, and web/static/app.css is committed.
+# test/vet need templ only: web/static/app.css is committed. The test command
+# starts one PostgreSQL 18 container for the complete Go suite, then each
+# database test keeps using its own isolated schema inside that instance.
 test: templ
-	go test ./...
+	go run ./cmd/test ./...
 
 vet: templ
 	go vet ./...

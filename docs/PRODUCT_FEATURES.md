@@ -86,6 +86,8 @@ features depend on provider-neutral Go interfaces.
   partial indexes, generated ranges, and exclusion constraints are used for
   database-level validation.
 - Goose migrations are embedded and PostgreSQL-only.
+- The default test command provisions an ephemeral PostgreSQL 18 instance with
+  Testcontainers; `TEST_DATABASE_URL` can reuse an existing instance.
 - PostgreSQL integration tests create isolated schemas.
 - Runtime-role tests prove forced RLS instead of accidentally testing as a
   superuser.

@@ -11,12 +11,14 @@ migrations, and `log/slog`. No framework.
 
 ```sh
 make dev        # templ generate + migrate + run on :8080
-make test
+make test       # starts an ephemeral PostgreSQL 18 with Testcontainers
 make build      # binaries in bin/
 ```
 
-Requires Go 1.26+ and PostgreSQL 18. Templ runs through the `go tool`
-directive.
+Requires Go 1.26+ and Docker for the test suite. Running the application still
+requires PostgreSQL 18. Templ runs through the `go tool` directive. Set
+`TEST_DATABASE_URL` to reuse an existing PostgreSQL 18 instance instead of
+starting a test container.
 
 ## Configuration
 
@@ -40,6 +42,7 @@ exactly one row (update/delete by id) go through
 ```
 cmd/web/            entry point: wire config, call app.Run
 cmd/migrate/        one-off migration command (≈ manage.py migrate)
+cmd/test/           start PostgreSQL 18 and run the complete Go suite
 internal/app/       composition root: router, middleware, server, config
 internal/features/  every feature "app" lives here, one package each
   auth/             OAuth login, server-side sessions, RequireUser middleware
