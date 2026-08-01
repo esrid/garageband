@@ -60,13 +60,15 @@ features depend on provider-neutral Go interfaces.
 - Organization owners and admins can grant or revoke customer sharing between
   locations. Every change records the actor, source location, receiving
   location, and timestamp in the access-control audit trail.
+- Organization owners and admins implicitly access every location in their
+  organization.
+- Managers and members access only the locations to which they are explicitly
+  assigned. A user may be assigned to more than one location.
 
 ### Open decisions for customer sharing
 
 The following remain open:
 
-- Which employees are assigned to each location and whether owners implicitly
-  access every location.
 - What revocation hides when the receiving location has already created an
   appointment or repair order for the shared customer.
 - Whether sharing always applies to future vehicles and history automatically.
