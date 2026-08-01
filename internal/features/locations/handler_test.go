@@ -122,6 +122,14 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var serviceID string
+	if err := fixtures.QueryRow(`
+		INSERT INTO service_offerings (
+		    tenant_id, location_id, code, name, duration_minutes
+		) VALUES ($1, $2, 'revision', 'Révision', 60)
+		RETURNING id::text`, tenantID, location.ID).Scan(&serviceID); err != nil {
+		t.Fatal(err)
+	}
 	ownerHandler := locationHandler(store, locations.Principal{UserID: ownerID, TenantID: tenantID})
 	base := "/locations/" + location.ID + "/schedule"
 
@@ -135,6 +143,19 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "hours-added") {
 		t.Fatalf("add hour = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
 	}
+	response = postLocationForm(ownerHandler, base+"/resources", url.Values{
+		locations.FieldResourceKind: {"technician"}, locations.FieldResourceName: {"Alice"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "resource-added") {
+		t.Fatalf("add resource = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
+	response = postLocationForm(ownerHandler, base+"/requirements", url.Values{
+		locations.FieldRequirementService: {serviceID}, locations.FieldRequirementKind: {"technician"},
+		locations.FieldRequirementQuantity: {"1"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "requirement-saved") {
+		t.Fatalf("add requirement = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
 	response = postLocationForm(ownerHandler, base+"/closures", url.Values{
 		locations.FieldClosureStartDate: {"2030-08-12"}, locations.FieldClosureStartTime: {"10:00"},
 		locations.FieldClosureEndDate: {"2030-08-12"}, locations.FieldClosureEndTime: {"12:00"},
@@ -145,7 +166,8 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	}
 	response = getLocationPage(ownerHandler, base)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "08:00–12:00") ||
-		!strings.Contains(response.Body.String(), "Réunion d&#39;équipe") {
+		!strings.Contains(response.Body.String(), "Réunion d&#39;équipe") ||
+		!strings.Contains(response.Body.String(), "Alice") || !strings.Contains(response.Body.String(), "1 × Technicien") {
 		t.Fatalf("configured schedule = %d %q", response.Code, response.Body.String())
 	}
 	response = postLocationForm(ownerHandler, base+"/hours", url.Values{
@@ -160,6 +182,12 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	})
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("member add hour = %d body %q", response.Code, response.Body.String())
+	}
+	response = postLocationForm(memberHandler, base+"/resources", url.Values{
+		locations.FieldResourceKind: {"bay"}, locations.FieldResourceName: {"Pont interdit"},
+	})
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("member add resource HTTP = %d body %q", response.Code, response.Body.String())
 	}
 }
 

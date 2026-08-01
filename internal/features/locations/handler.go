@@ -114,6 +114,14 @@ func (h *handler) showSchedule(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "La fermeture exceptionnelle a été ajoutée."}
 	case "closure-deleted":
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "La fermeture exceptionnelle a été retirée."}
+	case "resource-added":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "La ressource a été ajoutée."}
+	case "resource-updated":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "La disponibilité de la ressource a été modifiée."}
+	case "requirement-saved":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le besoin de la prestation a été enregistré."}
+	case "requirement-deleted":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le besoin de la prestation a été retiré."}
 	}
 	h.renderSchedule(w, r, page, http.StatusOK)
 }
@@ -186,6 +194,83 @@ func (h *handler) deleteClosure(w http.ResponseWriter, r *http.Request) {
 	h.scheduleRedirect(w, r, locationID, "closure-deleted")
 }
 
+func (h *handler) addResource(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	input, fieldErrors := parseResource(r)
+	if len(fieldErrors) != 0 {
+		h.renderCapacityRetry(w, r, principal, locationID, input, RequirementInput{}, fieldErrors)
+		return
+	}
+	if _, err := h.store.AddResource(r.Context(), principal.TenantID, principal.UserID, locationID, input); err != nil {
+		h.scheduleCapacityWriteError(w, r, principal, locationID, input, RequirementInput{}, FieldResourceName, err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "resource-added")
+}
+
+func (h *handler) setResourceActive(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	resourceID := r.PathValue("resourceID")
+	if !uuidPattern.MatchString(resourceID) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	active, err := strconv.ParseBool(strings.TrimSpace(r.FormValue(FieldResourceActive)))
+	if err != nil {
+		http.Error(w, "État de ressource invalide.", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.SetResourceActive(r.Context(), principal.TenantID, principal.UserID, locationID, resourceID, active); err != nil {
+		h.scheduleStoreError(w, r, err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "resource-updated")
+}
+
+func (h *handler) upsertRequirement(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	input, fieldErrors := parseRequirement(r, true)
+	if len(fieldErrors) != 0 {
+		h.renderCapacityRetry(w, r, principal, locationID, ResourceInput{Kind: "technician"}, input, fieldErrors)
+		return
+	}
+	if err := h.store.UpsertRequirement(r.Context(), principal.TenantID, principal.UserID, locationID, input); err != nil {
+		h.scheduleCapacityWriteError(w, r, principal, locationID, ResourceInput{Kind: "technician"}, input, FieldRequirementQuantity, err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "requirement-saved")
+}
+
+func (h *handler) deleteRequirement(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	input, fieldErrors := parseRequirement(r, false)
+	if len(fieldErrors) != 0 {
+		http.Error(w, "Besoin de prestation invalide.", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.DeleteRequirement(r.Context(), principal.TenantID, principal.UserID, locationID, input); err != nil {
+		h.scheduleStoreError(w, r, err)
+		return
+	}
+	h.scheduleRedirect(w, r, locationID, "requirement-deleted")
+}
+
 func (h *handler) schedulePage(r *http.Request, principal Principal, locationID string) (SchedulePage, error) {
 	schedule, err := h.store.Schedule(r.Context(), principal.TenantID, principal.UserID, locationID)
 	if err != nil {
@@ -198,13 +283,16 @@ func (h *handler) schedulePage(r *http.Request, principal Principal, locationID 
 	return SchedulePage{
 		Organization: schedule.Organization, Location: schedule.Location,
 		Enabled: schedule.Enabled, OpeningHours: schedule.OpeningHours,
-		Closures: schedule.Closures, CanManage: schedule.CanManage,
+		Closures: schedule.Closures, Resources: schedule.Resources,
+		Services: schedule.Services, CanManage: schedule.CanManage,
 		HourValues: OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "18:00"},
 		ClosureValues: ClosureInput{
 			StartsDate: now.Format(DateLayout), StartsTime: "12:00",
 			EndsDate: now.Format(DateLayout), EndsTime: "14:00",
 		},
-		FieldErrors: map[string]string{},
+		ResourceValues:    ResourceInput{Kind: "technician"},
+		RequirementValues: RequirementInput{Kind: "technician", Quantity: 1},
+		FieldErrors:       map[string]string{},
 	}, nil
 }
 
@@ -268,6 +356,62 @@ func parseClosure(r *http.Request) (ClosureInput, map[string]string) {
 	return input, fieldErrors
 }
 
+func parseResource(r *http.Request) (ResourceInput, map[string]string) {
+	input := ResourceInput{}
+	fieldErrors := make(map[string]string)
+	if err := r.ParseForm(); err != nil {
+		fieldErrors[FieldResourceName] = "Le formulaire envoyé est invalide."
+		return input, fieldErrors
+	}
+	input = ResourceInput{
+		Name: strings.TrimSpace(r.FormValue(FieldResourceName)),
+		Kind: strings.TrimSpace(r.FormValue(FieldResourceKind)),
+	}
+	if input.Name == "" {
+		fieldErrors[FieldResourceName] = "Donnez un nom à cette ressource."
+	} else if utf8.RuneCountInString(input.Name) > 120 {
+		fieldErrors[FieldResourceName] = "Le nom ne peut pas dépasser 120 caractères."
+	}
+	if !knownResourceKind(input.Kind) {
+		fieldErrors[FieldResourceKind] = "Choisissez un type de ressource."
+	}
+	return input, fieldErrors
+}
+
+func parseRequirement(r *http.Request, requireQuantity bool) (RequirementInput, map[string]string) {
+	input := RequirementInput{}
+	fieldErrors := make(map[string]string)
+	if err := r.ParseForm(); err != nil {
+		fieldErrors[FieldRequirementService] = "Le formulaire envoyé est invalide."
+		return input, fieldErrors
+	}
+	input.ServiceID = strings.TrimSpace(r.FormValue(FieldRequirementService))
+	input.Kind = strings.TrimSpace(r.FormValue(FieldRequirementKind))
+	if !uuidPattern.MatchString(input.ServiceID) {
+		fieldErrors[FieldRequirementService] = "Choisissez une prestation."
+	}
+	if !knownResourceKind(input.Kind) {
+		fieldErrors[FieldRequirementKind] = "Choisissez un type de ressource."
+	}
+	if requireQuantity {
+		quantity, err := strconv.Atoi(strings.TrimSpace(r.FormValue(FieldRequirementQuantity)))
+		input.Quantity = quantity
+		if err != nil || quantity < 1 || quantity > 10 {
+			fieldErrors[FieldRequirementQuantity] = "La quantité doit être comprise entre 1 et 10."
+		}
+	}
+	return input, fieldErrors
+}
+
+func knownResourceKind(kind string) bool {
+	for _, option := range resourceKindOptions {
+		if option.Value == kind {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *handler) renderScheduleRetry(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -291,6 +435,65 @@ func (h *handler) renderScheduleRetry(
 	page.FieldErrors = fieldErrors
 	page.Notice = Notice{Kind: NoticeInvalid, Message: "Corrigez les champs indiqués avant de continuer."}
 	h.renderSchedule(w, r, page, http.StatusUnprocessableEntity)
+}
+
+func (h *handler) renderCapacityRetry(
+	w http.ResponseWriter,
+	r *http.Request,
+	principal Principal,
+	locationID string,
+	resource ResourceInput,
+	requirement RequirementInput,
+	fieldErrors map[string]string,
+) {
+	page, err := h.schedulePage(r, principal, locationID)
+	if err != nil {
+		h.storeError(w, r, err)
+		return
+	}
+	if resource.Name != "" || resource.Kind != "" {
+		page.ResourceValues = resource
+	}
+	if requirement.ServiceID != "" || requirement.Kind != "" {
+		page.RequirementValues = requirement
+	}
+	page.FieldErrors = fieldErrors
+	page.Notice = Notice{Kind: NoticeInvalid, Message: "Corrigez les champs indiqués avant de continuer."}
+	h.renderSchedule(w, r, page, http.StatusUnprocessableEntity)
+}
+
+func (h *handler) scheduleCapacityWriteError(
+	w http.ResponseWriter,
+	r *http.Request,
+	principal Principal,
+	locationID string,
+	resource ResourceInput,
+	requirement RequirementInput,
+	conflictField string,
+	err error,
+) {
+	if errors.Is(err, ErrForbidden) || errors.Is(err, sql.ErrNoRows) {
+		h.scheduleStoreError(w, r, err)
+		return
+	}
+	page, loadErr := h.schedulePage(r, principal, locationID)
+	if loadErr != nil {
+		h.storeError(w, r, loadErr)
+		return
+	}
+	page.ResourceValues = resource
+	page.RequirementValues = requirement
+	page.FieldErrors = map[string]string{}
+	var postgresError *pgconn.PgError
+	if errors.As(err, &postgresError) && postgresError.ConstraintName == "service_requirements_preserve_appointments" {
+		page.FieldErrors[conflictField] = "Des rendez-vous à venir n’immobilisent pas encore cette capacité."
+		page.Notice = Notice{Kind: NoticeInvalid, Message: "Modifiez d’abord les rendez-vous concernés."}
+		h.renderSchedule(w, r, page, http.StatusConflict)
+		return
+	}
+	slog.Error("write workshop capacity", "err", err)
+	page.Notice = Notice{Kind: NoticeError, Message: "La capacité de l’atelier n’a pas pu être enregistrée."}
+	h.renderSchedule(w, r, page, http.StatusInternalServerError)
 }
 
 func (h *handler) scheduleWriteError(
@@ -351,6 +554,8 @@ func (h *handler) scheduleStoreError(w http.ResponseWriter, r *http.Request, err
 		http.NotFound(w, r)
 	case errors.As(err, &postgresError) && postgresError.ConstraintName == "opening_hours_preserve_appointments":
 		http.Error(w, "Déplacez ou annulez les rendez-vous concernés avant de retirer cette plage.", http.StatusConflict)
+	case errors.As(err, &postgresError) && postgresError.ConstraintName == "bookable_resources_preserve_appointments":
+		http.Error(w, "Cette ressource a des rendez-vous à venir et ne peut pas être désactivée.", http.StatusConflict)
 	default:
 		slog.Error("write location schedule", "err", err)
 		http.Error(w, "Impossible de modifier le planning.", http.StatusInternalServerError)

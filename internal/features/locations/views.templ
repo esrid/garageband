@@ -445,6 +445,131 @@ templ ScheduleView(page SchedulePage) {
 					}
 				</div>
 			</section>
+			<section class="card card-border border-base-300 bg-base-100" aria-labelledby="capacity-heading">
+				<div class="card-body gap-5 p-5">
+					<div class="grid gap-1">
+						<h2 id="capacity-heading" class="text-base font-semibold">Capacité de l’atelier</h2>
+						<p class="text-sm opacity-70">Déclarez les techniciens, ponts et équipements, puis ce que chaque prestation immobilise. L’agenda choisira automatiquement un ensemble libre.</p>
+					</div>
+					<div class="grid gap-3">
+						<h3 class="text-sm font-semibold">Ressources</h3>
+						if len(page.Resources) == 0 {
+							<p class="text-sm opacity-60">Aucune ressource configurée.</p>
+						} else {
+							<ul class="grid gap-2 sm:grid-cols-2">
+								for _, resource := range page.Resources {
+									<li class={ "flex items-center justify-between gap-3 rounded-box border border-base-300 p-3", templ.KV("opacity-55", !resource.Active) }>
+										<div class="grid gap-0.5">
+											<span class="text-sm font-medium">{ resource.Name }</span>
+											<span class="text-xs opacity-60">{ resourceKindLabel(resource.Kind) } · { resourceStatusLabel(resource.Active) }</span>
+										</div>
+										if page.CanManage {
+											<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/resources/" + resource.ID + "/active") }>
+												<input type="hidden" name={ FieldResourceActive } value={ strconv.FormatBool(!resource.Active) }/>
+												<button type="submit" class="btn btn-ghost btn-sm min-h-11 sm:min-h-9">{ resourceActionLabel(resource.Active) }</button>
+											</form>
+										}
+									</li>
+								}
+							</ul>
+						}
+						if page.CanManage {
+							<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/resources") } class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end" novalidate>
+								<label class="form-control grid gap-1">
+									<span class="label-text text-sm font-medium">Type</span>
+									<select name={ FieldResourceKind } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldResourceKind)) }>
+										for _, kind := range resourceKindOptions {
+											<option value={ kind.Value } selected?={ kind.Value == page.ResourceValues.Kind }>{ kind.Label }</option>
+										}
+									</select>
+									if page.HasError(FieldResourceKind) {
+										<span class="text-error text-xs">{ page.Error(FieldResourceKind) }</span>
+									}
+								</label>
+								<label class="form-control grid gap-1">
+									<span class="label-text text-sm font-medium">Nom</span>
+									<input name={ FieldResourceName } value={ page.ResourceValues.Name } maxlength="120" class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldResourceName)) } placeholder="Pont 1" required/>
+									if page.HasError(FieldResourceName) {
+										<span class="text-error text-xs">{ page.Error(FieldResourceName) }</span>
+									}
+								</label>
+								<button type="submit" class="btn min-h-11">Ajouter</button>
+							</form>
+						}
+					</div>
+					<div class="divider my-0"></div>
+					<div class="grid gap-3">
+						<h3 class="text-sm font-semibold">Besoins par prestation</h3>
+						if len(page.Services) == 0 {
+							<p class="text-sm opacity-60">Aucune prestation de planning active. Ajoutez d’abord les prestations proposées par ce site.</p>
+						} else {
+							<ul class="grid gap-3">
+								for _, service := range page.Services {
+									<li class="grid gap-2 rounded-box border border-base-300 p-3">
+										<div class="flex flex-wrap items-baseline justify-between gap-2">
+											<span class="text-sm font-medium">{ service.Name }</span>
+											<span class="text-xs opacity-60">{ strconv.Itoa(service.Duration) } min</span>
+										</div>
+										if len(service.Requirements) == 0 {
+											<span class="text-xs opacity-60">Sélection manuelle des ressources</span>
+										} else {
+											<ul class="flex flex-wrap gap-2">
+												for _, requirement := range service.Requirements {
+													<li class="badge badge-outline h-auto gap-2 py-2">
+														{ strconv.Itoa(requirement.Quantity) } × { resourceKindLabel(requirement.Kind) }
+														if page.CanManage {
+															<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/requirements/delete") }>
+																<input type="hidden" name={ FieldRequirementService } value={ service.ID }/>
+																<input type="hidden" name={ FieldRequirementKind } value={ requirement.Kind }/>
+																<button type="submit" class="btn btn-ghost btn-xs" aria-label={ "Retirer " + resourceKindLabel(requirement.Kind) + " de " + service.Name }>×</button>
+															</form>
+														}
+													</li>
+												}
+											</ul>
+										}
+									</li>
+								}
+							</ul>
+							if page.CanManage {
+								<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/requirements") } class="grid gap-3 sm:grid-cols-[2fr_1fr_6rem_auto] sm:items-end" novalidate>
+									<label class="form-control grid gap-1">
+										<span class="label-text text-sm font-medium">Prestation</span>
+										<select name={ FieldRequirementService } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldRequirementService)) }>
+											<option value="">Choisir</option>
+											for _, service := range page.Services {
+												<option value={ service.ID } selected?={ service.ID == page.RequirementValues.ServiceID }>{ service.Name }</option>
+											}
+										</select>
+										if page.HasError(FieldRequirementService) {
+											<span class="text-error text-xs">{ page.Error(FieldRequirementService) }</span>
+										}
+									</label>
+									<label class="form-control grid gap-1">
+										<span class="label-text text-sm font-medium">Type</span>
+										<select name={ FieldRequirementKind } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldRequirementKind)) }>
+											for _, kind := range resourceKindOptions {
+												<option value={ kind.Value } selected?={ kind.Value == page.RequirementValues.Kind }>{ kind.Label }</option>
+											}
+										</select>
+										if page.HasError(FieldRequirementKind) {
+											<span class="text-error text-xs">{ page.Error(FieldRequirementKind) }</span>
+										}
+									</label>
+									<label class="form-control grid gap-1">
+										<span class="label-text text-sm font-medium">Quantité</span>
+										<input type="number" name={ FieldRequirementQuantity } value={ strconv.Itoa(page.RequirementValues.Quantity) } min="1" max="10" class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldRequirementQuantity)) } required/>
+										if page.HasError(FieldRequirementQuantity) {
+											<span class="text-error text-xs">{ page.Error(FieldRequirementQuantity) }</span>
+										}
+									</label>
+									<button type="submit" class="btn min-h-11">Enregistrer</button>
+								</form>
+							}
+						}
+					</div>
+				</div>
+			</section>
 			<section class="card card-border border-base-300 bg-base-100" aria-labelledby="closures-heading">
 				<div class="card-body gap-4 p-5">
 					<div class="grid gap-1">

@@ -120,6 +120,15 @@ overlap on primary or additional resources, and appointment status/time changes
 are copied to every reservation by a trigger. A reservation cannot forge a
 different interval or status from its appointment.
 
+When `service_resource_requirements` contains rows for the selected service,
+manual resource ids become optional. Availability requires enough free active
+resources of every declared kind and quantity. Save locks and assigns a stable
+set ordered by kind/id, excluding the appointment itself while rescheduling;
+`SKIP LOCKED` lets concurrent bookings use different capacity when it exists.
+Deferred PostgreSQL triggers reject an active appointment that reaches commit
+without satisfying every requirement, including appointments written outside
+this store.
+
 ## Permissions
 
 `CanManage` is the only permission input: false hides booking and editing but
@@ -128,6 +137,5 @@ button is not a check.
 
 ## Not covered here
 
-Automatic service-to-resource requirements, rescheduling by drag, week and
-month views, reminders, and Google Calendar synchronisation are separate
-slices.
+Scheduling-service administration, rescheduling by drag, week and month views,
+reminders, and Google Calendar synchronisation are separate slices.

@@ -2,6 +2,7 @@ package agenda_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +13,12 @@ import (
 	"github.com/esrid/garageband/internal/features/agenda"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type agendaFixture struct {
 	fixtures         *db.DB
+	runtime          *db.DB
 	store            *agenda.Store
 	tenantID         string
 	userID           string
@@ -108,6 +111,18 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 		t.Fatalf("reservations = %d, want 2", reservationCount)
 	}
 	if _, err := fixture.fixtures.Exec(`
+		INSERT INTO service_resource_requirements (
+		    tenant_id, location_id, service_id, resource_kind, quantity
+		) VALUES ($1, $2, $3, 'equipment', 2)`,
+		fixture.tenantID, fixture.locationID, fixture.serviceID); err == nil {
+		t.Fatal("requirement invalidating a future appointment unexpectedly accepted")
+	}
+	if _, err := fixture.fixtures.Exec(`
+		UPDATE bookable_resources SET active = false
+		WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, fixture.secondResourceID); err == nil {
+		t.Fatal("future reserved resource unexpectedly deactivated")
+	}
+	if _, err := fixture.fixtures.Exec(`
 		UPDATE appointment_resource_reservations
 		SET ends_at = ends_at + interval '15 minutes'
 		WHERE tenant_id = $1 AND resource_id = $2`,
@@ -155,6 +170,89 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 	}
 	if _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting); err != nil {
 		t.Fatalf("resource stayed occupied after cancellation: %v", err)
+	}
+}
+
+func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
+		VALUES ($1, $2, 3, '08:00', '14:00')`, fixture.tenantID, fixture.locationID)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO service_resource_requirements (
+		    tenant_id, location_id, service_id, resource_kind, quantity
+		) VALUES
+		    ($1, $2, $3, 'bay', 1),
+		    ($1, $2, $3, 'equipment', 1)`,
+		fixture.tenantID, fixture.locationID, fixture.serviceID)
+	err := fixture.runtime.WithinTenantUser(t.Context(), fixture.tenantID, fixture.userID, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(), `
+			INSERT INTO appointments (
+			    tenant_id, location_id, customer_id, vehicle_id, service_id,
+			    resource_id, starts_at, ends_at, source
+			) VALUES (
+			    $1, $2, $3, $4, $5, $6,
+			    '2026-08-12 13:00:00+00', '2026-08-12 14:15:00+00', 'dashboard'
+			)`, fixture.tenantID, fixture.locationID, fixture.customerID,
+			fixture.vehicleID, fixture.serviceID, fixture.resourceID)
+		return err
+	})
+	var postgresError *pgconn.PgError
+	if !errors.As(err, &postgresError) || postgresError.ConstraintName != "appointments_satisfy_resource_requirements" {
+		t.Fatalf("underallocated direct appointment = %v", err)
+	}
+
+	availability, err := fixture.store.Availability(
+		t.Context(), fixture.tenantID, fixture.userID, fixture.locationID,
+		fixture.serviceID, nil, "2026-08-12",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availability.AutoAllocated || len(availability.Slots) == 0 ||
+		availability.Slots[0].StartsAt.Format("15:04") != "08:00" {
+		t.Fatalf("automatic availability = %#v", availability)
+	}
+
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
+		},
+	)
+	form := url.Values{
+		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
+		agenda.FieldVehicle: {fixture.vehicleID}, agenda.FieldService: {fixture.serviceID},
+		agenda.FieldDate: {"2026-08-12"}, agenda.FieldStartTime: {"09:00"},
+	}
+	response := postAgendaForm(mux, "/agenda", form)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("automatic booking = %d body %q", response.Code, response.Body.String())
+	}
+	var reservations int
+	if err := fixture.fixtures.QueryRow(`
+		SELECT count(*)
+		FROM appointment_resource_reservations reservation
+		JOIN bookable_resources resource
+		  ON resource.tenant_id = reservation.tenant_id
+		 AND resource.id = reservation.resource_id
+		WHERE reservation.tenant_id = $1
+		  AND resource.kind IN ('bay', 'equipment')`, fixture.tenantID,
+	).Scan(&reservations); err != nil {
+		t.Fatal(err)
+	}
+	if reservations != 2 {
+		t.Fatalf("automatic reservations = %d, want 2", reservations)
+	}
+	input := fixture.input("2026-08-12", "09:30")
+	input.ResourceID = ""
+	input.ResourceIDs = nil
+	_, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input)
+	var conflict *agenda.ConflictError
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Resource, "ensemble") {
+		t.Fatalf("automatic capacity conflict = %#v, err %v", conflict, err)
 	}
 }
 
@@ -327,7 +425,7 @@ func (fixture agendaFixture) input(date string, start string) agenda.SaveInput {
 func newAgendaFixture(t *testing.T) agendaFixture {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)
-	fixture := agendaFixture{fixtures: fixtures, store: agenda.NewStore(runtime)}
+	fixture := agendaFixture{fixtures: fixtures, runtime: runtime, store: agenda.NewStore(runtime)}
 	fixture.userID = insertReturningID(t, fixtures, `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', 'agenda-owner', 'agenda@example.com', 'Agenda Owner')
@@ -383,4 +481,12 @@ func mustExec(t *testing.T, database *db.DB, query string, args ...any) {
 	if _, err := database.Exec(query, args...); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func postAgendaForm(handler http.Handler, target string, values url.Values) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(values.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
 }

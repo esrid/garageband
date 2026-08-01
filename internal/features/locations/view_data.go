@@ -18,25 +18,31 @@ const StatusActive = "active"
 // constants are the single source of truth for what a handler must parse and
 // for the keys used in FieldErrors.
 const (
-	FieldName             = "name"
-	FieldSIRET            = "siret"
-	FieldAddressLine1     = "address_line1"
-	FieldAddressLine2     = "address_line2"
-	FieldPostalCode       = "postal_code"
-	FieldCity             = "city"
-	FieldCountry          = "country_code"
-	FieldTimezone         = "timezone"
-	FieldEmail            = "email"
-	FieldPhone            = "phone"
-	FieldWebsite          = "website"
-	FieldWeekday          = "weekday"
-	FieldOpensAt          = "opens_at"
-	FieldClosesAt         = "closes_at"
-	FieldClosureStartDate = "closure_start_date"
-	FieldClosureStartTime = "closure_start_time"
-	FieldClosureEndDate   = "closure_end_date"
-	FieldClosureEndTime   = "closure_end_time"
-	FieldClosureReason    = "closure_reason"
+	FieldName                = "name"
+	FieldSIRET               = "siret"
+	FieldAddressLine1        = "address_line1"
+	FieldAddressLine2        = "address_line2"
+	FieldPostalCode          = "postal_code"
+	FieldCity                = "city"
+	FieldCountry             = "country_code"
+	FieldTimezone            = "timezone"
+	FieldEmail               = "email"
+	FieldPhone               = "phone"
+	FieldWebsite             = "website"
+	FieldWeekday             = "weekday"
+	FieldOpensAt             = "opens_at"
+	FieldClosesAt            = "closes_at"
+	FieldClosureStartDate    = "closure_start_date"
+	FieldClosureStartTime    = "closure_start_time"
+	FieldClosureEndDate      = "closure_end_date"
+	FieldClosureEndTime      = "closure_end_time"
+	FieldClosureReason       = "closure_reason"
+	FieldResourceName        = "resource_name"
+	FieldResourceKind        = "resource_kind"
+	FieldResourceActive      = "resource_active"
+	FieldRequirementService  = "requirement_service_id"
+	FieldRequirementKind     = "requirement_kind"
+	FieldRequirementQuantity = "requirement_quantity"
 )
 
 // Notice kinds. The view derives the heading from the kind, so French copy
@@ -83,16 +89,20 @@ type FormPage struct {
 }
 
 type SchedulePage struct {
-	Organization  string
-	Location      Location
-	Enabled       bool
-	OpeningHours  []OpeningHour
-	Closures      []Closure
-	CanManage     bool
-	HourValues    OpeningHourInput
-	ClosureValues ClosureInput
-	FieldErrors   map[string]string
-	Notice        Notice
+	Organization      string
+	Location          Location
+	Enabled           bool
+	OpeningHours      []OpeningHour
+	Closures          []Closure
+	Resources         []WorkshopResource
+	Services          []SchedulingService
+	CanManage         bool
+	HourValues        OpeningHourInput
+	ClosureValues     ClosureInput
+	ResourceValues    ResourceInput
+	RequirementValues RequirementInput
+	FieldErrors       map[string]string
+	Notice            Notice
 }
 
 func (p SchedulePage) Error(field string) string { return p.FieldErrors[field] }
@@ -204,6 +214,36 @@ var weekdayOptions = []Option{
 	{"5", "Vendredi"},
 	{"6", "Samedi"},
 	{"0", "Dimanche"},
+}
+
+var resourceKindOptions = []Option{
+	{"technician", "Technicien"},
+	{"bay", "Pont ou baie"},
+	{"equipment", "Équipement"},
+	{"calendar", "Calendrier"},
+}
+
+func resourceKindLabel(kind string) string {
+	for _, option := range resourceKindOptions {
+		if option.Value == kind {
+			return option.Label
+		}
+	}
+	return kind
+}
+
+func resourceStatusLabel(active bool) string {
+	if active {
+		return "Actif"
+	}
+	return "Inactif"
+}
+
+func resourceActionLabel(active bool) string {
+	if active {
+		return "Désactiver"
+	}
+	return "Réactiver"
 }
 
 func weekdayNumber(option Option) int {

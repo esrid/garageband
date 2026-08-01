@@ -247,7 +247,7 @@ templ Form(page FormPage) {
 										required
 									/>
 								}
-								@field(page, FieldResource, "Ressources", true, "Sélectionnez tout ce que l’intervention immobilise : technicien, pont et équipement.", true) {
+								@field(page, FieldResource, "Ressources", false, "Si la prestation a des besoins configurés, l’application choisit automatiquement un ensemble libre. Sinon, sélectionnez tout ce que l’intervention immobilise.", true) {
 									<div id={ FieldResource } class={ "grid gap-2 rounded-box border p-3 sm:grid-cols-2", templ.KV("border-error", page.HasError(FieldResource)), templ.KV("border-base-300", !page.HasError(FieldResource)) } role="group" aria-invalid={ ariaInvalid(page.HasError(FieldResource)) } aria-describedby={ describedBy(FieldResource, true, page.HasError(FieldResource)) }>
 										for _, option := range page.Resources {
 											<label class="label min-h-11 cursor-pointer justify-start gap-3 rounded-btn px-2 hover:bg-base-200">
@@ -271,6 +271,9 @@ templ Form(page FormPage) {
 							if page.AvailabilitySearched {
 								<div class="grid gap-2" aria-live="polite">
 									<h3 class="text-sm font-semibold">Créneaux disponibles</h3>
+									if page.AutomaticallyAllocated {
+										<p class="text-sm opacity-70">Le technicien, le pont et les équipements requis seront attribués automatiquement à l’enregistrement.</p>
+									}
 									if !page.ScheduleConfigured {
 										<p class="text-sm opacity-70">Configurez d’abord les horaires d’ouverture de ce site.</p>
 									} else if !page.OpenThisDay {

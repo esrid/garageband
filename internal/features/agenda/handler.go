@@ -128,18 +128,19 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 	}
 	page.Values = FormValues{Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID, ServiceID: input.ServiceID, ResourceID: input.ResourceID, ResourceIDs: input.ResourceIDs, Note: input.Note}
 	page.AvailabilitySearched = true
-	if !uuidPattern.MatchString(input.ServiceID) || !validResourceIDs(input.ResourceIDs) || input.Date == "" {
+	if !uuidPattern.MatchString(input.ServiceID) ||
+		(len(input.ResourceIDs) != 0 && !validResourceIDs(input.ResourceIDs)) || input.Date == "" {
 		page.FieldErrors = map[string]string{}
 		if !uuidPattern.MatchString(input.ServiceID) {
 			page.FieldErrors[FieldService] = "Choisissez une prestation."
 		}
-		if !validResourceIDs(input.ResourceIDs) {
-			page.FieldErrors[FieldResource] = "Choisissez au moins une ressource."
+		if len(input.ResourceIDs) != 0 && !validResourceIDs(input.ResourceIDs) {
+			page.FieldErrors[FieldResource] = "Choisissez uniquement des ressources valides."
 		}
 		if input.Date == "" {
 			page.FieldErrors[FieldDate] = "Choisissez une date."
 		}
-		page.Notice = Notice{Kind: NoticeInvalid, Message: "Choisissez une date, une prestation et une ressource."}
+		page.Notice = Notice{Kind: NoticeInvalid, Message: "Choisissez une date et une prestation valides."}
 		h.render(w, r, Form(page), http.StatusUnprocessableEntity)
 		return
 	}
@@ -157,6 +158,7 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 	}
 	page.ScheduleConfigured = availability.ScheduleConfigured
 	page.OpenThisDay = availability.OpenThisDay
+	page.AutomaticallyAllocated = availability.AutoAllocated
 	for _, available := range availability.Slots {
 		page.AvailableSlots = append(page.AvailableSlots, Slot{
 			Value: available.StartsAt.Format("15:04"),
@@ -303,9 +305,7 @@ func validateInput(input SaveInput) map[string]string {
 			errorsByField[field] = "Choisissez une valeur valide."
 		}
 	}
-	if len(input.ResourceIDs) == 0 {
-		errorsByField[FieldResource] = "Choisissez au moins une ressource."
-	} else {
+	if len(input.ResourceIDs) != 0 {
 		for _, resourceID := range input.ResourceIDs {
 			if !uuidPattern.MatchString(resourceID) {
 				errorsByField[FieldResource] = "Choisissez uniquement des ressources valides."

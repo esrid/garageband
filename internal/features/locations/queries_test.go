@@ -167,6 +167,24 @@ func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	resourceID, err := store.AddResource(t.Context(), tenantID, ownerID, location.ID, locations.ResourceInput{
+		Kind: "technician", Name: "Alice",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var serviceID string
+	if err := fixtures.QueryRow(`
+		INSERT INTO service_offerings (
+		    tenant_id, location_id, code, name, duration_minutes
+		) VALUES ($1, $2, 'diagnostic', 'Diagnostic', 45)
+		RETURNING id::text`, tenantID, location.ID).Scan(&serviceID); err != nil {
+		t.Fatal(err)
+	}
+	requirement := locations.RequirementInput{ServiceID: serviceID, Kind: "technician", Quantity: 1}
+	if err := store.UpsertRequirement(t.Context(), tenantID, ownerID, location.ID, requirement); err != nil {
+		t.Fatal(err)
+	}
 
 	hour := locations.OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "12:00"}
 	if err := store.AddOpeningHour(t.Context(), tenantID, ownerID, location.ID, hour); err != nil {
@@ -188,7 +206,9 @@ func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !schedule.Enabled || len(schedule.OpeningHours) != 1 || len(schedule.Closures) != 1 {
+	if !schedule.Enabled || len(schedule.OpeningHours) != 1 || len(schedule.Closures) != 1 ||
+		len(schedule.Resources) != 1 || len(schedule.Services) != 1 ||
+		len(schedule.Services[0].Requirements) != 1 {
 		t.Fatalf("schedule = %#v", schedule)
 	}
 	if schedule.Closures[0].StartsAt.Format("2006-01-02 15:04 -07:00") != "2030-08-12 10:00 -04:00" {
@@ -198,6 +218,17 @@ func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
 		Weekday: 2, OpensAt: "08:00", ClosesAt: "12:00",
 	}); !errors.Is(err, locations.ErrForbidden) {
 		t.Fatalf("member add hour = %v, want ErrForbidden", err)
+	}
+	if _, err := store.AddResource(t.Context(), tenantID, memberID, location.ID, locations.ResourceInput{
+		Kind: "bay", Name: "Pont interdit",
+	}); !errors.Is(err, locations.ErrForbidden) {
+		t.Fatalf("member add resource = %v, want ErrForbidden", err)
+	}
+	if err := store.DeleteRequirement(t.Context(), tenantID, ownerID, location.ID, requirement); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetResourceActive(t.Context(), tenantID, ownerID, location.ID, resourceID, false); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.DeleteClosure(t.Context(), tenantID, ownerID, location.ID, closureID); err != nil {
 		t.Fatal(err)

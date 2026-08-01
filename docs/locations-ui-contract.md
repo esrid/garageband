@@ -19,6 +19,10 @@ permissions — everything below is what the handler owes them.
 | `POST` | `/locations/{id}/schedule/hours/delete` | remove the exact window named by hidden fields |
 | `POST` | `/locations/{id}/schedule/closures` | add an exceptional closure parsed in the location timezone |
 | `POST` | `/locations/{id}/schedule/closures/{closureID}/delete` | remove an exceptional closure |
+| `POST` | `/locations/{id}/schedule/resources` | add a technician, bay, equipment, or calendar resource |
+| `POST` | `/locations/{id}/schedule/resources/{resourceID}/active` | activate/deactivate capacity without deleting history |
+| `POST` | `/locations/{id}/schedule/requirements` | upsert one resource kind/quantity required by a service |
+| `POST` | `/locations/{id}/schedule/requirements/delete` | return that service kind to manual selection |
 | `POST` | `/locations/{id}/deactivate` | `Store.SetStatus(..., "inactive")` |
 | `POST` | `/locations/{id}/reactivate` | `Store.SetStatus(..., "active")` |
 
@@ -45,6 +49,14 @@ The location timezone becomes immutable once the site has an appointment or a
 closure. Changing it later would reinterpret weekly hours and shift historical
 local-time displays, so PostgreSQL rejects the update and the location form
 ties the explanation to its timezone field.
+
+The same screen owns workshop capacity. Owners/admins name bookable resources
+and declare each active scheduling service's required kinds and quantities.
+Members can inspect both but cannot write. A resource with a future active
+reservation cannot be deactivated, and a new/upscaled requirement cannot
+invalidate future appointments. Services without requirements retain explicit
+manual resource selection; services with at least one requirement are allocated
+automatically by the agenda store.
 
 ## Filling IndexPage
 

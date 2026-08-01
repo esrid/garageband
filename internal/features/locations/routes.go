@@ -31,6 +31,10 @@ func Register(
 	mux.Handle("POST /locations/{locationID}/schedule/hours/delete", requireTenant(http.HandlerFunc(h.deleteOpeningHour)))
 	mux.Handle("POST /locations/{locationID}/schedule/closures", requireTenant(http.HandlerFunc(h.addClosure)))
 	mux.Handle("POST /locations/{locationID}/schedule/closures/{closureID}/delete", requireTenant(http.HandlerFunc(h.deleteClosure)))
+	mux.Handle("POST /locations/{locationID}/schedule/resources", requireTenant(http.HandlerFunc(h.addResource)))
+	mux.Handle("POST /locations/{locationID}/schedule/resources/{resourceID}/active", requireTenant(http.HandlerFunc(h.setResourceActive)))
+	mux.Handle("POST /locations/{locationID}/schedule/requirements", requireTenant(http.HandlerFunc(h.upsertRequirement)))
+	mux.Handle("POST /locations/{locationID}/schedule/requirements/delete", requireTenant(http.HandlerFunc(h.deleteRequirement)))
 	mux.Handle(
 		"POST /locations/{locationID}/deactivate",
 		requireTenant(http.HandlerFunc(h.deactivate)),

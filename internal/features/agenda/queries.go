@@ -52,7 +52,13 @@ type AvailabilitySlot struct {
 type AvailabilityResult struct {
 	ScheduleConfigured bool
 	OpenThisDay        bool
+	AutoAllocated      bool
 	Slots              []AvailabilitySlot
+}
+
+type resourceRequirement struct {
+	Kind     string
+	Quantity int
 }
 
 type Store struct{ db *db.DB }
@@ -97,16 +103,23 @@ func (s *Store) Availability(
 			}
 			return err
 		}
-		var resourceCount int
-		if err := tx.QueryRowContext(ctx, `
-			SELECT count(*) FROM bookable_resources
-			WHERE tenant_id = $1 AND location_id = $2 AND id::text = ANY($3::text[]) AND active`,
-			tenantID, locationID, resourceIDs,
-		).Scan(&resourceCount); err != nil {
+		requirements, err := loadResourceRequirements(ctx, tx, tenantID, locationID, serviceID)
+		if err != nil {
 			return err
 		}
-		if resourceCount == 0 || resourceCount != len(resourceIDs) {
-			return &FieldError{Field: FieldResource, Message: "Choisissez uniquement des ressources disponibles dans cet établissement."}
+		result.AutoAllocated = len(requirements) != 0
+		if !result.AutoAllocated {
+			var resourceCount int
+			if err := tx.QueryRowContext(ctx, `
+				SELECT count(*) FROM bookable_resources
+				WHERE tenant_id = $1 AND location_id = $2 AND id::text = ANY($3::text[]) AND active`,
+				tenantID, locationID, resourceIDs,
+			).Scan(&resourceCount); err != nil {
+				return err
+			}
+			if resourceCount == 0 || resourceCount != len(resourceIDs) {
+				return &FieldError{Field: FieldResource, Message: "Choisissez uniquement des ressources disponibles dans cet établissement."}
+			}
 		}
 
 		weekday := int(day.Weekday())
@@ -149,13 +162,38 @@ func (s *Store) Availability(
 			SELECT candidate.slot_start, candidate.slot_end
 			FROM candidates candidate
 			WHERE candidate.slot_start >= now()
-			  AND NOT EXISTS (
-			      SELECT 1 FROM appointment_resource_reservations reservation
-			      WHERE reservation.tenant_id = $1
-			        AND reservation.location_id = $2
-			        AND reservation.resource_id::text = ANY($3::text[])
-			        AND reservation.status IN ('pending', 'confirmed', 'in_progress')
-			        AND reservation.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			  AND (
+			      ($7::boolean AND NOT EXISTS (
+			          SELECT 1
+			          FROM service_resource_requirements requirement
+			          WHERE requirement.tenant_id = $1
+			            AND requirement.location_id = $2
+			            AND requirement.service_id = $8
+			            AND (
+			                SELECT count(*)
+			                FROM bookable_resources resource
+			                WHERE resource.tenant_id = $1
+			                  AND resource.location_id = $2
+			                  AND resource.kind = requirement.resource_kind
+			                  AND resource.active
+			                  AND NOT EXISTS (
+			                      SELECT 1
+			                      FROM appointment_resource_reservations reservation
+			                      WHERE reservation.tenant_id = resource.tenant_id
+			                        AND reservation.resource_id = resource.id
+			                        AND reservation.status IN ('pending', 'confirmed', 'in_progress')
+			                        AND reservation.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			                  )
+			            ) < requirement.quantity
+			      ))
+			      OR (NOT $7::boolean AND NOT EXISTS (
+			          SELECT 1 FROM appointment_resource_reservations reservation
+			          WHERE reservation.tenant_id = $1
+			            AND reservation.location_id = $2
+			            AND reservation.resource_id::text = ANY($3::text[])
+			            AND reservation.status IN ('pending', 'confirmed', 'in_progress')
+			            AND reservation.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			      ))
 			  )
 			  AND NOT EXISTS (
 			      SELECT 1 FROM location_closures closure
@@ -163,7 +201,7 @@ func (s *Store) Availability(
 			        AND closure.closed_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
 			  )
 			ORDER BY candidate.slot_start
-			LIMIT 96`, tenantID, locationID, resourceIDs, day.Format(DateLayout), weekday, totalMinutes)
+			LIMIT 96`, tenantID, locationID, resourceIDs, day.Format(DateLayout), weekday, totalMinutes, result.AutoAllocated, serviceID)
 		if err != nil {
 			return err
 		}
@@ -466,14 +504,26 @@ func (s *Store) Save(
 			}
 			return err
 		}
-		resourceIDs := selectedResourceIDs(input)
-		resourceNames, err := lockSelectedResources(ctx, tx, tenantID, input.LocationID, resourceIDs)
+		endsAt := startsAt.Add(time.Duration(duration+before+after) * time.Minute)
+		requirements, err := loadResourceRequirements(ctx, tx, tenantID, input.LocationID, input.ServiceID)
+		if err != nil {
+			return err
+		}
+		var resourceIDs, resourceNames []string
+		if len(requirements) != 0 {
+			resourceIDs, resourceNames, err = allocateRequiredResources(
+				ctx, tx, tenantID, input.LocationID, appointmentID,
+				startsAt, endsAt, requirements,
+			)
+		} else {
+			resourceIDs = selectedResourceIDs(input)
+			resourceNames, err = lockSelectedResources(ctx, tx, tenantID, input.LocationID, resourceIDs)
+		}
 		if err != nil {
 			return err
 		}
 		input.ResourceID = resourceIDs[0]
 		resourceName := strings.Join(resourceNames, ", ")
-		endsAt := startsAt.Add(time.Duration(duration+before+after) * time.Minute)
 
 		if appointmentID == "" {
 			if err := tx.QueryRowContext(ctx, `
@@ -565,6 +615,90 @@ func selectedResourceIDs(input SaveInput) []string {
 		resourceIDs = append(resourceIDs, value)
 	}
 	return resourceIDs
+}
+
+func loadResourceRequirements(
+	ctx context.Context,
+	tx *sql.Tx,
+	tenantID string,
+	locationID string,
+	serviceID string,
+) (requirements []resourceRequirement, err error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT resource_kind, quantity
+		FROM service_resource_requirements
+		WHERE tenant_id = $1 AND location_id = $2 AND service_id = $3
+		ORDER BY resource_kind`, tenantID, locationID, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var requirement resourceRequirement
+		if err := rows.Scan(&requirement.Kind, &requirement.Quantity); err != nil {
+			return nil, errors.Join(err, rows.Close())
+		}
+		requirements = append(requirements, requirement)
+	}
+	return requirements, errors.Join(rows.Err(), rows.Close())
+}
+
+func allocateRequiredResources(
+	ctx context.Context,
+	tx *sql.Tx,
+	tenantID string,
+	locationID string,
+	appointmentID string,
+	startsAt time.Time,
+	endsAt time.Time,
+	requirements []resourceRequirement,
+) (resourceIDs []string, names []string, err error) {
+	for _, requirement := range requirements {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT resource.id::text, resource.name
+			FROM bookable_resources resource
+			WHERE resource.tenant_id = $1
+			  AND resource.location_id = $2
+			  AND resource.kind = $3
+			  AND resource.active
+			  AND NOT EXISTS (
+			      SELECT 1
+			      FROM appointment_resource_reservations reservation
+			      WHERE reservation.tenant_id = resource.tenant_id
+			        AND reservation.resource_id = resource.id
+			        AND reservation.status IN ('pending', 'confirmed', 'in_progress')
+			        AND reservation.occupied_during && tstzrange($4, $5, '[)')
+			        AND ($6 = '' OR reservation.appointment_id::text <> $6)
+			  )
+			ORDER BY resource.id
+			LIMIT $7
+			FOR UPDATE SKIP LOCKED`,
+			tenantID, locationID, requirement.Kind, startsAt, endsAt,
+			appointmentID, requirement.Quantity)
+		if err != nil {
+			return nil, nil, err
+		}
+		found := 0
+		for rows.Next() {
+			var resourceID, name string
+			if err := rows.Scan(&resourceID, &name); err != nil {
+				return nil, nil, errors.Join(err, rows.Close())
+			}
+			resourceIDs = append(resourceIDs, resourceID)
+			names = append(names, name)
+			found++
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return nil, nil, err
+		}
+		if found != requirement.Quantity {
+			return nil, nil, &ConflictError{
+				Resource: "L’ensemble de ressources requis",
+				StartsAt: startsAt,
+				EndsAt:   endsAt,
+			}
+		}
+	}
+	return resourceIDs, names, nil
 }
 
 func lockSelectedResources(

@@ -71,7 +71,39 @@ type Schedule struct {
 	Enabled      bool
 	OpeningHours []OpeningHour
 	Closures     []Closure
+	Resources    []WorkshopResource
+	Services     []SchedulingService
 	CanManage    bool
+}
+
+type WorkshopResource struct {
+	ID     string
+	Kind   string
+	Name   string
+	Active bool
+}
+
+type ServiceRequirement struct {
+	Kind     string
+	Quantity int
+}
+
+type SchedulingService struct {
+	ID           string
+	Name         string
+	Duration     int
+	Requirements []ServiceRequirement
+}
+
+type ResourceInput struct {
+	Kind string
+	Name string
+}
+
+type RequirementInput struct {
+	ServiceID string
+	Kind      string
+	Quantity  int
 }
 
 type OpeningHourInput struct {
@@ -176,9 +208,159 @@ func (s *Store) Schedule(
 			closure.EndsAt = closure.EndsAt.In(zone)
 			schedule.Closures = append(schedule.Closures, closure)
 		}
-		return errors.Join(closureRows.Err(), closureRows.Close())
+		if err := errors.Join(closureRows.Err(), closureRows.Close()); err != nil {
+			return err
+		}
+
+		resourceRows, err := tx.QueryContext(ctx, `
+			SELECT id::text, kind, name, active
+			FROM bookable_resources
+			WHERE tenant_id = $1 AND location_id = $2
+			ORDER BY active DESC, kind, name, id`, tenantID, locationID)
+		if err != nil {
+			return err
+		}
+		for resourceRows.Next() {
+			var resource WorkshopResource
+			if err := resourceRows.Scan(&resource.ID, &resource.Kind, &resource.Name, &resource.Active); err != nil {
+				return errors.Join(err, resourceRows.Close())
+			}
+			schedule.Resources = append(schedule.Resources, resource)
+		}
+		if err := errors.Join(resourceRows.Err(), resourceRows.Close()); err != nil {
+			return err
+		}
+
+		serviceRows, err := tx.QueryContext(ctx, `
+			SELECT service.id::text, service.name, service.duration_minutes,
+			       requirement.resource_kind, requirement.quantity
+			FROM service_offerings service
+			LEFT JOIN service_resource_requirements requirement
+			  ON requirement.tenant_id = service.tenant_id
+			 AND requirement.service_id = service.id
+			WHERE service.tenant_id = $1 AND service.location_id = $2 AND service.active
+			ORDER BY service.name, service.id, requirement.resource_kind`, tenantID, locationID)
+		if err != nil {
+			return err
+		}
+		serviceIndexes := make(map[string]int)
+		for serviceRows.Next() {
+			var id, name string
+			var duration int
+			var kind sql.NullString
+			var quantity sql.NullInt64
+			if err := serviceRows.Scan(&id, &name, &duration, &kind, &quantity); err != nil {
+				return errors.Join(err, serviceRows.Close())
+			}
+			index, exists := serviceIndexes[id]
+			if !exists {
+				index = len(schedule.Services)
+				serviceIndexes[id] = index
+				schedule.Services = append(schedule.Services, SchedulingService{ID: id, Name: name, Duration: duration})
+			}
+			if kind.Valid {
+				schedule.Services[index].Requirements = append(schedule.Services[index].Requirements, ServiceRequirement{Kind: kind.String, Quantity: int(quantity.Int64)})
+			}
+		}
+		return errors.Join(serviceRows.Err(), serviceRows.Close())
 	})
 	return schedule, err
+}
+
+func (s *Store) AddResource(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input ResourceInput,
+) (id string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(ctx, `
+			INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
+			SELECT $1, location.id, $3, btrim($4)
+			FROM locations location
+			WHERE location.tenant_id = $1 AND location.id = $2
+			RETURNING id::text`, tenantID, locationID, input.Kind, input.Name).Scan(&id)
+	})
+	return id, err
+}
+
+func (s *Store) SetResourceActive(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	resourceID string,
+	active bool,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			UPDATE bookable_resources SET active = $4, updated_at = now()
+			WHERE tenant_id = $1 AND location_id = $2 AND id = $3`,
+			tenantID, locationID, resourceID, active)
+		if err != nil {
+			return err
+		}
+		return exactlyOne(result)
+	})
+}
+
+func (s *Store) UpsertRequirement(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input RequirementInput,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			INSERT INTO service_resource_requirements (
+			    tenant_id, location_id, service_id, resource_kind, quantity
+			)
+			SELECT service.tenant_id, service.location_id, service.id, $4, $5
+			FROM service_offerings service
+			WHERE service.tenant_id = $1 AND service.location_id = $2
+			  AND service.id = $3 AND service.active
+			ON CONFLICT (service_id, resource_kind) DO UPDATE
+			SET quantity = EXCLUDED.quantity`,
+			tenantID, locationID, input.ServiceID, input.Kind, input.Quantity)
+		if err != nil {
+			return err
+		}
+		return exactlyOne(result)
+	})
+}
+
+func (s *Store) DeleteRequirement(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input RequirementInput,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM service_resource_requirements
+			WHERE tenant_id = $1 AND location_id = $2
+			  AND service_id = $3 AND resource_kind = $4`,
+			tenantID, locationID, input.ServiceID, input.Kind)
+		if err != nil {
+			return err
+		}
+		return exactlyOne(result)
+	})
 }
 
 func (s *Store) AddOpeningHour(
