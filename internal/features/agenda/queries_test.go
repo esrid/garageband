@@ -190,6 +190,17 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 		t.Fatal("closure overlapping an active appointment unexpectedly accepted")
 	}
 	if _, err := fixture.fixtures.Exec(`
+		DELETE FROM location_opening_hours
+		WHERE tenant_id = $1 AND location_id = $2 AND weekday = 3 AND opens_at = '08:00'`,
+		fixture.tenantID, fixture.locationID); err == nil {
+		t.Fatal("opening window containing an active appointment unexpectedly deleted")
+	}
+	if _, err := fixture.fixtures.Exec(`
+		UPDATE locations SET timezone = 'Europe/Paris'
+		WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, fixture.locationID); err == nil {
+		t.Fatal("timezone with scheduling history unexpectedly changed")
+	}
+	if _, err := fixture.fixtures.Exec(`
 		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
 		VALUES ($1, $2, 3, '13:00', '15:00')`, fixture.tenantID, fixture.locationID); err == nil {
 		t.Fatal("overlapping opening hours unexpectedly accepted")

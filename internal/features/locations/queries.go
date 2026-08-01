@@ -52,9 +52,267 @@ type Overview struct {
 	CanManage      bool
 }
 
+type OpeningHour struct {
+	Weekday  int
+	OpensAt  string
+	ClosesAt string
+}
+
+type Closure struct {
+	ID       string
+	StartsAt time.Time
+	EndsAt   time.Time
+	Reason   string
+}
+
+type Schedule struct {
+	Organization string
+	Location     Location
+	Enabled      bool
+	OpeningHours []OpeningHour
+	Closures     []Closure
+	CanManage    bool
+}
+
+type OpeningHourInput struct {
+	Weekday  int
+	OpensAt  string
+	ClosesAt string
+}
+
+type ClosureInput struct {
+	StartsDate string
+	StartsTime string
+	EndsDate   string
+	EndsTime   string
+	Reason     string
+}
+
+type ScheduleFieldError struct {
+	Field   string
+	Message string
+}
+
+func (e *ScheduleFieldError) Error() string { return e.Message }
+
 type Store struct{ db *db.DB }
 
 func NewStore(database *db.DB) *Store { return &Store{db: database} }
+
+func (s *Store) Schedule(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+) (schedule Schedule, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
+		organization, role, err := membershipContext(ctx, tx, tenantID, userID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrForbidden
+			}
+			return err
+		}
+		schedule.Organization = organization
+		schedule.CanManage = role == "owner" || role == "admin"
+		row := tx.QueryRowContext(ctx, `
+			SELECT id, tenant_id, name,
+			       COALESCE(siret, ''), COALESCE(phone_e164, ''),
+			       COALESCE(email, ''), COALESCE(website_url, ''),
+			       COALESCE(address_line1, ''), COALESCE(address_line2, ''),
+			       COALESCE(postal_code, ''), COALESCE(city, ''),
+			       country_code, timezone, status, created_at, updated_at
+			FROM locations
+			WHERE tenant_id = $1 AND id = $2`, tenantID, locationID)
+		if schedule.Location, err = scanLocation(row); err != nil {
+			return err
+		}
+		if err := tx.QueryRowContext(ctx, `
+			SELECT availability_schedule_enabled
+			FROM locations WHERE tenant_id = $1 AND id = $2`,
+			tenantID, locationID,
+		).Scan(&schedule.Enabled); err != nil {
+			return err
+		}
+
+		hourRows, err := tx.QueryContext(ctx, `
+			SELECT weekday, to_char(opens_at, 'HH24:MI'), to_char(closes_at, 'HH24:MI')
+			FROM location_opening_hours
+			WHERE tenant_id = $1 AND location_id = $2
+			ORDER BY weekday, opens_at`, tenantID, locationID)
+		if err != nil {
+			return err
+		}
+		for hourRows.Next() {
+			var opening OpeningHour
+			if err := hourRows.Scan(&opening.Weekday, &opening.OpensAt, &opening.ClosesAt); err != nil {
+				return errors.Join(err, hourRows.Close())
+			}
+			schedule.OpeningHours = append(schedule.OpeningHours, opening)
+		}
+		if err := errors.Join(hourRows.Err(), hourRows.Close()); err != nil {
+			return err
+		}
+
+		zone, err := time.LoadLocation(schedule.Location.Timezone)
+		if err != nil {
+			return err
+		}
+		closureRows, err := tx.QueryContext(ctx, `
+			SELECT id::text, starts_at, ends_at, COALESCE(reason, '')
+			FROM location_closures
+			WHERE tenant_id = $1 AND location_id = $2 AND ends_at >= now()
+			ORDER BY starts_at, id
+			LIMIT 100`, tenantID, locationID)
+		if err != nil {
+			return err
+		}
+		for closureRows.Next() {
+			var closure Closure
+			if err := closureRows.Scan(&closure.ID, &closure.StartsAt, &closure.EndsAt, &closure.Reason); err != nil {
+				return errors.Join(err, closureRows.Close())
+			}
+			closure.StartsAt = closure.StartsAt.In(zone)
+			closure.EndsAt = closure.EndsAt.In(zone)
+			schedule.Closures = append(schedule.Closures, closure)
+		}
+		return errors.Join(closureRows.Err(), closureRows.Close())
+	})
+	return schedule, err
+}
+
+func (s *Store) AddOpeningHour(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input OpeningHourInput,
+) (err error) {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		var locationExists bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (SELECT 1 FROM locations WHERE tenant_id = $1 AND id = $2)`,
+			tenantID, locationID,
+		).Scan(&locationExists); err != nil {
+			return err
+		}
+		if !locationExists {
+			return sql.ErrNoRows
+		}
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO location_opening_hours (
+			    tenant_id, location_id, weekday, opens_at, closes_at
+			) VALUES ($1, $2, $3, $4::time, $5::time)`,
+			tenantID, locationID, input.Weekday, input.OpensAt, input.ClosesAt)
+		return err
+	})
+}
+
+func (s *Store) DeleteOpeningHour(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input OpeningHourInput,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM location_opening_hours
+			WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
+			  AND opens_at = $4::time AND closes_at = $5::time`,
+			tenantID, locationID, input.Weekday, input.OpensAt, input.ClosesAt)
+		if err != nil {
+			return err
+		}
+		return exactlyOne(result)
+	})
+}
+
+func (s *Store) AddClosure(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	input ClosureInput,
+) (id string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		var timezoneName string
+		if err := tx.QueryRowContext(ctx, `
+			SELECT timezone FROM locations WHERE tenant_id = $1 AND id = $2`,
+			tenantID, locationID,
+		).Scan(&timezoneName); err != nil {
+			return err
+		}
+		zone, err := time.LoadLocation(timezoneName)
+		if err != nil {
+			return err
+		}
+		const localDateTime = "2006-01-02 15:04"
+		startsValue := input.StartsDate + " " + input.StartsTime
+		endsValue := input.EndsDate + " " + input.EndsTime
+		startsAt, err := time.ParseInLocation(localDateTime, startsValue, zone)
+		if err != nil || startsAt.Format(localDateTime) != startsValue {
+			return &ScheduleFieldError{Field: FieldClosureStartDate, Message: "Choisissez un début valide dans le fuseau du site."}
+		}
+		endsAt, err := time.ParseInLocation(localDateTime, endsValue, zone)
+		if err != nil || endsAt.Format(localDateTime) != endsValue {
+			return &ScheduleFieldError{Field: FieldClosureEndDate, Message: "Choisissez une fin valide dans le fuseau du site."}
+		}
+		if !endsAt.After(startsAt) {
+			return &ScheduleFieldError{Field: FieldClosureEndTime, Message: "La fin doit être après le début."}
+		}
+		return tx.QueryRowContext(ctx, `
+			INSERT INTO location_closures (
+			    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
+			) VALUES ($1, $2, $3, $4, NULLIF(btrim($5), ''), $6)
+			RETURNING id::text`,
+			tenantID, locationID, startsAt, endsAt, input.Reason, userID,
+		).Scan(&id)
+	})
+	return id, err
+}
+
+func (s *Store) DeleteClosure(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	closureID string,
+) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM location_closures
+			WHERE tenant_id = $1 AND location_id = $2 AND id = $3`,
+			tenantID, locationID, closureID)
+		if err != nil {
+			return err
+		}
+		return exactlyOne(result)
+	})
+}
+
+func exactlyOne(result sql.Result) error {
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
 
 func (s *Store) Overview(
 	ctx context.Context,

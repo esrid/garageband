@@ -154,6 +154,66 @@ func TestLocationDatabaseValidationAndTenantBoundary(t *testing.T) {
 	}
 }
 
+func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "schedule-owner@example.com")
+	memberID := createUser(t, fixtures, "schedule-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	store := locations.NewStore(runtime)
+	location, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier", CountryCode: "FR", Timezone: "America/Martinique",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hour := locations.OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "12:00"}
+	if err := store.AddOpeningHour(t.Context(), tenantID, ownerID, location.ID, hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddOpeningHour(t.Context(), tenantID, ownerID, location.ID, locations.OpeningHourInput{
+		Weekday: 1, OpensAt: "11:00", ClosesAt: "13:00",
+	}); err == nil {
+		t.Fatal("overlapping opening window unexpectedly accepted")
+	}
+	closureID, err := store.AddClosure(t.Context(), tenantID, ownerID, location.ID, locations.ClosureInput{
+		StartsDate: "2030-08-12", StartsTime: "10:00",
+		EndsDate: "2030-08-12", EndsTime: "12:00", Reason: "Réunion",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedule, err := store.Schedule(t.Context(), tenantID, ownerID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !schedule.Enabled || len(schedule.OpeningHours) != 1 || len(schedule.Closures) != 1 {
+		t.Fatalf("schedule = %#v", schedule)
+	}
+	if schedule.Closures[0].StartsAt.Format("2006-01-02 15:04 -07:00") != "2030-08-12 10:00 -04:00" {
+		t.Fatalf("local closure = %v", schedule.Closures[0].StartsAt)
+	}
+	if err := store.AddOpeningHour(t.Context(), tenantID, memberID, location.ID, locations.OpeningHourInput{
+		Weekday: 2, OpensAt: "08:00", ClosesAt: "12:00",
+	}); !errors.Is(err, locations.ErrForbidden) {
+		t.Fatalf("member add hour = %v, want ErrForbidden", err)
+	}
+	if err := store.DeleteClosure(t.Context(), tenantID, ownerID, location.ID, closureID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteOpeningHour(t.Context(), tenantID, ownerID, location.ID, hour); err != nil {
+		t.Fatal(err)
+	}
+	schedule, err = store.Schedule(t.Context(), tenantID, ownerID, location.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !schedule.Enabled || len(schedule.OpeningHours) != 0 || len(schedule.Closures) != 0 {
+		t.Fatalf("empty configured schedule = %#v", schedule)
+	}
+}
+
 func createUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var userID string

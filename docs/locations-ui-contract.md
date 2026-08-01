@@ -14,13 +14,37 @@ permissions — everything below is what the handler owes them.
 | `POST` | `/locations` | create, then redirect to `/locations` |
 | `GET` | `/locations/{id}` | `Form(FormPage)` for an existing site |
 | `POST` | `/locations/{id}` | update, then redirect to `/locations` |
+| `GET` | `/locations/{id}/schedule` | weekly opening hours and upcoming exceptional closures |
+| `POST` | `/locations/{id}/schedule/hours` | add a non-overlapping local-time opening window |
+| `POST` | `/locations/{id}/schedule/hours/delete` | remove the exact window named by hidden fields |
+| `POST` | `/locations/{id}/schedule/closures` | add an exceptional closure parsed in the location timezone |
+| `POST` | `/locations/{id}/schedule/closures/{closureID}/delete` | remove an exceptional closure |
 | `POST` | `/locations/{id}/deactivate` | `Store.SetStatus(..., "inactive")` |
 | `POST` | `/locations/{id}/reactivate` | `Store.SetStatus(..., "active")` |
 
 All of them are registered by `Register` behind the `requireTenant` middleware
-and run inside the tenant scope. Nothing in the app links to `/locations` yet:
-the navigation shell is a separate slice, so the entry point is added there
-rather than left as a dead link somewhere else.
+and run inside the tenant/user scope. The shared navigation links to
+`/locations`; the edit screen is the entry point into a site's schedule.
+
+## Weekly schedule and closures
+
+`ScheduleView(SchedulePage)` renders every weekday, including closed days, and
+supports multiple windows on one day for lunch breaks. The first inserted
+window durably enables schedule enforcement. Removing the final window does
+not silently return the site to unrestricted legacy booking: the enabled site
+is closed until another window is added.
+
+Closure date/time values are parsed in `Location.Timezone`, stored as
+`TIMESTAMPTZ`, and converted back to that timezone before rendering. Only
+upcoming closures are shown. PostgreSQL rejects overlapping windows,
+overlapping closures, closures over active appointments, and removal of an
+opening window that would strand a future active appointment. These conflicts
+are user-correctable outcomes, not server errors.
+
+The location timezone becomes immutable once the site has an appointment or a
+closure. Changing it later would reinterpret weekly hours and shift historical
+local-time displays, so PostgreSQL rejects the update and the location form
+ties the explanation to its timezone field.
 
 ## Filling IndexPage
 
@@ -78,5 +102,5 @@ instead of controls. The handler must still refuse the write routes itself —
 
 ## Not covered here
 
-Customer sharing, employee permissions beyond `CanManage`, and the navigation
-entry point into `/locations` are out of scope for the UI slice.
+Customer sharing and employee permissions beyond `CanManage` are out of scope
+for this UI slice.

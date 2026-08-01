@@ -6,6 +6,7 @@ import (
 	"html"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 )
@@ -217,6 +218,23 @@ func TestFormReadOnlyForMemberWithoutRights(t *testing.T) {
 	mustNotContain(t, page,
 		`name="name"`, "Enregistrer les modifications",
 		"Désactiver ce site", "Réactiver ce site",
+	)
+}
+
+func TestScheduleViewSeparatesWeeklyHoursAndClosures(t *testing.T) {
+	page := render(t, ScheduleView(SchedulePage{
+		Organization: "Garage Central",
+		Location:     Location{ID: "loc-1", Name: "Atelier Gerland", Timezone: "Europe/Paris"},
+		Enabled:      true, CanManage: true,
+		OpeningHours:  []OpeningHour{{Weekday: 1, OpensAt: "08:00", ClosesAt: "12:00"}, {Weekday: 1, OpensAt: "14:00", ClosesAt: "18:00"}},
+		Closures:      []Closure{{ID: "closure-1", StartsAt: time.Date(2030, 8, 12, 10, 0, 0, 0, time.UTC), EndsAt: time.Date(2030, 8, 12, 12, 0, 0, 0, time.UTC), Reason: "Réunion"}},
+		HourValues:    OpeningHourInput{Weekday: 1, OpensAt: "08:00", ClosesAt: "18:00"},
+		ClosureValues: ClosureInput{StartsDate: "2030-08-12", StartsTime: "10:00", EndsDate: "2030-08-12", EndsTime: "12:00"},
+	}))
+	mustContain(t, page,
+		"Horaires hebdomadaires", "Lundi", "08:00–12:00", "14:00–18:00",
+		"Fermetures exceptionnelles", "Réunion", "Ajouter la plage", "Ajouter la fermeture",
+		"/locations/loc-1/schedule/hours", "/locations/loc-1/schedule/closures",
 	)
 }
 

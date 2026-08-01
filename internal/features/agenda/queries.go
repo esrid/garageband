@@ -70,10 +70,10 @@ func (s *Store) Availability(
 	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
 		var timezoneName string
 		if err := tx.QueryRowContext(ctx, `
-			SELECT timezone FROM locations
+			SELECT timezone, availability_schedule_enabled FROM locations
 			WHERE tenant_id = $1 AND id = $2 AND status = 'active'
 			  AND app_current_user_can_access_location(id)`, tenantID, locationID,
-		).Scan(&timezoneName); err != nil {
+		).Scan(&timezoneName, &result.ScheduleConfigured); err != nil {
 			return err
 		}
 		zone, err := time.LoadLocation(timezoneName)
@@ -109,16 +109,15 @@ func (s *Store) Availability(
 		}
 
 		weekday := int(day.Weekday())
+		if !result.ScheduleConfigured {
+			return nil
+		}
 		if err := tx.QueryRowContext(ctx, `
 			SELECT EXISTS (
-			           SELECT 1 FROM location_opening_hours
-			           WHERE tenant_id = $1 AND location_id = $2
-			       ),
-			       EXISTS (
-			           SELECT 1 FROM location_opening_hours
-			           WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
-			       )`, tenantID, locationID, weekday,
-		).Scan(&result.ScheduleConfigured, &result.OpenThisDay); err != nil {
+			    SELECT 1 FROM location_opening_hours
+			    WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
+			)`, tenantID, locationID, weekday,
+		).Scan(&result.OpenThisDay); err != nil {
 			return err
 		}
 		if !result.OpenThisDay {

@@ -1,6 +1,7 @@
 package locations
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -17,17 +18,25 @@ const StatusActive = "active"
 // constants are the single source of truth for what a handler must parse and
 // for the keys used in FieldErrors.
 const (
-	FieldName         = "name"
-	FieldSIRET        = "siret"
-	FieldAddressLine1 = "address_line1"
-	FieldAddressLine2 = "address_line2"
-	FieldPostalCode   = "postal_code"
-	FieldCity         = "city"
-	FieldCountry      = "country_code"
-	FieldTimezone     = "timezone"
-	FieldEmail        = "email"
-	FieldPhone        = "phone"
-	FieldWebsite      = "website"
+	FieldName             = "name"
+	FieldSIRET            = "siret"
+	FieldAddressLine1     = "address_line1"
+	FieldAddressLine2     = "address_line2"
+	FieldPostalCode       = "postal_code"
+	FieldCity             = "city"
+	FieldCountry          = "country_code"
+	FieldTimezone         = "timezone"
+	FieldEmail            = "email"
+	FieldPhone            = "phone"
+	FieldWebsite          = "website"
+	FieldWeekday          = "weekday"
+	FieldOpensAt          = "opens_at"
+	FieldClosesAt         = "closes_at"
+	FieldClosureStartDate = "closure_start_date"
+	FieldClosureStartTime = "closure_start_time"
+	FieldClosureEndDate   = "closure_end_date"
+	FieldClosureEndTime   = "closure_end_time"
+	FieldClosureReason    = "closure_reason"
 )
 
 // Notice kinds. The view derives the heading from the kind, so French copy
@@ -71,6 +80,33 @@ type FormPage struct {
 	FieldErrors map[string]string // field key -> French message, shown inline
 	Notice      Notice
 	CanManage   bool
+}
+
+type SchedulePage struct {
+	Organization  string
+	Location      Location
+	Enabled       bool
+	OpeningHours  []OpeningHour
+	Closures      []Closure
+	CanManage     bool
+	HourValues    OpeningHourInput
+	ClosureValues ClosureInput
+	FieldErrors   map[string]string
+	Notice        Notice
+}
+
+func (p SchedulePage) Error(field string) string { return p.FieldErrors[field] }
+
+func (p SchedulePage) HasError(field string) bool { return p.FieldErrors[field] != "" }
+
+func (p SchedulePage) HoursFor(weekday int) []OpeningHour {
+	var hours []OpeningHour
+	for _, opening := range p.OpeningHours {
+		if opening.Weekday == weekday {
+			hours = append(hours, opening)
+		}
+	}
+	return hours
 }
 
 func (p FormPage) IsNew() bool { return strings.TrimSpace(p.ID) == "" }
@@ -159,6 +195,41 @@ var countryOptions = []Option{
 	{"ES", "Espagne"},
 	{"IT", "Italie"},
 }
+
+var weekdayOptions = []Option{
+	{"1", "Lundi"},
+	{"2", "Mardi"},
+	{"3", "Mercredi"},
+	{"4", "Jeudi"},
+	{"5", "Vendredi"},
+	{"6", "Samedi"},
+	{"0", "Dimanche"},
+}
+
+func weekdayNumber(option Option) int {
+	weekday, _ := strconv.Atoi(option.Value)
+	return weekday
+}
+
+func closurePeriod(closure Closure) string {
+	if closure.StartsAt.Format(DateLayout) == closure.EndsAt.Format(DateLayout) {
+		return fmt.Sprintf(
+			"%s, %s–%s",
+			closure.StartsAt.Format("02/01/2006"),
+			closure.StartsAt.Format("15:04"),
+			closure.EndsAt.Format("15:04"),
+		)
+	}
+	return fmt.Sprintf(
+		"Du %s à %s au %s à %s",
+		closure.StartsAt.Format("02/01/2006"),
+		closure.StartsAt.Format("15:04"),
+		closure.EndsAt.Format("02/01/2006"),
+		closure.EndsAt.Format("15:04"),
+	)
+}
+
+const DateLayout = "2006-01-02"
 
 // fieldLabel is the French name of a field, used by the setup meter to say what
 // is still missing.

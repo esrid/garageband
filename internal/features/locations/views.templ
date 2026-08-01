@@ -1,6 +1,10 @@
 package locations
 
-import "github.com/esrid/garageband/internal/ui"
+import (
+	"strconv"
+
+	"github.com/esrid/garageband/internal/ui"
+)
 
 // Interface copy is French; identifiers and comments stay English.
 
@@ -159,7 +163,12 @@ templ Form(page FormPage) {
 	@ui.Layout(ui.PageInfo{Title: formTitle(page), NoIndex: true, Nav: ui.Nav{Section: ui.SectionLocations, InWorkspace: true}}) {
 		<div class="grid gap-5">
 			<header class="grid gap-1">
-				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
+					if !page.IsNew() {
+						<a href={ templ.URL("/locations/" + page.ID + "/schedule") } class="btn btn-sm min-h-11 sm:min-h-9">Horaires et fermetures</a>
+					}
+				</div>
 				<p class="text-sm opacity-70">
 					if page.IsNew() {
 						Un site est un atelier où vos clients se rendent. Vous pourrez le
@@ -356,6 +365,155 @@ templ Form(page FormPage) {
 			@pendingScript()
 		}
 	}
+}
+
+// Schedule configures the local weekly clock used by availability searches
+// and the exceptional periods during which the whole workshop is closed.
+templ ScheduleView(page SchedulePage) {
+	@ui.Layout(ui.PageInfo{Title: "Horaires de " + page.Location.Name, NoIndex: true, Nav: ui.Nav{Section: ui.SectionLocations, Workspace: page.Organization, InWorkspace: true}}) {
+		<div class="grid gap-5">
+			<header class="grid gap-2">
+				<a href={ templ.URL("/locations/" + page.Location.ID) } class="link text-sm">← Revenir au site</a>
+				<h1 class="text-xl font-semibold">Horaires et fermetures</h1>
+				<p class="text-sm opacity-70">{ page.Location.Name } · { page.Location.Timezone }</p>
+			</header>
+			@notice(page.Notice)
+			if !page.CanManage {
+				<div role="status" class="alert items-start text-left">
+					@infoIcon()
+					<span class="text-sm">Vous consultez ce planning en lecture seule.</span>
+				</div>
+			}
+			<section class="card card-border border-base-300 bg-base-100" aria-labelledby="weekly-hours-heading">
+				<div class="card-body gap-4 p-5">
+					<div class="grid gap-1">
+						<h2 id="weekly-hours-heading" class="text-base font-semibold">Horaires hebdomadaires</h2>
+						<p class="text-sm opacity-70">
+							Les rendez-vous doivent tenir entièrement dans une plage. Vous pouvez ajouter deux plages pour une journée avec pause déjeuner.
+						</p>
+					</div>
+					if !page.Enabled {
+						<div role="status" class="alert alert-warning items-start text-left">
+							@infoIcon()
+							<span class="text-sm">La recherche de créneaux attend votre première plage d’ouverture. Les rendez-vous existants ne sont pas modifiés.</span>
+						</div>
+					}
+					<ul class="divide-y divide-base-300 rounded-box border border-base-300">
+						for _, day := range weekdayOptions {
+							{{ hours := page.HoursFor(weekdayNumber(day)) }}
+							<li class="grid gap-2 p-3 sm:grid-cols-[8rem_1fr] sm:items-start">
+								<span class="font-medium">{ day.Label }</span>
+								if len(hours) == 0 {
+									<span class="text-sm opacity-60">Fermé</span>
+								} else {
+									<ul class="grid gap-2">
+										for _, opening := range hours {
+											<li class="flex flex-wrap items-center justify-between gap-2">
+												<span class="font-mono text-sm">{ opening.OpensAt }–{ opening.ClosesAt }</span>
+												if page.CanManage {
+													<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/hours/delete") }>
+														<input type="hidden" name={ FieldWeekday } value={ strconv.Itoa(opening.Weekday) }/>
+														<input type="hidden" name={ FieldOpensAt } value={ opening.OpensAt }/>
+														<input type="hidden" name={ FieldClosesAt } value={ opening.ClosesAt }/>
+														<button type="submit" class="btn btn-ghost btn-sm min-h-11 sm:min-h-9">Retirer<span class="sr-only"> { day.Label } { opening.OpensAt } à { opening.ClosesAt }</span></button>
+													</form>
+												}
+											</li>
+										}
+									</ul>
+								}
+							</li>
+						}
+					</ul>
+					if page.CanManage {
+						<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/hours") } class="grid gap-3 sm:grid-cols-4 sm:items-end" novalidate>
+							<label class="form-control grid gap-1">
+								<span class="label-text text-sm font-medium">Jour</span>
+								<select name={ FieldWeekday } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldWeekday)) }>
+									for _, day := range weekdayOptions {
+										<option value={ day.Value } selected?={ weekdayNumber(day) == page.HourValues.Weekday }>{ day.Label }</option>
+									}
+								</select>
+								if page.HasError(FieldWeekday) {
+									<span class="text-error text-xs">{ page.Error(FieldWeekday) }</span>
+								}
+							</label>
+							@timeField(FieldOpensAt, "Ouverture", page.HourValues.OpensAt, page.Error(FieldOpensAt))
+							@timeField(FieldClosesAt, "Fermeture", page.HourValues.ClosesAt, page.Error(FieldClosesAt))
+							<button type="submit" class="btn btn-primary min-h-11">Ajouter la plage</button>
+						</form>
+					}
+				</div>
+			</section>
+			<section class="card card-border border-base-300 bg-base-100" aria-labelledby="closures-heading">
+				<div class="card-body gap-4 p-5">
+					<div class="grid gap-1">
+						<h2 id="closures-heading" class="text-base font-semibold">Fermetures exceptionnelles</h2>
+						<p class="text-sm opacity-70">Jours fériés, réunion, congés ou fermeture ponctuelle de tout l’atelier.</p>
+					</div>
+					if len(page.Closures) == 0 {
+						<p class="text-sm opacity-60">Aucune fermeture à venir.</p>
+					} else {
+						<ul class="grid gap-2">
+							for _, closure := range page.Closures {
+								<li class="flex flex-col gap-2 rounded-box border border-base-300 p-3 sm:flex-row sm:items-center sm:justify-between">
+									<div class="grid gap-1">
+										<span class="text-sm font-medium">{ closurePeriod(closure) }</span>
+										if closure.Reason != "" {
+											<span class="text-sm opacity-60">{ closure.Reason }</span>
+										}
+									</div>
+									if page.CanManage {
+										<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/closures/" + closure.ID + "/delete") }>
+											<button type="submit" class="btn btn-ghost btn-sm min-h-11 sm:min-h-9">Retirer</button>
+										</form>
+									}
+								</li>
+							}
+						</ul>
+					}
+					if page.CanManage {
+						<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/closures") } class="grid gap-3" novalidate>
+							<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+								@dateField(FieldClosureStartDate, "Date de début", page.ClosureValues.StartsDate, page.Error(FieldClosureStartDate))
+								@timeField(FieldClosureStartTime, "Heure de début", page.ClosureValues.StartsTime, page.Error(FieldClosureStartTime))
+								@dateField(FieldClosureEndDate, "Date de fin", page.ClosureValues.EndsDate, page.Error(FieldClosureEndDate))
+								@timeField(FieldClosureEndTime, "Heure de fin", page.ClosureValues.EndsTime, page.Error(FieldClosureEndTime))
+							</div>
+							<label class="form-control grid gap-1">
+								<span class="label-text text-sm font-medium">Motif <span class="font-normal opacity-60">(optionnel)</span></span>
+								<input name={ FieldClosureReason } value={ page.ClosureValues.Reason } maxlength="300" class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldClosureReason)) }/>
+								if page.HasError(FieldClosureReason) {
+									<span class="text-error text-xs">{ page.Error(FieldClosureReason) }</span>
+								}
+							</label>
+							<button type="submit" class="btn btn-primary min-h-11 w-full sm:w-auto">Ajouter la fermeture</button>
+						</form>
+					}
+				</div>
+			</section>
+		</div>
+	}
+}
+
+templ timeField(name string, label string, value string, fieldError string) {
+	<label class="form-control grid gap-1">
+		<span class="label-text text-sm font-medium">{ label }</span>
+		<input type="time" name={ name } value={ value } class={ "input min-h-11 w-full", templ.KV("input-error", fieldError != "") } required/>
+		if fieldError != "" {
+			<span class="text-error text-xs">{ fieldError }</span>
+		}
+	</label>
+}
+
+templ dateField(name string, label string, value string, fieldError string) {
+	<label class="form-control grid gap-1">
+		<span class="label-text text-sm font-medium">{ label }</span>
+		<input type="date" name={ name } value={ value } class={ "input min-h-11 w-full", templ.KV("input-error", fieldError != "") } required/>
+		if fieldError != "" {
+			<span class="text-error text-xs">{ fieldError }</span>
+		}
+	</label>
 }
 
 // lifecycleSection keeps deactivation away from the save button: its own

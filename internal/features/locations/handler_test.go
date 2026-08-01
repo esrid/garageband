@@ -109,6 +109,60 @@ func TestLocationHTTPValidationDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestLocationScheduleHTTPFlow(t *testing.T) {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "schedule-handler-owner@example.com")
+	memberID := createUser(t, fixtures, "schedule-handler-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	store := locations.NewStore(runtime)
+	location, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier Planning", CountryCode: "FR", Timezone: "America/Martinique",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerHandler := locationHandler(store, locations.Principal{UserID: ownerID, TenantID: tenantID})
+	base := "/locations/" + location.ID + "/schedule"
+
+	response := getLocationPage(ownerHandler, base)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Horaires hebdomadaires") {
+		t.Fatalf("schedule page = %d %q", response.Code, response.Body.String())
+	}
+	response = postLocationForm(ownerHandler, base+"/hours", url.Values{
+		locations.FieldWeekday: {"1"}, locations.FieldOpensAt: {"08:00"}, locations.FieldClosesAt: {"12:00"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "hours-added") {
+		t.Fatalf("add hour = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
+	response = postLocationForm(ownerHandler, base+"/closures", url.Values{
+		locations.FieldClosureStartDate: {"2030-08-12"}, locations.FieldClosureStartTime: {"10:00"},
+		locations.FieldClosureEndDate: {"2030-08-12"}, locations.FieldClosureEndTime: {"12:00"},
+		locations.FieldClosureReason: {"Réunion d'équipe"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "closure-added") {
+		t.Fatalf("add closure = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
+	}
+	response = getLocationPage(ownerHandler, base)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "08:00–12:00") ||
+		!strings.Contains(response.Body.String(), "Réunion d&#39;équipe") {
+		t.Fatalf("configured schedule = %d %q", response.Code, response.Body.String())
+	}
+	response = postLocationForm(ownerHandler, base+"/hours", url.Values{
+		locations.FieldWeekday: {"1"}, locations.FieldOpensAt: {"18:00"}, locations.FieldClosesAt: {"08:00"},
+	})
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "après l’ouverture") {
+		t.Fatalf("invalid hour = %d %q", response.Code, response.Body.String())
+	}
+	memberHandler := locationHandler(store, locations.Principal{UserID: memberID, TenantID: tenantID})
+	response = postLocationForm(memberHandler, base+"/hours", url.Values{
+		locations.FieldWeekday: {"2"}, locations.FieldOpensAt: {"08:00"}, locations.FieldClosesAt: {"12:00"},
+	})
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("member add hour = %d body %q", response.Code, response.Body.String())
+	}
+}
+
 func locationHandler(store *locations.Store, principal locations.Principal) http.Handler {
 	mux := http.NewServeMux()
 	locations.Register(
