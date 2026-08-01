@@ -1,15 +1,14 @@
 # Team UI — what the handler owes the views
 
-The `team` feature ships the "Accès aux sites" screen (`views.templ`) and its
-view models (`view_data.go`) without a handler or a store. This is what the
-backend has to provide. The views never query anything and never decide
-permissions.
+The `team` feature ships the "Accès aux sites" screen (`views.templ`), its
+HTTP handler, and its view models. The views never query anything and never
+decide permissions. This document records the boundary the implementation
+must preserve.
 
-The store already exists, in a **different** feature: `accesscontrol.Store`
-(`AssignLocation`, `RevokeLocationAssignment`). A feature never imports another
-feature, so `team` must not import it. Wire it the way `dashboard` is wired in
-`app/router.go`: declare function types in `team` and pass closures over
-`accesscontrol.Store` from the composition root.
+The store lives in a **different** feature: `accesscontrol.Store`. A feature
+never imports another feature, so `team` declares function types and
+`app/router.go` passes closures over `accesscontrol.Store` from the composition
+root.
 
 The screen implements the accepted rule from `PRODUCT_FEATURES.md`: owners and
 admins reach every location by role, managers and members reach only the
@@ -21,12 +20,9 @@ locations explicitly assigned to them. It is backed by
 | Method | Path | Effect |
 |---|---|---|
 | `GET` | `/team` | `Index(Page)` |
-| `POST` | `/team/{userID}/locations` | replace that member's assignments, then redirect to `/team` |
+| `POST` | `/team/{userID}/locations` | atomically replace that member's assignments, then redirect to `/team?saved=1` |
 
-Both sit behind `auth.RequireTenant`. **Nothing links to `/team` yet**: the
-shell deliberately has no navigation entry, because a link to a route that
-404s is worse than no link. `ui.SectionTeam` already exists — add the entry in
-`ui.shell()` in the same change that registers the routes.
+Both sit behind `auth.RequireTenant`; the workspace shell links to `/team`.
 
 ## Filling Page
 
@@ -62,17 +58,12 @@ selected := r.Form[team.FieldLocations]
 ```
 
 An empty slice is a legitimate submission: it means "this person reaches no
-site". Do not treat it as a missing field.
+site". It is not treated as a missing field.
 
 The POST carries the complete desired state, not a delta, because a checkbox
-set has no other honest reading. The handler diffs it against the member's
-current assignments and calls `accesscontrol.Store.AssignLocation` for each
-added site and `RevokeLocationAssignment` for each removed one.
-
-Note the asymmetry: revocation takes an **assignment id**, not a location id,
-so whatever loads the page must keep the id of each active assignment around —
-`Member.LocationIDs` carries location ids only, since that is all the screen
-draws. Resolve the assignment id in the handler.
+set has no other honest reading. `accesscontrol.Store.ReplaceLocationAssignments`
+validates every requested location and applies the complete desired state in
+one transaction. If any location is invalid, none of the changes are committed.
 
 `user_location_assignments` keeps revoked rows: revoking sets `revoked_at` and
 `revoked_by_user_id` rather than deleting, and the partial unique index already

@@ -143,6 +143,34 @@ features depend on provider-neutral Go interfaces.
 - HTTP, store, database-validation, cross-tenant, and adversarial runtime-role
   tests cover the complete slice.
 
+### Location access and customer sharing foundation
+
+- Owners and admins implicitly reach every location; managers and members use
+  explicit, revocable `user_location_assignments`.
+- The authenticated `/team` screen lets owners and admins atomically replace a
+  manager or member's complete location assignment set. Other roles see only
+  their own access in a read-only presentation.
+- Assignment history is immutable: PostgreSQL records the assigning and
+  revoking users and timestamps, and re-assignment creates a new audit row.
+- Every customer has a required home location. Vehicles, vehicle lookups, and
+  agent memories also carry the location needed for authorization.
+- Owners and admins can create and revoke temporal customer-location grants
+  through the access-control store. The customer-sharing UI remains planned.
+- Forced PostgreSQL RLS applies location access and customer dossier grants to
+  customers, contacts, vehicles, calls, memories, appointments, repairs,
+  calendars, agents, phone numbers, services, and resources.
+- A receiving site can read the living canonical dossier while a grant is
+  active but cannot mutate common customer identity or vehicles owned by the
+  home site.
+- Appointments and repair orders preserve immutable customer and vehicle JSONB
+  identity snapshots; customer memories preserve an immutable customer
+  snapshot. After revocation, each site retains only its own records and the
+  source keeps read-only visibility of receiving-site activity created during
+  the grant interval.
+- Database and HTTP tests cover assignment replacement, forbidden targets,
+  grant/revoke/regrant audit history, active dossier access, canonical write
+  rejection, revocation, retained records, and historical source visibility.
+
 ### Business onboarding
 
 - Authenticated SIRET onboarding flow.
@@ -175,10 +203,6 @@ features depend on provider-neutral Go interfaces.
   appointments.
 - Repair history supports multiple vehicles and multiple repairs per customer.
 
-Important limitation: customers are currently organization-scoped in the
-schema. The accepted default-location ownership and explicit sharing model is
-not implemented yet.
-
 ### AI telephone-agent schema and provider ports
 
 - Provider-neutral interfaces exist for telephony, LLM, speech, calendar,
@@ -197,25 +221,21 @@ These are database contracts and ports, not working provider integrations.
 
 ## In progress
 
-No implementation slice is currently open.
+### Customer search
+
+- The DaisyUI customer-search screen and its backend contract are present.
+- The RLS foundation it depends on is implemented.
+- Search queries, HTTP routes, and the customer profile/detail route are still
+  required before the screen can be linked from navigation.
 
 ## Planned
 
 ### Location authorization and customer sharing
 
-- Add default/home location ownership to customer records.
-- Add user-to-location assignments for non-owner employees.
-- Add explicit customer-to-location access grants.
-- Enforce access in PostgreSQL as defense in depth, in addition to explicit
-  authorization in application queries.
-- Make vehicle, appointment, repair-history, and agent-memory visibility follow
-  the accepted complete-dossier sharing rule.
-- Record who shared a customer, when, and with which location.
-- Implement the accepted revocation behavior: hide the source location's records
-  and its future updates, keep the receiving location's own operational and
-  legal records together with the minimum customer and vehicle identity they
-  need, and preserve the source location's read-only view of activity the
-  receiving location created while the share was active.
+- Add customer-profile controls for owners and admins to grant or revoke access
+  for individual receiving locations.
+- Show current access, source and receiving locations, actor, grant time,
+  revocation time, and historical grants without allowing audit-row edits.
 
 ### Customer relationship management
 
@@ -306,7 +326,6 @@ No implementation slice is currently open.
 ### Organization administration
 
 - Invite users and manage membership roles.
-- Assign staff to one or more locations.
 - Configure opening hours, holidays, services, prices, bays, technicians, and
   equipment per location.
 - Switch active organization and active working location.
@@ -340,8 +359,8 @@ These are recommendations, not accepted scope:
 
 ## Recommended implementation order
 
-1. Implement location assignments and customer access grants before customer
-   CRUD so authorization is not retrofitted later.
+1. **Complete:** location assignments and customer access grants were built
+   before customer CRUD so authorization is not retrofitted later.
 2. Build customer and vehicle profiles with search and repair timeline.
 3. Build the structured offers/products/packages catalog and CSV/XLSX staging
    import before an agent is allowed to answer pricing questions.

@@ -158,6 +158,15 @@ func TestNoLocationsYet(t *testing.T) {
 	mustNotContain(t, page, `name="location_ids"`)
 }
 
+func TestReadOnlyWithoutAssignedLocationDoesNotSuggestCreatingOne(t *testing.T) {
+	page := render(t, Index(Page{
+		Organization: "Garage Central", CanManage: false,
+		Members: []Member{{UserID: "u2", Name: "Marc Leroy", Role: RoleManager}},
+	}))
+	mustContain(t, page, "Aucun site accessible", "Demandez à un propriétaire")
+	mustNotContain(t, page, "Créez d'abord un site", ">Voir les sites</a>")
+}
+
 func TestMemberLabelFallsBackToEmail(t *testing.T) {
 	named := Member{Name: "Claire Dupont", Email: "claire@example.fr"}
 	if named.Label() != "Claire Dupont" {

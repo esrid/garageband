@@ -49,12 +49,20 @@ templ Index(page Page) {
 			if len(page.Locations) == 0 {
 				<div class="card card-border border-base-300 bg-base-100">
 					<div class="card-body items-start gap-2 p-5">
-						<h2 class="text-base font-semibold">Aucun site à attribuer</h2>
-						<p class="text-sm opacity-70">
-							Créez d'abord un site : il n'y a rien à donner tant que votre garage
-							n'a pas d'atelier.
-						</p>
-						<a href="/locations" class="btn btn-primary mt-1 min-h-11">Voir les sites</a>
+						if page.CanManage {
+							<h2 class="text-base font-semibold">Aucun site à attribuer</h2>
+							<p class="text-sm opacity-70">
+								Créez d'abord un site : il n'y a rien à donner tant que votre garage
+								n'a pas d'atelier.
+							</p>
+							<a href="/locations" class="btn btn-primary mt-1 min-h-11">Voir les sites</a>
+						} else {
+							<h2 class="text-base font-semibold">Aucun site accessible</h2>
+							<p class="text-sm opacity-70">
+								Demandez à un propriétaire ou à un administrateur de vous attribuer
+								au moins un site.
+							</p>
+						}
 					</div>
 				</div>
 			} else {

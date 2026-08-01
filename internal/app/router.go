@@ -2,13 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/esrid/garageband/internal/features/accesscontrol"
 	"github.com/esrid/garageband/internal/features/auth"
 	"github.com/esrid/garageband/internal/features/dashboard"
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/features/onboarding"
+	"github.com/esrid/garageband/internal/features/team"
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/web"
@@ -72,6 +75,59 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			return locations.Principal{
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
+		},
+	)
+	accessStore := accesscontrol.NewStore(database)
+	team.Register(
+		mux,
+		auth.RequireTenant,
+		func(ctx context.Context) (team.Principal, bool) {
+			user, userOK := auth.UserFrom(ctx)
+			tenantID, tenantOK := auth.TenantFrom(ctx)
+			return team.Principal{
+				UserID: user.ID, TenantID: tenantID,
+			}, userOK && tenantOK
+		},
+		func(ctx context.Context, principal team.Principal) (team.Page, error) {
+			overview, err := accessStore.TeamOverview(
+				ctx, principal.TenantID, principal.UserID,
+			)
+			if err != nil {
+				return team.Page{}, err
+			}
+			page := team.Page{
+				Organization: overview.Organization,
+				CanManage:    overview.CanManage,
+				Locations:    make([]team.LocationRef, 0, len(overview.Locations)),
+				Members:      make([]team.Member, 0, len(overview.Members)),
+			}
+			for _, location := range overview.Locations {
+				page.Locations = append(page.Locations, team.LocationRef{
+					ID: location.ID, Name: location.Name, Active: location.Active,
+				})
+			}
+			for _, member := range overview.Members {
+				page.Members = append(page.Members, team.Member{
+					UserID: member.UserID, Name: member.Name, Email: member.Email,
+					Role: member.Role, LocationIDs: member.LocationIDs,
+				})
+			}
+			return page, nil
+		},
+		func(
+			ctx context.Context,
+			principal team.Principal,
+			targetUserID string,
+			locationIDs []string,
+		) error {
+			err := accessStore.ReplaceLocationAssignments(
+				ctx, principal.TenantID, principal.UserID,
+				targetUserID, locationIDs,
+			)
+			if errors.Is(err, accesscontrol.ErrForbidden) {
+				return team.ErrForbidden
+			}
+			return err
 		},
 	)
 

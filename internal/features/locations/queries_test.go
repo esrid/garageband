@@ -42,6 +42,14 @@ func TestLocationLifecycleAndRoleCapabilities(t *testing.T) {
 	if created.Status != "active" {
 		t.Fatalf("new location status = %q, want active", created.Status)
 	}
+	if _, err := database.Exec(`
+		INSERT INTO user_location_assignments (
+			tenant_id, user_id, location_id, assigned_by_user_id
+		) VALUES ($1, $2, $3, $4)`,
+		tenantID, memberID, created.ID, ownerID,
+	); err != nil {
+		t.Fatal(err)
+	}
 
 	overview, err := store.Overview(t.Context(), tenantID, memberID)
 	if err != nil {

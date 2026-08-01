@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -158,6 +159,14 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.Exec(`
+		INSERT INTO user_location_assignments (
+			tenant_id, user_id, location_id, assigned_by_user_id
+		) VALUES ($1, $2, $3, $4)`,
+		tenantID, memberID, locationID, ownerID,
+	); err != nil {
+		t.Fatal(err)
+	}
 
 	err = d.WithinTenantUser(t.Context(), tenantID, memberID, func(tx *sql.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
@@ -224,6 +233,246 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 	}
 }
 
+func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
+	d := dbtest.Open(t)
+	runtimeRole := dbtest.RuntimeRole(t, d)
+	ownerID := insertUser(t, d, "share-owner@example.com")
+	homeStaffID := insertUser(t, d, "share-home@example.com")
+	receivingStaffID := insertUser(t, d, "share-receiving@example.com")
+	tenantID := insertTenant(t, d, "share-lifecycle")
+	insertMembershipRole(t, d, tenantID, ownerID, "owner")
+	insertMembershipRole(t, d, tenantID, homeStaffID, "member")
+	insertMembershipRole(t, d, tenantID, receivingStaffID, "member")
+	homeLocationID := insertLocation(t, d, tenantID, "share-home")
+	receivingLocationID := insertLocation(t, d, tenantID, "share-receiving")
+	insertLocationAssignment(t, d, tenantID, homeStaffID, homeLocationID, ownerID)
+	insertLocationAssignment(t, d, tenantID, receivingStaffID, receivingLocationID, ownerID)
+
+	var customerID, vehicleID string
+	if err := d.QueryRow(`
+		INSERT INTO customers (
+			tenant_id, home_location_id, first_name, last_name
+		) VALUES ($1, $2, 'Alice', 'Martin') RETURNING id`,
+		tenantID, homeLocationID,
+	).Scan(&customerID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.QueryRow(`
+		INSERT INTO vehicles (
+			tenant_id, location_id, customer_id,
+			registration_country, registration_plate
+		) VALUES ($1, $2, $3, 'FR', 'AA-123-AA') RETURNING id`,
+		tenantID, homeLocationID, customerID,
+	).Scan(&vehicleID); err != nil {
+		t.Fatal(err)
+	}
+
+	visibleCustomers := func(userID string) int {
+		t.Helper()
+		var count int
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			return tx.QueryRowContext(
+				t.Context(), `SELECT COUNT(*) FROM customers WHERE id = $1`, customerID,
+			).Scan(&count)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	if got := visibleCustomers(receivingStaffID); got != 0 {
+		t.Fatalf("receiving site sees %d customers before sharing, want 0", got)
+	}
+
+	grantedAt := time.Now().UTC().Add(-time.Hour)
+	var grantID string
+	if err := d.QueryRow(`
+		INSERT INTO customer_location_grants (
+			tenant_id, customer_id, source_location_id,
+			receiving_location_id, granted_by_user_id, granted_at
+		) VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id`, tenantID, customerID, homeLocationID,
+		receivingLocationID, ownerID, grantedAt,
+	).Scan(&grantID); err != nil {
+		t.Fatal(err)
+	}
+	if got := visibleCustomers(receivingStaffID); got != 1 {
+		t.Fatalf("receiving site sees %d customers during sharing, want 1", got)
+	}
+	if _, err := d.Exec(`
+		UPDATE customer_location_grants
+		SET granted_at = granted_at - interval '1 day'
+		WHERE id = $1`, grantID,
+	); err == nil {
+		t.Fatal("grant audit timestamp was mutable")
+	}
+	if _, err := d.Exec(`
+		UPDATE customers SET home_location_id = $2 WHERE id = $1`,
+		customerID, receivingLocationID,
+	); err == nil {
+		t.Fatal("customer home location was mutable")
+	}
+
+	var appointmentID, memoryID string
+	appointmentCreatedAt := grantedAt.Add(30 * time.Minute)
+	err := d.WithinTenantUser(
+		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			result, err := tx.ExecContext(t.Context(), `
+				UPDATE customers SET first_name = 'Forbidden'
+				WHERE id = $1`, customerID)
+			if err != nil {
+				return err
+			}
+			updated, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if updated != 0 {
+				t.Fatalf("receiving site updated %d canonical customers, want 0", updated)
+			}
+			return tx.QueryRowContext(t.Context(), `
+				INSERT INTO appointments (
+					tenant_id, location_id, customer_id, vehicle_id,
+					status, starts_at, ends_at, source, created_at,
+					customer_snapshot, vehicle_snapshot
+				) VALUES (
+					$1, $2, $3, $4, 'draft', now() + interval '1 day',
+					now() + interval '1 day 1 hour', 'dashboard', $5,
+					'{"first_name":"Mallory"}'::JSONB,
+					'{"registration_plate":"FAKE"}'::JSONB
+				) RETURNING id`, tenantID, receivingLocationID,
+				customerID, vehicleID, appointmentCreatedAt,
+			).Scan(&appointmentID)
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = d.WithinTenantUser(
+		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			return tx.QueryRowContext(t.Context(), `
+				INSERT INTO customer_memories (
+					tenant_id, location_id, customer_id, key, value,
+					customer_snapshot, created_at
+				) VALUES (
+					$1, $2, $3, 'vehicle.preference', '{"value":"morning"}',
+					'{"first_name":"Mallory"}'::JSONB, $4
+				) RETURNING id`, tenantID, receivingLocationID,
+				customerID, appointmentCreatedAt,
+			).Scan(&memoryID)
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := d.Exec(`
+		UPDATE customer_location_grants
+		SET revoked_by_user_id = $3, revoked_at = now()
+		WHERE tenant_id = $1 AND id = $2`, tenantID, grantID, ownerID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if got := visibleCustomers(receivingStaffID); got != 0 {
+		t.Fatalf("receiving site sees %d canonical customers after revocation, want 0", got)
+	}
+
+	assertAppointment := func(userID string, want int) {
+		t.Helper()
+		var count int
+		var customerSnapshot, vehicleSnapshot []byte
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			err := tx.QueryRowContext(t.Context(), `
+				SELECT COUNT(*) FROM appointments WHERE id = $1`, appointmentID,
+			).Scan(&count)
+			if err != nil || count == 0 {
+				return err
+			}
+			return tx.QueryRowContext(t.Context(), `
+				SELECT customer_snapshot, vehicle_snapshot
+				FROM appointments WHERE id = $1`, appointmentID,
+			).Scan(&customerSnapshot, &vehicleSnapshot)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Fatalf("user %s sees %d retained appointments, want %d", userID, count, want)
+		}
+		if want == 1 && (len(customerSnapshot) == 0 || len(vehicleSnapshot) == 0) {
+			t.Fatal("retained appointment is missing identity snapshots")
+		}
+		if want == 1 {
+			assertSnapshotValue(t, customerSnapshot, "first_name", "Alice")
+			assertSnapshotValue(
+				t, vehicleSnapshot, "registration_plate", "AA-123-AA",
+			)
+		}
+	}
+	assertAppointment(receivingStaffID, 1)
+	assertAppointment(homeStaffID, 1)
+
+	assertMemory := func(userID string) {
+		t.Helper()
+		var snapshot []byte
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			return tx.QueryRowContext(t.Context(), `
+				SELECT customer_snapshot
+				FROM customer_memories WHERE id = $1`, memoryID,
+			).Scan(&snapshot)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertSnapshotValue(t, snapshot, "first_name", "Alice")
+	}
+	assertMemory(receivingStaffID)
+	assertMemory(homeStaffID)
+
+	err = d.WithinTenantUser(
+		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(t.Context(), `
+				INSERT INTO appointments (
+					tenant_id, location_id, customer_id, vehicle_id,
+					status, starts_at, ends_at, source
+				) VALUES (
+					$1, $2, $3, $4, 'draft', now() + interval '2 days',
+					now() + interval '2 days 1 hour', 'dashboard'
+				)`, tenantID, receivingLocationID, customerID, vehicleID)
+			return err
+		})
+	if err == nil {
+		t.Fatal("receiving site created a new customer event after revocation")
+	}
+}
+
+func assertSnapshotValue(t *testing.T, raw []byte, key string, want any) {
+	t.Helper()
+	var snapshot map[string]any
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if got := snapshot[key]; got != want {
+		t.Fatalf("snapshot %q = %#v, want %#v", key, got, want)
+	}
+}
+
 func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	d := dbtest.Open(t)
 	tenantID := insertTenant(t, d, "history")
@@ -231,9 +480,11 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 
 	var customerID, resourceID string
 	if err := d.QueryRow(`
-		INSERT INTO customers (tenant_id, first_name, last_name)
-		VALUES ($1, 'Alice', 'Martin')
-		RETURNING id`, tenantID).Scan(&customerID); err != nil {
+		INSERT INTO customers (
+			tenant_id, home_location_id, first_name, last_name
+		)
+		VALUES ($1, $2, 'Alice', 'Martin')
+		RETURNING id`, tenantID, locationID).Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.QueryRow(`
@@ -248,10 +499,12 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 		var vehicleID string
 		if err := d.QueryRow(`
 			INSERT INTO vehicles (
-				tenant_id, customer_id, registration_country, registration_plate
+				tenant_id, location_id, customer_id,
+				registration_country, registration_plate
 			)
-			VALUES ($1, $2, 'FR', $3)
-			RETURNING id`, tenantID, customerID, plate).Scan(&vehicleID); err != nil {
+			VALUES ($1, $2, $3, 'FR', $4)
+			RETURNING id`, tenantID, locationID, customerID, plate,
+		).Scan(&vehicleID); err != nil {
 			t.Fatal(err)
 		}
 		vehicles = append(vehicles, vehicleID)
@@ -385,6 +638,27 @@ func insertMembershipRole(t *testing.T, database interface {
 	if _, err := database.Exec(`
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, $3)`, tenantID, userID, role); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func insertLocationAssignment(
+	t *testing.T,
+	database interface {
+		Exec(query string, args ...any) (sql.Result, error)
+	},
+	tenantID string,
+	userID string,
+	locationID string,
+	assignedBy string,
+) {
+	t.Helper()
+	if _, err := database.Exec(`
+		INSERT INTO user_location_assignments (
+			tenant_id, user_id, location_id, assigned_by_user_id
+		) VALUES ($1, $2, $3, $4)`,
+		tenantID, userID, locationID, assignedBy,
+	); err != nil {
 		t.Fatal(err)
 	}
 }
