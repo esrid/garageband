@@ -5,10 +5,11 @@ package ui
 const (
 	SectionDashboard = "dashboard"
 	SectionLocations = "locations"
-	// SectionTeam has no navigation link yet: /team has no route, and the shell
-	// must not offer a link into a screen that 404s. Add the link in shell()
-	// when the route lands.
 	SectionTeam = "team"
+	// SectionCustomers has no navigation link yet: /customers has no route, and
+	// the shell must not offer a link into a screen that 404s. Add it in
+	// shell() in the change that registers the route.
+	SectionCustomers = "customers"
 )
 
 // Nav describes the application shell around a page. Its zero value renders no
@@ -122,6 +123,7 @@ templ shell(nav Nav) {
 					@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
 					if nav.InWorkspace {
 						@navLink("/locations", "Sites", nav.current(SectionLocations))
+						@navLink("/team", "Équipe", nav.current(SectionTeam))
 					}
 				</ul>
 			</nav>

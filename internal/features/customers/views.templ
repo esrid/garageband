@@ -1,0 +1,154 @@
+package customers
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+// Index is the customer search screen and its results.
+templ Index(page Page) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Clients",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCustomers, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Clients</h1>
+				<p class="text-sm opacity-70">
+					Cherchez par nom, téléphone, e-mail, plaque ou numéro VIN.
+				</p>
+			</header>
+			@notice(page.Notice)
+			<search>
+				<form method="get" action="/customers" class="flex flex-col gap-2 sm:flex-row" data-pending-form>
+					<div class="grid flex-1 gap-1">
+						<label class="sr-only" for={ FieldQuery }>Rechercher un client</label>
+						<input
+							id={ FieldQuery }
+							name={ FieldQuery }
+							type="search"
+							class="input min-h-11 w-full"
+							value={ page.Query }
+							placeholder="Nom, téléphone, plaque…"
+							autocomplete="off"
+							aria-describedby="search-hint"
+						/>
+					</div>
+					<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Recherche…">
+						Rechercher
+					</button>
+				</form>
+				<p id="search-hint" class="mt-1 text-xs opacity-60">
+					Une plaque se cherche avec ou sans tirets.
+				</p>
+			</search>
+			if !page.Searched() {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Trouvez un client</h2>
+						<p class="text-sm opacity-70">
+							Tapez ce que vous avez sous la main : le nom au téléphone, la plaque
+							du véhicule sur le parking, ou le numéro qui vient d'appeler.
+						</p>
+					</div>
+				</div>
+			} else if len(page.Customers) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Aucun résultat pour « { page.Query } »</h2>
+						<p class="text-sm opacity-70">
+							Vérifiez l'orthographe, ou essayez la plaque plutôt que le nom. Un
+							client créé par un autre site n'apparaît que s'il vous a été partagé.
+						</p>
+					</div>
+				</div>
+			} else {
+				<div class="grid gap-3">
+					<p role="status" class="text-sm opacity-70">{ ResultSummary(len(page.Customers)) }</p>
+					<ul class="grid gap-3">
+						for _, customer := range page.Customers {
+							<li>
+								@customerCard(customer)
+							</li>
+						}
+					</ul>
+				</div>
+			}
+		</div>
+		@pendingScript()
+	}
+}
+
+// customerCard leads with the name, then the way to reach them, then what they
+// drive — the order a garage actually needs when the phone is ringing.
+templ customerCard(customer Customer) {
+	<article class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-2 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">
+					<a href={ templ.URL(customerPath(customer)) } class="link-hover link">
+						{ customer.Label() }
+					</a>
+				</h2>
+				if customer.Shared {
+					<span class="badge badge-sm shrink-0">Partagé avec vous</span>
+				}
+			</div>
+			if len(customer.Contacts()) > 0 {
+				<p class="text-sm opacity-80">
+					for index, contact := range customer.Contacts() {
+						if index > 0 {
+							<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+						}
+						{ contact }
+					}
+				</p>
+			} else {
+				<p class="text-sm opacity-60">Aucun contact enregistré</p>
+			}
+			if len(customer.Vehicles) > 0 {
+				<p class="text-xs opacity-60">{ vehicleSummary(customer.Vehicles) }</p>
+			} else {
+				<p class="text-xs opacity-60">Aucun véhicule enregistré</p>
+			}
+			if customer.HomeLocationName != "" {
+				<p class="text-xs opacity-60">
+					<span class="opacity-70">Site :</span> { customer.HomeLocationName }
+				</p>
+			}
+		</div>
+	</article>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+			</svg>
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}
