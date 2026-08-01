@@ -70,6 +70,9 @@ features depend on provider-neutral Go interfaces.
   repairs, invoices, or notes it authored. It retains only the minimum customer
   and vehicle identity required to understand and preserve those operational
   and legal records.
+- The source location retains read-only visibility of appointments and repairs
+  that the receiving location created while the share was active. Activity
+  created by the receiving location after revocation is not shared back.
 
 ### Open decisions for customer sharing
 
