@@ -6,6 +6,15 @@ This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
 the code and migrations remain the implementation source of truth.
 
+## Repository state at pause
+
+- All local work is merged into `main`; no local `staging`, backend, or
+  frontend branches/worktrees remain.
+- The working tree is clean and the validated `main` branch is ahead of
+  `origin/main` by 39 commits.
+- No push has been performed. Pushing `main` to the remote is the next Git
+  operation when the team is ready.
+
 ## Completed and verified
 
 - PostgreSQL 18 is the sole application database. Native UUIDv7 identifiers,
