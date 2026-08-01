@@ -51,13 +51,14 @@ features depend on provider-neutral Go interfaces.
   saved by the telephone agent.
 - No records are copied when shared. Locations receive access to the same
   canonical customer dossier.
+- A receiving location can read the shared common dossier but cannot directly
+  modify the customer's common identity, vehicles, or records authored by
+  another location.
+- A receiving location can create and update only its own appointments, repair
+  records, and location-authored notes or memories. Those records become part
+  of the shared dossier while preserving their authoring location.
 
 ### Open decisions for customer sharing
-
-The next product question is whether a receiving location can edit the shared
-customer and add repairs visible to the originating location, or receives
-read-only access. This decision affects the grant schema and authorization
-queries and must be settled before implementing customer CRUD.
 
 The following also remain open:
 
