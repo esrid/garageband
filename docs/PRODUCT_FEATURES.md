@@ -57,12 +57,14 @@ features depend on provider-neutral Go interfaces.
 - A receiving location can create and update only its own appointments, repair
   records, and location-authored notes or memories. Those records become part
   of the shared dossier while preserving their authoring location.
+- Organization owners and admins can grant or revoke customer sharing between
+  locations. Every change records the actor, source location, receiving
+  location, and timestamp in the access-control audit trail.
 
 ### Open decisions for customer sharing
 
-The following also remain open:
+The following remain open:
 
-- Whether only owners can share customers, or owners and organization admins.
 - Which employees are assigned to each location and whether owners implicitly
   access every location.
 - What revocation hides when the receiving location has already created an
