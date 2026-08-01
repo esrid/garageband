@@ -6,12 +6,10 @@ const (
 	SectionDashboard = "dashboard"
 	SectionLocations = "locations"
 	SectionTeam = "team"
-	// SectionCustomers has no navigation link yet: /customers has no route, and
-	// the shell must not offer a link into a screen that 404s. Add it in
-	// shell() in the change that registers the route.
 	SectionCustomers = "customers"
 	SectionAgenda    = "agenda"
 	SectionCalls     = "calls"
+	SectionAgents    = "agents"
 )
 
 // Nav describes the application shell around a page. Its zero value renders no
@@ -120,12 +118,13 @@ templ shell(nav Nav) {
 			if nav.Workspace != "" {
 				<span class="hidden text-sm opacity-60 sm:inline">{ nav.Workspace }</span>
 			}
-			<nav aria-label="Navigation principale" class="order-last w-full sm:order-none sm:w-auto">
+			<nav aria-label="Navigation principale" class="order-last w-full">
 				<ul class="menu menu-horizontal gap-1 p-0">
 					@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
 					if nav.InWorkspace {
 						@navLink("/locations", "Sites", nav.current(SectionLocations))
 						@navLink("/team", "Équipe", nav.current(SectionTeam))
+						@navLink("/customers", "Clients", nav.current(SectionCustomers))
 					}
 				</ul>
 			</nav>

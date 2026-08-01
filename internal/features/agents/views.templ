@@ -1,0 +1,395 @@
+package agents
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+var pendingHandle = templ.NewOnceHandle()
+
+// List shows every workshop's telephone agent and whether it can actually pick
+// up the phone.
+templ List(page Index) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Agents téléphoniques",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionAgents, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Agents téléphoniques</h1>
+				<p class="text-sm opacity-70">
+					Un agent par atelier. Il répond, comprend la demande et prend les
+					rendez-vous à votre place.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if len(page.Agents) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Aucun agent configuré</h2>
+						<p class="text-sm opacity-70">
+							Chaque site peut avoir son agent téléphonique. Créez d'abord un site,
+							son agent suivra.
+						</p>
+						<a href="/locations" class="btn btn-primary mt-1 min-h-11">Voir les sites</a>
+					</div>
+				</div>
+			} else {
+				<p class="text-sm opacity-70">{ agentSummary(len(page.Agents)) }</p>
+				<ul class="grid gap-3">
+					for _, agent := range page.Agents {
+						<li>
+							@agentCard(agent, page.CanManage)
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+}
+
+// agentCard says what the agent is for and, above all, whether a customer
+// calling right now would actually reach it.
+templ agentCard(agent Agent, canManage bool) {
+	<article
+		class={ "card card-border border-base-300",
+			templ.KV("bg-base-100", agent.Reachable()),
+			templ.KV("border-dashed bg-base-200", !agent.Reachable()) }
+	>
+		<div class="card-body gap-2 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">{ agent.Name }</h2>
+				<span class="badge badge-sm shrink-0">{ statusLabel(agent.Status) }</span>
+			</div>
+			<p class="text-sm opacity-70">{ agent.LocationName }</p>
+			<p class="text-xs opacity-60">{ numbersSummary(agent.Numbers) }</p>
+			if agent.Reachable() {
+				<p class="text-sm font-medium">Vos clients joignent cet agent.</p>
+			} else if !agent.Ready() {
+				<p class="text-sm">
+					<span class="font-medium">Pas encore opérationnel.</span>
+					<span class="opacity-80">Il manque { missingLabels(agent.Missing) }.</span>
+				</p>
+			} else if len(agent.Numbers) == 0 {
+				<p class="text-sm">
+					<span class="font-medium">Aucune ligne ne le joint.</span>
+					<span class="opacity-80">Rattachez-lui un numéro pour qu'il puisse répondre.</span>
+				</p>
+			} else {
+				<p class="text-sm">
+					<span class="font-medium">Hors ligne.</span>
+					<span class="opacity-80">Les appels ne sont pas pris par l'agent.</span>
+				</p>
+			}
+			if canManage {
+				<div class="card-actions">
+					<a href={ templ.URL(agentPath(agent)) } class="btn btn-sm min-h-11">
+						Configurer<span class="sr-only">{ " " + agent.Name }</span>
+					</a>
+				</div>
+			}
+		</div>
+	</article>
+}
+
+// Form configures one agent: what it says, how it behaves, and what it runs on.
+templ Form(page FormPage) {
+	@ui.Layout(ui.PageInfo{
+		Title:   page.Values.Name,
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionAgents, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/agents" class="link">Agents téléphoniques</a>
+			</nav>
+			<header class="grid gap-2">
+				<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+					<h1 class="text-xl font-semibold">{ page.Values.Name }</h1>
+					<span class="badge badge-sm shrink-0">{ statusLabel(page.Status) }</span>
+				</div>
+				<p class="text-sm opacity-70">{ page.LocationName }</p>
+				<p class="text-xs opacity-60">{ numbersSummary(page.Numbers) }</p>
+			</header>
+			@notice(page.Notice)
+			if !page.Ready() {
+				<div role="status" class="alert alert-warning items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">Cet agent ne peut pas encore répondre</span>
+						<span class="text-sm">
+							Il manque { missingLabels(page.Missing()) }. Vous pouvez préparer ses
+							réponses dès maintenant : elles seront prêtes le jour où les
+							fournisseurs seront connectés.
+						</span>
+					</div>
+				</div>
+			}
+			if !page.CanManage {
+				<div role="status" class="alert items-start text-left">
+					@infoIcon()
+					<span class="text-sm">
+						Vous consultez cette configuration en lecture seule. Seul un
+						propriétaire ou un administrateur peut la modifier.
+					</span>
+				</div>
+			} else {
+				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<div class="grid gap-1">
+								<h2 class="text-base font-semibold">Ce que vos clients entendent</h2>
+								<p class="text-sm opacity-70">
+									Écrivez-le comme vous le diriez au téléphone.
+								</p>
+							</div>
+							@field(page, FieldName, "Nom de l'agent", true, "Pour vous repérer ; les clients ne l'entendent pas.", true) {
+								<input
+									id={ FieldName }
+									name={ FieldName }
+									class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldName)) }
+									value={ page.Values.Name }
+									aria-invalid={ ariaInvalid(page.HasError(FieldName)) }
+									aria-describedby={ describedBy(FieldName, true, page.HasError(FieldName)) }
+									required
+								/>
+							}
+							@field(page, FieldGreeting, "Phrase d'accueil", true, "La première chose dite en décrochant.", true) {
+								<textarea
+									id={ FieldGreeting }
+									name={ FieldGreeting }
+									class={ "textarea min-h-24 w-full", templ.KV("textarea-error", page.HasError(FieldGreeting)) }
+									rows="2"
+									aria-invalid={ ariaInvalid(page.HasError(FieldGreeting)) }
+									aria-describedby={ describedBy(FieldGreeting, true, page.HasError(FieldGreeting)) }
+									required
+								>{ page.Values.Greeting }</textarea>
+							}
+							@field(page, FieldFallback, "Quand il ne sait pas répondre", true, "Mieux vaut passer la main que d'inventer une réponse.", true) {
+								<textarea
+									id={ FieldFallback }
+									name={ FieldFallback }
+									class={ "textarea min-h-24 w-full", templ.KV("textarea-error", page.HasError(FieldFallback)) }
+									rows="2"
+									aria-invalid={ ariaInvalid(page.HasError(FieldFallback)) }
+									aria-describedby={ describedBy(FieldFallback, true, page.HasError(FieldFallback)) }
+									required
+								>{ page.Values.Fallback }</textarea>
+							}
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<div class="grid gap-1">
+								<h2 class="text-base font-semibold">Comment il se comporte</h2>
+								<p class="text-sm opacity-70">
+									Vos consignes : ce qu'il peut promettre, ce qu'il doit refuser,
+									quand transférer à un humain.
+								</p>
+							</div>
+							@field(page, FieldPrompt, "Consignes", false, "Ne mettez pas de prix ici : l'agent les lira dans votre catalogue.", true) {
+								<textarea
+									id={ FieldPrompt }
+									name={ FieldPrompt }
+									class="textarea min-h-40 w-full"
+									rows="8"
+									aria-describedby={ describedBy(FieldPrompt, true, false) }
+								>{ page.Values.Prompt }</textarea>
+							}
+							@field(page, FieldLocale, "Langue", true, "", false) {
+								<select
+									id={ FieldLocale }
+									name={ FieldLocale }
+									class="select min-h-11 w-full"
+									aria-describedby={ describedBy(FieldLocale, false, false) }
+									required
+								>
+									for _, option := range page.Locales {
+										<option value={ option.Value } selected?={ option.Value == page.Values.Locale }>{ option.Label }</option>
+									}
+								</select>
+							}
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<div class="grid gap-1">
+								<h2 class="text-base font-semibold">Ce qu'il utilise</h2>
+								<p class="text-sm opacity-70">
+									Les services qui écoutent, comprennent et parlent.
+								</p>
+							</div>
+							@connectionField(page, FieldLLM, "Modèle de langage", page.LLMConnections, page.Values.LLM)
+							@connectionField(page, FieldSTT, "Transcription de la voix", page.STTConnections, page.Values.STT)
+							@connectionField(page, FieldTTS, "Synthèse vocale", page.TTSConnections, page.Values.TTS)
+						</div>
+					</section>
+					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<a href="/agents" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Enregistrement…">
+							Enregistrer
+						</button>
+					</div>
+				</form>
+				@lifecycleSection(page)
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// connectionField renders one provider choice, or explains why there is
+// nothing to choose from instead of showing an empty select.
+templ connectionField(page FormPage, key string, label string, options []Option, selected string) {
+	if len(options) == 0 {
+		<div class="grid content-start gap-1">
+			<p class="label font-medium text-base-content">{ label }</p>
+			<p class="text-sm opacity-70">
+				Aucun fournisseur connecté pour ce rôle. La connexion se fait dans les
+				réglages de l'organisation, pas ici.
+			</p>
+		</div>
+	} else {
+		@field(page, key, label, true, "", false) {
+			<select
+				id={ key }
+				name={ key }
+				class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(key)) }
+				aria-invalid={ ariaInvalid(page.HasError(key)) }
+				aria-describedby={ describedBy(key, false, page.HasError(key)) }
+				required
+			>
+				<option value="">Choisir un fournisseur</option>
+				for _, option := range options {
+					<option value={ option.Value } selected?={ option.Value == selected }>{ option.Label }</option>
+				}
+			</select>
+		}
+	}
+}
+
+// lifecycleSection puts the agent on or off the line, away from the save
+// button, because it is the control that changes what customers hear.
+templ lifecycleSection(page FormPage) {
+	<section
+		class={ "card card-border bg-base-100",
+			templ.KV("border-error/40", page.Answering()),
+			templ.KV("border-base-300", !page.Answering()) }
+		aria-labelledby="lifecycle-heading"
+	>
+		<div class="card-body gap-3 p-5">
+			<h2 id="lifecycle-heading" class="text-base font-semibold">
+				if page.Answering() {
+					Mettre l'agent en pause
+				} else {
+					Mettre l'agent en ligne
+				}
+			</h2>
+			if page.Answering() {
+				<p class="text-sm opacity-70">
+					Les appels cesseront d'être pris par l'agent. Sa configuration et son
+					historique restent intacts, et vous pouvez le remettre en ligne quand
+					vous voulez.
+				</p>
+				<form method="post" action={ templ.URL(pausePath(page)) } data-pending-form>
+					<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Mise en pause…">
+						Mettre en pause
+					</button>
+				</form>
+			} else if !page.Ready() {
+				<p class="text-sm opacity-70">
+					Impossible tant qu'il manque { missingLabels(page.Missing()) }. Un agent
+					sans ces services décrocherait sans pouvoir parler.
+				</p>
+			} else {
+				<p class="text-sm opacity-70">
+					L'agent commencera à répondre aux appels reçus sur ses numéros.
+				</p>
+				<form method="post" action={ templ.URL(activatePath(page)) } data-pending-form>
+					<button type="submit" class="btn btn-primary min-h-11 w-full sm:w-auto" data-pending-label="Mise en ligne…">
+						Mettre en ligne
+					</button>
+				</form>
+			}
+		</div>
+	</section>
+}
+
+// field wraps one control with its label, its required marker, its hint and
+// its inline error. The ids match what describedBy builds.
+templ field(page FormPage, key string, label string, required bool, hint string, wide bool) {
+	<div class={ "grid content-start gap-1", templ.KV("sm:col-span-2", wide) }>
+		<label class="label flex-wrap justify-start gap-2 font-medium text-base-content" for={ key }>
+			{ label }
+			if required {
+				<span class="text-xs font-normal opacity-60">Requis</span>
+			} else {
+				<span class="text-xs font-normal opacity-60">Optionnel</span>
+			}
+		</label>
+		{ children... }
+		if hint != "" {
+			<p id={ key + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
+		}
+		if page.HasError(key) {
+			<p id={ key + "-error" } role="alert" class="label text-xs leading-snug font-medium whitespace-normal text-error">
+				{ page.Error(key) }
+			</p>
+		}
+	</div>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			if n.Kind == NoticeSuccess {
+				@successIcon()
+			} else {
+				@warningIcon()
+			}
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
+
+templ successIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+	</svg>
+}
+
+templ infoIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"></path>
+	</svg>
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}
