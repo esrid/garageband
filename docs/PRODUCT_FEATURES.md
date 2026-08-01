@@ -73,14 +73,9 @@ features depend on provider-neutral Go interfaces.
 - The source location retains read-only visibility of appointments and repairs
   that the receiving location created while the share was active. Activity
   created by the receiving location after revocation is not shared back.
-
-### Open decisions for customer sharing
-
-The following remain open:
-
-- Whether sharing always applies to future vehicles and history automatically.
-  The current assumption is yes because the accepted scope is the complete
-  customer dossier.
+- While a share is active, it automatically includes future vehicles,
+  appointments, repairs, and memories added to the living customer dossier; it
+  is not a snapshot taken at grant time.
 
 ## Implemented
 
@@ -343,16 +338,15 @@ These are recommendations, not accepted scope:
 
 ## Recommended implementation order
 
-1. Resolve the remaining customer-sharing questions.
-2. Implement location assignments and customer access grants before customer
+1. Implement location assignments and customer access grants before customer
    CRUD so authorization is not retrofitted later.
-3. Build customer and vehicle profiles with search and repair timeline.
-4. Build the structured offers/products/packages catalog and CSV/XLSX staging
+2. Build customer and vehicle profiles with search and repair timeline.
+3. Build the structured offers/products/packages catalog and CSV/XLSX staging
    import before an agent is allowed to answer pricing questions.
-5. Build scheduling and availability without an external calendar first.
-6. Implement the internal operations chat using explicit, authorized tools and
+4. Build scheduling and availability without an external calendar first.
+5. Implement the internal operations chat using explicit, authorized tools and
    fake model adapters.
-7. Add Google Calendar synchronization.
-8. Implement one end-to-end telephone provider tracer bullet reusing the same
+6. Add Google Calendar synchronization.
+7. Implement one end-to-end telephone provider tracer bullet reusing the same
    customer, catalog, and scheduling tools with fake LLM and speech adapters.
-9. Add real voice/model providers only after call and tool contracts are proven.
+8. Add real voice/model providers only after call and tool contracts are proven.
