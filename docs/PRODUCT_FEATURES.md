@@ -249,6 +249,51 @@ No implementation slice is currently open.
 - Call summaries, outcomes, searchable transcripts, and quality review.
 - Explicit confirmation before consequential tool actions.
 
+### Garage operations assistant
+
+- Add an embedded conversational assistant for garage employees.
+- Scope every conversation and tool execution to the active organization and,
+  where applicable, the active physical location.
+- Reuse the same explicit application tools for the internal chat and the
+  telephone agent; neither agent receives raw SQL or unrestricted database
+  access.
+- Let authorized users ask the assistant to find information and propose or
+  perform actions such as correcting customer details, updating operational
+  information, or managing appointments.
+- Authorize every tool independently from the user's membership role and
+  location assignments. Being allowed to use the chat does not imply being
+  allowed to perform every action.
+- Require preview and explicit confirmation for consequential or destructive
+  actions, with stricter rules still to be decided per tool.
+- Persist the requesting user, conversation, tool name, validated arguments,
+  affected records, outcome, and timestamps in an immutable audit trail.
+- Make tool execution idempotent so retries cannot create duplicate changes.
+- Provide a human-readable explanation of what changed and a recoverable error
+  when an action is rejected.
+
+### Offers, products, packages, and intelligent imports
+
+- Let each organization maintain products, services, fixed-price packages,
+  optional extras, labor rates, descriptions, taxes, effective dates, and
+  location availability.
+- Allow CSV and XLSX uploads, plus less structured documents such as PDF or
+  office documents when a parser/provider is selected.
+- Store every upload and parsing run as an auditable import batch with source,
+  checksum, status, errors, and provenance.
+- Parse imported content into a staging area rather than writing directly to
+  the published catalog.
+- Validate normalized rows with PostgreSQL constraints, show ambiguities and
+  rejected rows, and require a human preview/approval before publication.
+- Support idempotent re-imports, versioned publication, rollback, and explicit
+  replacement versus merge behavior.
+- Let the telephone agent and internal assistant answer price and offer
+  questions only from currently published catalog data, including whether a
+  price is fixed, estimated, location-specific, tax-inclusive, or conditional.
+- Never invent a price when the catalog is missing or ambiguous; the agent must
+  explain the uncertainty and offer a human follow-up.
+- Open decisions include document retention, maximum file size, accepted
+  formats, tax representation, price ranges, and who may approve publication.
+
 ### Organization administration
 
 - Invite users and manage membership roles.
@@ -286,13 +331,16 @@ These are recommendations, not accepted scope:
 
 ## Recommended implementation order
 
-1. Finish and verify active-organization sessions.
-2. Resolve the remaining customer-sharing questions.
-3. Implement location assignments and customer access grants before customer
+1. Resolve the remaining customer-sharing questions.
+2. Implement location assignments and customer access grants before customer
    CRUD so authorization is not retrofitted later.
-4. Build customer and vehicle profiles with search and repair timeline.
+3. Build customer and vehicle profiles with search and repair timeline.
+4. Build the structured offers/products/packages catalog and CSV/XLSX staging
+   import before an agent is allowed to answer pricing questions.
 5. Build scheduling and availability without an external calendar first.
-6. Add Google Calendar synchronization.
-7. Implement one end-to-end telephone provider tracer bullet with fake LLM and
-   speech adapters.
-8. Add real voice/model providers only after call and tool contracts are proven.
+6. Implement the internal operations chat using explicit, authorized tools and
+   fake model adapters.
+7. Add Google Calendar synchronization.
+8. Implement one end-to-end telephone provider tracer bullet reusing the same
+   customer, catalog, and scheduling tools with fake LLM and speech adapters.
+9. Add real voice/model providers only after call and tool contracts are proven.
