@@ -132,6 +132,11 @@ type Option struct {
 	Label string
 }
 
+type Slot struct {
+	Value string
+	Label string
+}
+
 // FormValues holds the editable fields, keyed like the POST body.
 type FormValues struct {
 	Date       string // DateLayout
@@ -144,19 +149,23 @@ type FormValues struct {
 
 // FormPage backs the booking form; the same screen creates and edits.
 type FormPage struct {
-	ID           string // empty when booking a new appointment
-	Organization string
-	LocationID   string
-	LocationName string
-	Locations    []Option
-	Customer     CustomerRef
-	Vehicles     []Option
-	Services     []Option
-	Resources    []Option
-	Values       FormValues
-	FieldErrors  map[string]string
-	Notice       Notice
-	CanManage    bool
+	ID                   string // empty when booking a new appointment
+	Organization         string
+	LocationID           string
+	LocationName         string
+	Locations            []Option
+	Customer             CustomerRef
+	Vehicles             []Option
+	Services             []Option
+	Resources            []Option
+	AvailableSlots       []Slot
+	AvailabilitySearched bool
+	ScheduleConfigured   bool
+	OpenThisDay          bool
+	Values               FormValues
+	FieldErrors          map[string]string
+	Notice               Notice
+	CanManage            bool
 	// Cancellable is false for an appointment already cancelled or finished:
 	// there is nothing left to call off.
 	Cancellable bool

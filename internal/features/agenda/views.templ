@@ -263,6 +263,37 @@ templ Form(page FormPage) {
 									</select>
 								}
 							</div>
+							if page.IsNew() {
+								<button
+									type="submit"
+									formaction="/agenda/availability"
+									formmethod="post"
+									class="btn min-h-11 w-full sm:w-auto"
+								>
+									Rechercher les créneaux libres
+								</button>
+							}
+							if page.AvailabilitySearched {
+								<div class="grid gap-2" aria-live="polite">
+									<h3 class="text-sm font-semibold">Créneaux disponibles</h3>
+									if !page.ScheduleConfigured {
+										<p class="text-sm opacity-70">Configurez d’abord les horaires d’ouverture de ce site.</p>
+									} else if !page.OpenThisDay {
+										<p class="text-sm opacity-70">L’atelier est fermé ce jour-là.</p>
+									} else if len(page.AvailableSlots) == 0 {
+										<p class="text-sm opacity-70">Aucun créneau libre pour cette ressource.</p>
+									} else {
+										<div class="flex flex-wrap gap-2">
+											for _, slot := range page.AvailableSlots {
+												<label class="btn btn-sm min-h-11 cursor-pointer">
+													<input type="radio" name={ FieldStartTime } value={ slot.Value } class="sr-only" checked?={ page.Values.StartTime == slot.Value }/>
+													{ slot.Label }
+												</label>
+											}
+										</div>
+									}
+								</div>
+							}
 						</div>
 					</section>
 					<section class="card card-border border-base-300 bg-base-100">

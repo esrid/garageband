@@ -96,6 +96,75 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 	h.save(w, r, "")
 }
 
+func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	input := SaveInput{
+		LocationID: strings.TrimSpace(r.FormValue(FieldLocation)),
+		CustomerID: strings.TrimSpace(r.FormValue(FieldCustomer)),
+		VehicleID:  strings.TrimSpace(r.FormValue(FieldVehicle)),
+		ServiceID:  strings.TrimSpace(r.FormValue(FieldService)),
+		ResourceID: strings.TrimSpace(r.FormValue(FieldResource)),
+		Date:       strings.TrimSpace(r.FormValue(FieldDate)),
+		StartTime:  strings.TrimSpace(r.FormValue(FieldStartTime)),
+		Note:       strings.TrimSpace(r.FormValue(FieldNote)),
+	}
+	if !uuidPattern.MatchString(input.LocationID) ||
+		(input.CustomerID != "" && !uuidPattern.MatchString(input.CustomerID)) {
+		http.NotFound(w, r)
+		return
+	}
+	page, err := h.store.Form(r.Context(), principal.TenantID, principal.UserID, "", input.CustomerID, input.LocationID)
+	if err != nil {
+		h.handleReadError(w, r, "load availability form", err)
+		return
+	}
+	page.Values = FormValues{Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID, ServiceID: input.ServiceID, ResourceID: input.ResourceID, Note: input.Note}
+	page.AvailabilitySearched = true
+	if !uuidPattern.MatchString(input.ServiceID) || !uuidPattern.MatchString(input.ResourceID) || input.Date == "" {
+		page.FieldErrors = map[string]string{}
+		if !uuidPattern.MatchString(input.ServiceID) {
+			page.FieldErrors[FieldService] = "Choisissez une prestation."
+		}
+		if !uuidPattern.MatchString(input.ResourceID) {
+			page.FieldErrors[FieldResource] = "Choisissez une ressource."
+		}
+		if input.Date == "" {
+			page.FieldErrors[FieldDate] = "Choisissez une date."
+		}
+		page.Notice = Notice{Kind: NoticeInvalid, Message: "Choisissez une date, une prestation et une ressource."}
+		h.render(w, r, Form(page), http.StatusUnprocessableEntity)
+		return
+	}
+	availability, err := h.store.Availability(r.Context(), principal.TenantID, principal.UserID, input.LocationID, input.ServiceID, input.ResourceID, input.Date)
+	if err != nil {
+		var fieldError *FieldError
+		if errors.As(err, &fieldError) {
+			page.FieldErrors = map[string]string{fieldError.Field: fieldError.Message}
+			page.Notice = Notice{Kind: NoticeInvalid, Message: "La disponibilité n’a pas pu être calculée."}
+			h.render(w, r, Form(page), http.StatusUnprocessableEntity)
+			return
+		}
+		h.handleReadError(w, r, "search availability", err)
+		return
+	}
+	page.ScheduleConfigured = availability.ScheduleConfigured
+	page.OpenThisDay = availability.OpenThisDay
+	for _, available := range availability.Slots {
+		page.AvailableSlots = append(page.AvailableSlots, Slot{
+			Value: available.StartsAt.Format("15:04"),
+			Label: available.StartsAt.Format("15:04") + "–" + available.EndsAt.Format("15:04"),
+		})
+	}
+	h.render(w, r, Form(page), http.StatusOK)
+}
+
 func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 	appointmentID := r.PathValue("appointmentID")
 	if !uuidPattern.MatchString(appointmentID) {

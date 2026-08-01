@@ -302,6 +302,12 @@ These are database contracts and ports, not working provider integrations.
   prevents UTC shifts from changing workshop bookings.
 - Appointment duration is derived from the selected service duration and its
   buffers rather than trusted from browser input.
+- The booking form searches 15-minute candidates inside location opening
+  hours, removing exceptional closures and active bookings for the selected
+  resource without mutating the agenda.
+- PostgreSQL prevents overlapping weekly opening windows, bookings outside a
+  configured schedule, bookings during closures, and closures over active
+  bookings; weekdays without a window are closed once a schedule exists.
 - Active services, active resources, customer/vehicle ownership, membership,
   and location access are revalidated inside the tenant/user transaction.
 - PostgreSQL exclusion violations are rendered as slot conflicts rather than
@@ -399,9 +405,8 @@ These are database contracts and ports, not working provider integrations.
 
 ### Scheduling and calendars
 
-- Availability search around the existing appointment CRUD.
-- Opening-hours, service-duration, buffer, technician, bay, and equipment
-  constraints.
+- Owner/admin screens for weekly opening hours and exceptional closures.
+- Multi-resource allocation across technician, bay, and equipment requirements.
 - Google Calendar OAuth connection and synchronization.
 - Idempotent external event creation and reconciliation.
 - Rescheduling, cancellation, no-show, reminders, and confirmation workflows.
@@ -520,9 +525,9 @@ These are recommendations, not accepted scope:
 3. **Complete:** the structured offers/products/packages catalog, CSV/XLSX
    staging, confirmed publication, safe rollback, and quotable-price contract
    exist before an agent is allowed to answer pricing questions.
-4. **Partially complete:** appointment CRUD and conflict-safe day scheduling are
-   implemented; add opening-hours and multi-resource availability search before
-   connecting an external calendar.
+4. **Partially complete:** appointment CRUD, working-time enforcement, closures,
+   and single-resource availability search are implemented; add schedule
+   administration and multi-resource allocation before an external calendar.
 5. Implement the internal operations chat using explicit, authorized tools and
    fake model adapters.
 6. Add Google Calendar synchronization.

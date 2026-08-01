@@ -1,8 +1,7 @@
 # Agenda UI — what the handler owes the views
 
-The `agenda` feature ships the day agenda and the booking form (`views.templ`)
-with their view models (`view_data.go`), and no handler or store. The views
-never query anything, never compute availability, and never decide permissions.
+The `agenda` feature owns the day agenda, booking form, HTTP handlers, and
+PostgreSQL store. The views never query anything or decide permissions.
 
 ## Routes the templates need
 
@@ -10,6 +9,7 @@ never query anything, never compute availability, and never decide permissions.
 |---|---|---|
 | `GET` | `/agenda?location_id=…&date=YYYY-MM-DD` | `Show(Day)`; the first accessible active location and today are defaults |
 | `GET` | `/agenda/new?location_id=…&customer_id=…` | `Form(FormPage)` with an empty `ID` |
+| `POST` | `/agenda/availability` | redisplay the new-booking form with free slots; never creates an appointment |
 | `POST` | `/agenda` | create, then redirect to `/agenda?date=…` of the booked day |
 | `GET` | `/agenda/{id}` | `Form(FormPage)` for an existing appointment |
 | `POST` | `/agenda/{id}` | update, then redirect to the agenda |
@@ -94,6 +94,27 @@ not as a generic failure, and not as `NoticeInvalid`, because nothing the user
 typed is malformed. `NoticeInvalid` is for `FieldErrors`, which render inline
 against their control.
 
+## Availability and working time
+
+The availability endpoint accepts the current form body so customer notes and
+identifiers do not leak into a query string. It generates candidates every 15
+minutes inside the selected location's local opening windows, then removes
+slots overlapping an active appointment or an exceptional closure. Service
+duration and both buffers define the occupied length; the browser never sends
+that duration.
+
+A search is advisory, not a reservation. The appointment insert remains the
+authority and its PostgreSQL exclusion constraint resolves concurrent booking
+races. Database triggers also reject active appointments outside a configured
+weekly schedule or across a closure. Once any weekly hours exist for a
+location, weekdays without a window are closed. Locations with no weekly
+schedule retain legacy writes but return no suggested slots until an owner or
+admin configures one.
+
+The current appointment model reserves one `bookable_resource`. Technician,
+bay, and equipment combinations require a later multi-resource allocation
+slice rather than pretending one resource satisfies every service.
+
 ## Permissions
 
 `CanManage` is the only permission input: false hides booking and editing but
@@ -102,6 +123,6 @@ button is not a check.
 
 ## Not covered here
 
-Availability search, opening-hours and buffer validation, rescheduling by drag,
+Opening-hours administration, multi-resource allocation, rescheduling by drag,
 week and month views, reminders, and Google Calendar synchronisation are
 separate slices.

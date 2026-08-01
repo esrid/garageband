@@ -128,6 +128,109 @@ func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 	}
 }
 
+func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
+		VALUES ($1, $2, 3, '08:00', '14:00')`, fixture.tenantID, fixture.locationID)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO location_closures (
+		    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
+		) VALUES ($1, $2, '2026-08-12 14:00:00+00', '2026-08-12 15:00:00+00', 'Réunion', $3)`,
+		fixture.tenantID, fixture.locationID, fixture.userID)
+	if _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "",
+		fixture.input("2026-08-12", "08:00"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	availability, err := fixture.store.Availability(
+		t.Context(), fixture.tenantID, fixture.userID, fixture.locationID,
+		fixture.serviceID, fixture.resourceID, "2026-08-12",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !availability.ScheduleConfigured || !availability.OpenThisDay || len(availability.Slots) == 0 {
+		t.Fatalf("availability = %#v", availability)
+	}
+	for _, slot := range availability.Slots {
+		if slot.StartsAt.Format("15:04") < "11:00" {
+			t.Fatalf("busy or closed slot leaked: %#v", slot)
+		}
+	}
+	_, err = fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "",
+		fixture.input("2026-08-12", "07:00"),
+	)
+	var fieldError *agenda.FieldError
+	if !errors.As(err, &fieldError) || fieldError.Field != agenda.FieldStartTime ||
+		!strings.Contains(fieldError.Message, "horaires") {
+		t.Fatalf("outside hours = %#v err %v", fieldError, err)
+	}
+	_, err = fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "",
+		fixture.input("2026-08-12", "10:30"),
+	)
+	if !errors.As(err, &fieldError) || !strings.Contains(fieldError.Message, "fermé") {
+		t.Fatalf("closure booking = %#v err %v", fieldError, err)
+	}
+	_, err = fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "",
+		fixture.input("2026-08-13", "08:00"),
+	)
+	if !errors.As(err, &fieldError) || !strings.Contains(fieldError.Message, "horaires") {
+		t.Fatalf("closed weekday = %#v err %v", fieldError, err)
+	}
+	if _, err := fixture.fixtures.Exec(`
+		INSERT INTO location_closures (
+		    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
+		) VALUES ($1, $2, '2026-08-12 12:30:00+00', '2026-08-12 13:00:00+00', 'Chevauchement', $3)`,
+		fixture.tenantID, fixture.locationID, fixture.userID); err == nil {
+		t.Fatal("closure overlapping an active appointment unexpectedly accepted")
+	}
+	if _, err := fixture.fixtures.Exec(`
+		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
+		VALUES ($1, $2, 3, '13:00', '15:00')`, fixture.tenantID, fixture.locationID); err == nil {
+		t.Fatal("overlapping opening hours unexpectedly accepted")
+	}
+}
+
+func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
+		VALUES ($1, $2, 3, '08:00', '14:00')`, fixture.tenantID, fixture.locationID)
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
+		},
+	)
+	form := url.Values{
+		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
+		agenda.FieldVehicle: {fixture.vehicleID}, agenda.FieldService: {fixture.serviceID},
+		agenda.FieldResource: {fixture.resourceID}, agenda.FieldDate: {"2026-08-12"},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/agenda/availability", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Créneaux disponibles") ||
+		!strings.Contains(response.Body.String(), "08:00–09:15") {
+		t.Fatalf("availability HTTP = %d %q", response.Code, response.Body.String())
+	}
+	var appointments int
+	if err := fixture.fixtures.QueryRow(`SELECT count(*) FROM appointments WHERE tenant_id = $1`, fixture.tenantID).Scan(&appointments); err != nil {
+		t.Fatal(err)
+	}
+	if appointments != 0 {
+		t.Fatalf("availability search created %d appointments", appointments)
+	}
+}
+
 func (fixture agendaFixture) input(date string, start string) agenda.SaveInput {
 	return agenda.SaveInput{
 		LocationID: fixture.locationID,

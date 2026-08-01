@@ -43,9 +43,142 @@ type SaveInput struct {
 	Note       string
 }
 
+type AvailabilitySlot struct {
+	StartsAt time.Time
+	EndsAt   time.Time
+}
+
+type AvailabilityResult struct {
+	ScheduleConfigured bool
+	OpenThisDay        bool
+	Slots              []AvailabilitySlot
+}
+
 type Store struct{ db *db.DB }
 
 func NewStore(database *db.DB) *Store { return &Store{db: database} }
+
+func (s *Store) Availability(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	serviceID string,
+	resourceID string,
+	dateValue string,
+) (result AvailabilityResult, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		var timezoneName string
+		if err := tx.QueryRowContext(ctx, `
+			SELECT timezone FROM locations
+			WHERE tenant_id = $1 AND id = $2 AND status = 'active'
+			  AND app_current_user_can_access_location(id)`, tenantID, locationID,
+		).Scan(&timezoneName); err != nil {
+			return err
+		}
+		zone, err := time.LoadLocation(timezoneName)
+		if err != nil {
+			return err
+		}
+		day, err := time.ParseInLocation(DateLayout, dateValue, zone)
+		if err != nil {
+			return &FieldError{Field: FieldDate, Message: "Choisissez une date valide."}
+		}
+		var duration, before, after int
+		if err := tx.QueryRowContext(ctx, `
+			SELECT duration_minutes, buffer_before_minutes, buffer_after_minutes
+			FROM service_offerings
+			WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active`,
+			tenantID, locationID, serviceID,
+		).Scan(&duration, &before, &after); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return &FieldError{Field: FieldService, Message: "Choisissez une prestation disponible dans cet établissement."}
+			}
+			return err
+		}
+		var resourceExists bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+			    SELECT 1 FROM bookable_resources
+			    WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active
+			)`, tenantID, locationID, resourceID).Scan(&resourceExists); err != nil {
+			return err
+		}
+		if !resourceExists {
+			return &FieldError{Field: FieldResource, Message: "Choisissez une ressource disponible dans cet établissement."}
+		}
+
+		weekday := int(day.Weekday())
+		if err := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+			           SELECT 1 FROM location_opening_hours
+			           WHERE tenant_id = $1 AND location_id = $2
+			       ),
+			       EXISTS (
+			           SELECT 1 FROM location_opening_hours
+			           WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
+			       )`, tenantID, locationID, weekday,
+		).Scan(&result.ScheduleConfigured, &result.OpenThisDay); err != nil {
+			return err
+		}
+		if !result.OpenThisDay {
+			return nil
+		}
+
+		totalMinutes := duration + before + after
+		rows, err := tx.QueryContext(ctx, `
+			WITH location_context AS (
+			    SELECT timezone FROM locations
+			    WHERE tenant_id = $1 AND id = $2
+			), opening_windows AS (
+			    SELECT (($4::date + opening.opens_at) AT TIME ZONE location_context.timezone) AS window_start,
+			           (($4::date + opening.closes_at) AT TIME ZONE location_context.timezone) AS window_end
+			    FROM location_opening_hours opening
+			    CROSS JOIN location_context
+			    WHERE opening.tenant_id = $1 AND opening.location_id = $2 AND opening.weekday = $5
+			), candidates AS (
+			    SELECT slot_start,
+			           slot_start + make_interval(mins => $6) AS slot_end
+			    FROM opening_windows
+			    CROSS JOIN LATERAL generate_series(
+			        window_start,
+			        window_end - make_interval(mins => $6),
+			        interval '15 minutes'
+			    ) slot_start
+			)
+			SELECT candidate.slot_start, candidate.slot_end
+			FROM candidates candidate
+			WHERE candidate.slot_start >= now()
+			  AND NOT EXISTS (
+			      SELECT 1 FROM appointments appointment
+			      WHERE appointment.tenant_id = $1
+			        AND appointment.location_id = $2
+			        AND appointment.resource_id = $3
+			        AND appointment.status IN ('pending', 'confirmed', 'in_progress')
+			        AND appointment.occupied_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			  )
+			  AND NOT EXISTS (
+			      SELECT 1 FROM location_closures closure
+			      WHERE closure.tenant_id = $1 AND closure.location_id = $2
+			        AND closure.closed_during && tstzrange(candidate.slot_start, candidate.slot_end, '[)')
+			  )
+			ORDER BY candidate.slot_start
+			LIMIT 96`, tenantID, locationID, resourceID, day.Format(DateLayout), weekday, totalMinutes)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var slot AvailabilitySlot
+			if err := rows.Scan(&slot.StartsAt, &slot.EndsAt); err != nil {
+				return errors.Join(err, rows.Close())
+			}
+			slot.StartsAt, slot.EndsAt = slot.StartsAt.In(zone), slot.EndsAt.In(zone)
+			result.Slots = append(result.Slots, slot)
+		}
+		return errors.Join(rows.Err(), rows.Close())
+	})
+	return result, err
+}
 
 type locationRow struct {
 	ID       string
@@ -330,6 +463,9 @@ func (s *Store) Save(
 				if isExclusionViolation(err) {
 					return &ConflictError{Resource: resourceName, StartsAt: startsAt, EndsAt: endsAt}
 				}
+				if fieldError := workingTimeFieldError(err); fieldError != nil {
+					return fieldError
+				}
 				return err
 			}
 			return nil
@@ -348,6 +484,9 @@ func (s *Store) Save(
 		if err != nil {
 			if isExclusionViolation(err) {
 				return &ConflictError{Resource: resourceName, StartsAt: startsAt, EndsAt: endsAt}
+			}
+			if fieldError := workingTimeFieldError(err); fieldError != nil {
+				return fieldError
 			}
 			return err
 		}
@@ -595,6 +734,20 @@ func parseDay(value string, zone *time.Location) time.Time {
 func isExclusionViolation(err error) bool {
 	var pgError *pgconn.PgError
 	return errors.As(err, &pgError) && pgError.Code == "23P01"
+}
+
+func workingTimeFieldError(err error) *FieldError {
+	var pgError *pgconn.PgError
+	if !errors.As(err, &pgError) || pgError.Code != "23514" {
+		return nil
+	}
+	switch pgError.ConstraintName {
+	case "appointments_within_opening_hours":
+		return &FieldError{Field: FieldStartTime, Message: "Ce créneau est en dehors des horaires d’ouverture."}
+	case "appointments_avoid_closures":
+		return &FieldError{Field: FieldStartTime, Message: "L’atelier est fermé pendant ce créneau."}
+	}
+	return nil
 }
 
 func conflictMessage(conflict *ConflictError) string {
