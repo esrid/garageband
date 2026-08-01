@@ -58,3 +58,30 @@ func TestWithinTenantRequiresID(t *testing.T) {
 		t.Fatalf("got %v, want ErrTenantRequired", err)
 	}
 }
+
+func TestWithinUser(t *testing.T) {
+	d := dbtest.Open(t)
+	const userID = "0198a421-8b51-7f34-a723-4c1b49a4174e"
+
+	var got string
+	err := d.WithinUser(t.Context(), userID, func(tx *sql.Tx) error {
+		return tx.QueryRow(
+			`SELECT current_setting('app.current_user_id')`,
+		).Scan(&got)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != userID {
+		t.Fatalf("user context: got %q, want %q", got, userID)
+	}
+}
+
+func TestWithinUserRequiresID(t *testing.T) {
+	d := dbtest.Open(t)
+	if err := d.WithinUser(t.Context(), "", func(*sql.Tx) error {
+		return nil
+	}); !errors.Is(err, db.ErrUserRequired) {
+		t.Fatalf("got %v, want ErrUserRequired", err)
+	}
+}

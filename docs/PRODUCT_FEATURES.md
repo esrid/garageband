@@ -96,6 +96,17 @@ The following also remain open:
 - Session expiry is enforced server-side and logout revokes the session.
 - Authentication middleware exposes the current user and protects private
   routes.
+- Each session independently stores its active organization.
+- A composite foreign key guarantees that the active organization belongs to
+  the session user and clears it when the membership is deleted.
+- Transaction-local user context and forced RLS let a user discover only their
+  own organizations before selecting one.
+- Users can switch organizations from the dashboard, and onboarding activates
+  the newly created organization automatically.
+- `auth.TenantFrom` and `auth.RequireTenant` provide the trusted organization
+  context for tenant-owned feature routes.
+- Integration tests cover non-member activation, per-session isolation,
+  membership deletion, and RLS enforcement under a non-superuser runtime role.
 
 ### Organization tenancy schema
 
@@ -161,24 +172,7 @@ These are database contracts and ports, not working provider integrations.
 
 ## In progress
 
-### Active organization session and workspace switching
-
-The current slice adds:
-
-- an active tenant on each individual session;
-- a composite database foreign key ensuring the active tenant is one of the
-  user's memberships;
-- automatic clearing of the active tenant when membership is removed;
-- transaction-local `app.current_user_id` for pre-tenant workspace discovery;
-- RLS policies allowing users to list only organizations they belong to;
-- session-scoped workspace activation;
-- `auth.TenantFrom` and `auth.RequireTenant` for future tenant-owned routes;
-- dashboard workspace selection;
-- automatic activation after successful onboarding.
-
-The migration compiled and existing PostgreSQL tests passed. New adversarial
-authorization tests have been added but the complete suite and vet have not yet
-been rerun after the discussion interrupted this slice.
+No implementation slice is currently open.
 
 ## Planned
 

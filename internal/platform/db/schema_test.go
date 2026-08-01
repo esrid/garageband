@@ -78,6 +78,59 @@ func TestRuntimeRoleCanCreateTenantOnlyInsideNewTenantScope(t *testing.T) {
 	}
 }
 
+func TestUserScopedWorkspaceDiscoveryIsRLSIsolated(t *testing.T) {
+	d := dbtest.Open(t)
+	role := dbtest.RuntimeRole(t, d)
+
+	userA := insertUser(t, d, "workspace-a@example.com")
+	userB := insertUser(t, d, "workspace-b@example.com")
+	tenantA := insertTenant(t, d, "workspace-alpha")
+	tenantB := insertTenant(t, d, "workspace-bravo")
+	insertMembership(t, d, tenantA, userA)
+	insertMembership(t, d, tenantB, userB)
+
+	err := d.WithinUser(t.Context(), userA, func(tx *sql.Tx) error {
+		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+			return err
+		}
+
+		var tenants, memberships int
+		if err := tx.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tenants`).Scan(&tenants); err != nil {
+			return err
+		}
+		if err := tx.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tenant_memberships`).Scan(&memberships); err != nil {
+			return err
+		}
+		if tenants != 1 || memberships != 1 {
+			t.Fatalf(
+				"user-scoped visibility: got %d tenants and %d memberships, want 1 and 1",
+				tenants,
+				memberships,
+			)
+		}
+
+		result, err := tx.ExecContext(
+			t.Context(),
+			`UPDATE tenants SET name = 'forbidden' WHERE id = $1`,
+			tenantB,
+		)
+		if err != nil {
+			return err
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if updated != 0 {
+			t.Fatalf("user-scoped context updated %d tenant rows, want 0", updated)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	d := dbtest.Open(t)
 	tenantID := insertTenant(t, d, "history")
@@ -210,6 +263,31 @@ func insertLocation(t *testing.T, database interface {
 		t.Fatal(err)
 	}
 	return id
+}
+
+func insertUser(t *testing.T, database interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, email string) string {
+	t.Helper()
+	var id string
+	if err := database.QueryRow(`
+		INSERT INTO users (provider, provider_id, email, name)
+		VALUES ('test', $1, $1, 'Test User')
+		RETURNING id`, email).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func insertMembership(t *testing.T, database interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, tenantID, userID string) {
+	t.Helper()
+	if _, err := database.Exec(`
+		INSERT INTO tenant_memberships (tenant_id, user_id, role)
+		VALUES ($1, $2, 'owner')`, tenantID, userID); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func nullableAppointment(index int, appointmentID string) any {

@@ -164,6 +164,10 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	otherSessionToken, err := store.CreateSession(t.Context(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session := &http.Cookie{Name: "session", Value: token}
 	mux := http.NewServeMux()
 	auth.Register(mux, store, nil, false)
@@ -204,6 +208,13 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	}
 	if user.ActiveTenantID != ownedTenant {
 		t.Fatalf("active tenant = %q, want %q", user.ActiveTenantID, ownedTenant)
+	}
+	otherSessionUser, err := store.UserByToken(t.Context(), otherSessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if otherSessionUser.ActiveTenantID != "" {
+		t.Fatalf("activation leaked to another session: %s", otherSessionUser.ActiveTenantID)
 	}
 	response = get(handler, "/tenant-only", []*http.Cookie{session})
 	if response.Code != http.StatusOK || response.Body.String() != ownedTenant {
