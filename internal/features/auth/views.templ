@@ -1,0 +1,25 @@
+package auth
+
+import "github.com/esrid/template/internal/ui"
+
+templ LoginPage(providers []string) {
+	@ui.Layout(ui.PageInfo{Title: "Log in", NoIndex: true}) {
+		<h1>Log in</h1>
+		if len(providers) == 0 {
+			<p class="empty">
+				No OAuth provider configured. Set
+				<code>GOOGLE_CLIENT_ID</code>/<code>GOOGLE_CLIENT_SECRET</code> or
+				<code>GITHUB_CLIENT_ID</code>/<code>GITHUB_CLIENT_SECRET</code>,
+				then restart.
+			</p>
+		} else {
+			<ul class="provider-list">
+				for _, name := range providers {
+					<li>
+						<a class="provider" href={ templ.URL("/auth/" + name) }>Continue with { name }</a>
+					</li>
+				}
+			</ul>
+		}
+	}
+}

@@ -1,0 +1,13 @@
+bin/
+*.db
+*.db-shm
+*.db-wal
+*_templ.txt
+.DS_Store
+
+# secrets — GOOGLE_CLIENT_SECRET and friends live here, never in git
+.env
+.env.*
+
+# test artifacts
+*.out

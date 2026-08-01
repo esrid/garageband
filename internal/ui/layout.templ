@@ -1,0 +1,65 @@
+package ui
+
+// PageInfo carries everything a page can tell the layout about itself,
+// including the SEO surface. Zero-value fields render nothing: only Title is
+// required.
+type PageInfo struct {
+	Title       string // <title> and og:title
+	Description string // meta description and og:description
+	Canonical   string // absolute canonical URL; also og:url
+	Image       string // absolute image URL for social cards (og:image)
+	Type        string // og:type; empty means "website"
+	NoIndex     bool   // ask crawlers to skip this page (login, admin…)
+}
+
+func (p PageInfo) ogType() string {
+	if p.Type == "" {
+		return "website"
+	}
+	return p.Type
+}
+
+// Layout is the shared page shell. Features wrap their content in it:
+//
+//	@ui.Layout(ui.PageInfo{Title: "Todos", Description: "…"}) { ...content... }
+templ Layout(page PageInfo) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ page.Title }</title>
+			if page.Description != "" {
+				<meta name="description" content={ page.Description }/>
+			}
+			if page.NoIndex {
+				<meta name="robots" content="noindex, nofollow"/>
+			}
+			if page.Canonical != "" {
+				<link rel="canonical" href={ templ.URL(page.Canonical) }/>
+			}
+			<meta property="og:title" content={ page.Title }/>
+			if page.Description != "" {
+				<meta property="og:description" content={ page.Description }/>
+			}
+			<meta property="og:type" content={ page.ogType() }/>
+			if page.Canonical != "" {
+				<meta property="og:url" content={ page.Canonical }/>
+			}
+			if page.Image != "" {
+				<meta property="og:image" content={ page.Image }/>
+				<meta name="twitter:card" content="summary_large_image"/>
+			}
+			<link rel="stylesheet" href="/static/tokens.css"/>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body>
+			<header class="site-header">
+				<a href="/todos"><strong>template</strong></a>
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

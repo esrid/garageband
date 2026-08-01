@@ -1,0 +1,42 @@
+package todos
+
+import "github.com/esrid/template/internal/ui"
+
+templ Page(items []Todo) {
+	@ui.Layout(ui.PageInfo{Title: "Todos", Description: "A minimal todo list — demo feature of the template."}) {
+		<h1>Todos</h1>
+		<form method="post" action="/todos" class="todo-form">
+			<input type="text" name="title" aria-label="Todo title" placeholder="What needs doing?" required maxlength="200" autofocus/>
+			<button type="submit">Add</button>
+		</form>
+		if len(items) == 0 {
+			<p class="empty">Nothing yet. Add your first todo above.</p>
+		} else {
+			<ul class="todo-list">
+				for _, t := range items {
+					<li>
+						<form method="post" action={ templ.URL("/todos/" + t.ID + "/toggle") }>
+							<button type="submit" class="toggle" aria-label={ toggleLabel(t) }>
+								if t.Done {
+									<s>{ t.Title }</s>
+								} else {
+									{ t.Title }
+								}
+							</button>
+						</form>
+						<form method="post" action={ templ.URL("/todos/" + t.ID + "/delete") }>
+							<button type="submit" class="delete" aria-label={ "Delete " + t.Title }>✕</button>
+						</form>
+					</li>
+				}
+			</ul>
+		}
+	}
+}
+
+func toggleLabel(t Todo) string {
+	if t.Done {
+		return "Mark " + t.Title + " as not done"
+	}
+	return "Mark " + t.Title + " as done"
+}

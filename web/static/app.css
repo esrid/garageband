@@ -1,0 +1,120 @@
+/* App styles — consume tokens.css variables only, no hard-coded theme values. */
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.site-header {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-header a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-3);
+}
+
+.todo-form {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.todo-form input {
+  flex: 1;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.todo-form button {
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font: inherit;
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--color-muted);
+}
+
+.provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  max-width: 20rem;
+}
+
+.provider {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  text-align: center;
+}
+
+.provider:hover {
+  border-color: var(--color-accent);
+}
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.todo-list form:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-list .toggle,
+.todo-list .delete {
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  text-align: left;
+}
+
+.todo-list .toggle {
+  width: 100%;
+}
+
+.todo-list .toggle s {
+  color: var(--color-muted);
+}
+
+.todo-list .delete {
+  color: var(--color-danger);
+  padding: var(--space-2);
+}
