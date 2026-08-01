@@ -35,8 +35,10 @@ features depend on provider-neutral Go interfaces.
   resources, appointments, repair work, AI agent, telephone number, provider
   connections, and calendar connections where applicable.
 - A location is not a separate tenant. PostgreSQL RLS isolates organizations.
-- Users join an organization through memberships. More granular staff access
-  to locations is still to be designed.
+- Users join an organization through memberships. Owners and admins implicitly
+  reach every location in their organization. Managers and members reach only
+  the locations to which they are explicitly assigned, and a user may be
+  assigned to more than one.
 
 ### Customer ownership and cross-location sharing
 
@@ -60,10 +62,6 @@ features depend on provider-neutral Go interfaces.
 - Organization owners and admins can grant or revoke customer sharing between
   locations. Every change records the actor, source location, receiving
   location, and timestamp in the access-control audit trail.
-- Organization owners and admins implicitly access every location in their
-  organization.
-- Managers and members access only the locations to which they are explicitly
-  assigned. A user may be assigned to more than one location.
 - Revoking a customer share immediately hides records authored by the source
   location and all future source updates from the receiving location.
 - Revocation never removes the receiving location's access to appointments,
@@ -213,7 +211,11 @@ No implementation slice is currently open.
 - Make vehicle, appointment, repair-history, and agent-memory visibility follow
   the accepted complete-dossier sharing rule.
 - Record who shared a customer, when, and with which location.
-- Support safe access revocation after the open product questions are settled.
+- Implement the accepted revocation behavior: hide the source location's records
+  and its future updates, keep the receiving location's own operational and
+  legal records together with the minimum customer and vehicle identity they
+  need, and preserve the source location's read-only view of activity the
+  receiving location created while the share was active.
 
 ### Customer relationship management
 
