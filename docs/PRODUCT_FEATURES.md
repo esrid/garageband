@@ -64,13 +64,17 @@ features depend on provider-neutral Go interfaces.
   organization.
 - Managers and members access only the locations to which they are explicitly
   assigned. A user may be assigned to more than one location.
+- Revoking a customer share immediately hides records authored by the source
+  location and all future source updates from the receiving location.
+- Revocation never removes the receiving location's access to appointments,
+  repairs, invoices, or notes it authored. It retains only the minimum customer
+  and vehicle identity required to understand and preserve those operational
+  and legal records.
 
 ### Open decisions for customer sharing
 
 The following remain open:
 
-- What revocation hides when the receiving location has already created an
-  appointment or repair order for the shared customer.
 - Whether sharing always applies to future vehicles and history automatically.
   The current assumption is yes because the accepted scope is the complete
   customer dossier.
