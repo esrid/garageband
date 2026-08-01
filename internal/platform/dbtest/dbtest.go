@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -83,6 +84,53 @@ func Open(t testing.TB) *db.DB {
 		t.Fatal(err)
 	}
 	return database
+}
+
+// OpenRuntime returns separate fixture and application connections to the same
+// isolated schema. The application connection SET ROLEs to a non-superuser on
+// every physical connection, so store tests cannot accidentally bypass forced
+// RLS with Testcontainers' administrative bootstrap user.
+func OpenRuntime(t testing.TB) (fixtures *db.DB, runtime *db.DB) {
+	t.Helper()
+	fixtures = Open(t)
+	runtimeRole := RuntimeRole(t, fixtures)
+
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema string
+	if err := fixtures.QueryRow(`SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	if config.RuntimeParams == nil {
+		config.RuntimeParams = make(map[string]string)
+	}
+	config.RuntimeParams["search_path"] = schema + ",public"
+	quotedRole := pgx.Identifier{runtimeRole}.Sanitize()
+	previousAfterConnect := config.AfterConnect
+	config.AfterConnect = func(ctx context.Context, connection *pgconn.PgConn) error {
+		if previousAfterConnect != nil {
+			if err := previousAfterConnect(ctx, connection); err != nil {
+				return err
+			}
+		}
+		return connection.Exec(ctx, `SET ROLE `+quotedRole).Close()
+	}
+	runtime, err = db.OpenConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := runtime.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return fixtures, runtime
 }
 
 // RuntimeRole creates a temporary non-superuser role with application-level

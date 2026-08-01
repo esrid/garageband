@@ -74,7 +74,7 @@ customers.Profile{
     Vehicles:     vehicles,       // every vehicle of the dossier
     Timeline:     events,         // repairs and appointments, newest first
     Memories:     memories,       // what the agent retained
-    CanEdit:      customer.HomeLocationID == activeLocationID,
+    CanEdit:      actorCanAccess(customer.HomeLocationID),
     Notice:       customers.Notice{},
 }
 ```
@@ -83,12 +83,14 @@ The view does **not** sort: hand `Timeline` over already ordered, newest first,
 merging `repair_orders` and `appointments` into one list. Use `opened_at` for a
 repair and `starts_at` for an appointment.
 
-`Event.AuthoredHere` is `location_id == activeLocationID`. It is what makes the
-sharing rule visible: an entry from another workshop is labelled "Autre site,
-en lecture", and the banner above says the dossier may be read and added to but
-not rewritten. Set `Event.Status` to the raw database value — the view holds
-the French labels for both `repair_orders.status` and `appointments.status`,
-and shows an unknown value through rather than swallowing it.
+`Event.AuthoredHere` means the actor can access the event's authoring location.
+This supports employees assigned to several sites without inventing a session
+location selector for a read-only profile. An entry from an inaccessible
+workshop is labelled "Autre site, en lecture", and the banner above says the
+dossier may be read and added to but not rewritten. Set `Event.Status` to the
+raw database value — the view holds the French labels for both
+`repair_orders.status` and `appointments.status`, and shows an unknown value
+through rather than swallowing it.
 
 Money arrives as integer cents plus a currency code, straight from
 `repair_orders.total_cents` / `currency`. Zero renders as nothing rather than

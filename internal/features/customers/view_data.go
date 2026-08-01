@@ -52,13 +52,14 @@ func (v Vehicle) Label() string {
 
 // Customer is one search result.
 type Customer struct {
-	ID          string
-	FirstName   string
-	LastName    string
-	CompanyName string
-	Phone       string // primary contact, already formatted
-	Email       string // primary contact
-	Vehicles    []Vehicle
+	ID             string
+	HomeLocationID string
+	FirstName      string
+	LastName       string
+	CompanyName    string
+	Phone          string // primary contact, already formatted
+	Email          string // primary contact
+	Vehicles       []Vehicle
 	// HomeLocationName is the site that owns the record. Shared says this
 	// customer reaches you through an explicit grant rather than ownership.
 	HomeLocationName string
@@ -178,9 +179,9 @@ type Event struct {
 	VehicleLabel string
 	Status       string
 	LocationName string
-	// AuthoredHere says the active location wrote this record. A shared dossier
-	// shows entries from other workshops, which this location may read but not
-	// change.
+	// AuthoredHere says the actor can access the authoring location. A shared
+	// dossier shows entries from other workshops, which this actor may read but
+	// not change.
 	AuthoredHere bool
 	AmountCents  int
 	Currency     string
@@ -201,9 +202,9 @@ type Profile struct {
 	Vehicles     []ProfileVehicle
 	Timeline     []Event
 	Memories     []Memory
-	// CanEdit is false when the dossier reaches this location through a grant:
-	// it may read everything and author its own work, but not change the
-	// common identity or another workshop's records.
+	// CanEdit is false when the dossier is visible only through a grant: the
+	// actor may read everything and author work for an assigned location, but
+	// cannot change common identity or another workshop's records.
 	CanEdit bool
 	Notice  Notice
 }

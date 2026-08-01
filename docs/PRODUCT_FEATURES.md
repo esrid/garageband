@@ -173,6 +173,25 @@ features depend on provider-neutral Go interfaces.
   grant/revoke/regrant audit history, active dossier access, canonical write
   rejection, revocation, retained records, and historical source visibility.
 
+### Customer search and dossier
+
+- Authenticated `/customers` search by name, normalized French telephone,
+  e-mail, registration plate with or without hyphens, and VIN.
+- PostgreSQL-generated search columns, trigram indexing, compact-plate indexing,
+  existing contact/VIN indexes, soft-delete filtering, deterministic ordering,
+  and a bounded result set.
+- Search results include primary contacts, the vehicle fleet, owning location,
+  and whether access comes through a customer-location grant.
+- Authenticated customer profiles combine every visible vehicle, appointment,
+  repair, and agent memory into an RLS-filtered dossier and ordered timeline.
+- An actor may edit canonical customer data only when their role or assignment
+  reaches the home location. Events from other sites remain visibly read-only.
+- Source and authoring location names and referenced appointment services are
+  exposed only when the corresponding shared dossier event is itself visible.
+- Integration and HTTP tests execute the store as a non-superuser and cover all
+  search keys, profile composition, grant activation, revocation, and retained
+  source visibility of receiving-site activity.
+
 ### Business onboarding
 
 - Authenticated SIRET onboarding flow.
@@ -223,12 +242,14 @@ These are database contracts and ports, not working provider integrations.
 
 ## In progress
 
-### Customer search
+### Prepared UI awaiting backend
 
-- The DaisyUI customer-search screen and its backend contract are present.
-- The RLS foundation it depends on is implemented.
-- Search queries, HTTP routes, and the customer profile/detail route are still
-  required before the screen can be linked from navigation.
+- The day-agenda and appointment-form views are present; appointment queries,
+  availability rules, writes, conflict handling, and routes remain to build.
+- The call inbox and transcript views are present; call queries, filters,
+  transcript loading, and routes remain to build.
+- The telephone-agent configuration views are present; configuration queries,
+  validated writes, provider selection, and routes remain to build.
 
 ## Planned
 
@@ -241,8 +262,6 @@ These are database contracts and ports, not working provider integrations.
 
 ### Customer relationship management
 
-- Customer search by normalized phone, email, name, plate, and VIN.
-- Customer profile with multiple vehicles and complete repair timeline.
 - Duplicate detection and deliberate merge workflow.
 - Human review, correction, rejection, and provenance for memories proposed by
   the telephone agent.
@@ -363,7 +382,8 @@ These are recommendations, not accepted scope:
 
 1. **Complete:** location assignments and customer access grants were built
    before customer CRUD so authorization is not retrofitted later.
-2. Build customer and vehicle profiles with search and repair timeline.
+2. **Complete:** customer and vehicle profiles now provide search and a
+   repair/appointment timeline under location-aware RLS.
 3. Build the structured offers/products/packages catalog and CSV/XLSX staging
    import before an agent is allowed to answer pricing questions.
 4. Build scheduling and availability without an external calendar first.
