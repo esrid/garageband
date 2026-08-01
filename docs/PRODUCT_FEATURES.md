@@ -544,7 +544,9 @@ These are recommendations, not accepted scope:
 - Reception inbox for calls needing human action.
 - Daily agenda and unresolved-call summary for each location.
 - Import from existing garage-management software.
-- Billing and subscription management per organization or per location.
+- Billing and subscription management. The model uses one subscription per
+  organization with one quantity unit per active service location; see
+  [billing-model.md](billing-model.md).
 
 ## Recommended implementation order
 
