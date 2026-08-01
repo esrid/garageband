@@ -9,7 +9,7 @@ type PageData struct {
 }
 
 templ Page(data PageData) {
-	@ui.Layout(ui.PageInfo{Title: "Tableau de bord", NoIndex: true}) {
+	@ui.Layout(ui.PageInfo{Title: "Tableau de bord", NoIndex: true, Nav: ui.Nav{Section: ui.SectionDashboard, Workspace: activeWorkspaceName(data), InWorkspace: data.Active != nil}}) {
 		<div class="grid gap-6">
 			<div>
 				<h1 class="text-2xl font-semibold">Garageband</h1>
@@ -63,4 +63,13 @@ templ Page(data PageData) {
 			}
 		</div>
 	}
+}
+
+// activeWorkspaceName is what the shell shows, and what gates its Sites link:
+// no active workspace means /locations would bounce back here.
+func activeWorkspaceName(data PageData) string {
+	if data.Active == nil {
+		return ""
+	}
+	return data.Active.Name
 }

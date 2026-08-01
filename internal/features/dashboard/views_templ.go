@@ -168,12 +168,21 @@ func Page(data PageData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = ui.Layout(ui.PageInfo{Title: "Tableau de bord", NoIndex: true}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = ui.Layout(ui.PageInfo{Title: "Tableau de bord", NoIndex: true, Nav: ui.Nav{Section: ui.SectionDashboard, Workspace: activeWorkspaceName(data), InWorkspace: data.Active != nil}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		return nil
 	})
+}
+
+// activeWorkspaceName is what the shell shows, and what gates its Sites link:
+// no active workspace means /locations would bounce back here.
+func activeWorkspaceName(data PageData) string {
+	if data.Active == nil {
+		return ""
+	}
+	return data.Active.Name
 }
 
 var _ = templruntime.GeneratedTemplate

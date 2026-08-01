@@ -10,14 +10,9 @@ var pendingHandle = templ.NewOnceHandle()
 
 // Index lists the organization's physical sites.
 templ Index(page IndexPage) {
-	@ui.Layout(ui.PageInfo{Title: "Sites du garage", NoIndex: true}) {
+	@ui.Layout(ui.PageInfo{Title: "Sites du garage", NoIndex: true, Nav: ui.Nav{Section: ui.SectionLocations, Workspace: page.Organization, InWorkspace: true}}) {
 		<div class="grid gap-5">
-			<header class="grid gap-1">
-				<h1 class="text-xl font-semibold">Sites du garage</h1>
-				<p class="text-sm opacity-70">
-					Espace : <span class="font-medium">{ page.Organization }</span>
-				</p>
-			</header>
+			<h1 class="text-xl font-semibold">Sites du garage</h1>
 			@notice(page.Notice)
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<p class="max-w-md text-sm opacity-70">
@@ -161,7 +156,7 @@ templ setupMeter(location Location) {
 
 // Form adds a site or edits an existing one; both use the same screen.
 templ Form(page FormPage) {
-	@ui.Layout(ui.PageInfo{Title: formTitle(page), NoIndex: true}) {
+	@ui.Layout(ui.PageInfo{Title: formTitle(page), NoIndex: true, Nav: ui.Nav{Section: ui.SectionLocations, InWorkspace: true}}) {
 		<div class="grid gap-5">
 			<header class="grid gap-1">
 				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
