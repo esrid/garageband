@@ -1,0 +1,66 @@
+package dashboard
+
+import "github.com/esrid/garageband/internal/ui"
+
+type PageData struct {
+	Active     *Workspace
+	Workspaces []Workspace
+	Onboarded  bool
+}
+
+templ Page(data PageData) {
+	@ui.Layout(ui.PageInfo{Title: "Tableau de bord", NoIndex: true}) {
+		<div class="grid gap-6">
+			<div>
+				<h1 class="text-2xl font-semibold">Garageband</h1>
+				if data.Active != nil {
+					<p class="mt-1 opacity-70">Espace actif : <strong>{ data.Active.Name }</strong></p>
+				} else {
+					<p class="mt-1 opacity-70">Choisissez ou créez un espace garage pour continuer.</p>
+				}
+			</div>
+			if data.Onboarded && data.Active != nil {
+				<div role="status" class="alert alert-success">
+					<span>Votre espace garage a été créé et activé.</span>
+				</div>
+			}
+			if len(data.Workspaces) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body">
+						<h2 class="card-title">Configurez votre premier garage</h2>
+						<p>Enregistrez l'entreprise et son premier site avant de configurer son agent téléphonique.</p>
+						<div class="card-actions">
+							<a class="btn btn-primary" href="/onboarding">Configurer mon garage</a>
+						</div>
+					</div>
+				</div>
+			} else {
+				<section class="grid gap-3" aria-labelledby="workspace-heading">
+					<div class="flex items-center justify-between gap-3">
+						<h2 id="workspace-heading" class="text-lg font-semibold">Vos espaces</h2>
+						<a class="btn btn-sm" href="/onboarding">Ajouter un garage</a>
+					</div>
+					<ul class="grid gap-2">
+						for _, workspace := range data.Workspaces {
+							<li class="card card-border border-base-300 bg-base-100">
+								<div class="card-body flex-row items-center justify-between gap-3 p-4">
+									<div>
+										<p class="font-medium">{ workspace.Name }</p>
+										<p class="text-sm capitalize opacity-70">{ workspace.Role }</p>
+									</div>
+									if data.Active != nil && data.Active.ID == workspace.ID {
+										<span class="badge badge-success">Actif</span>
+									} else {
+										<form method="post" action={ templ.URL("/workspaces/" + workspace.ID + "/activate") }>
+											<button class="btn btn-sm" type="submit">Ouvrir</button>
+										</form>
+									}
+								</div>
+							</li>
+						}
+					</ul>
+				</section>
+			}
+		</div>
+	}
+}

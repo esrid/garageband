@@ -29,7 +29,7 @@ func (p PageInfo) ogType() string {
 
 // Layout is the shared page shell. Features wrap their content in it:
 //
-//	@ui.Layout(ui.PageInfo{Title: "Todos", Description: "…"}) { ...content... }
+//	@ui.Layout(ui.PageInfo{Title: "Dashboard"}) { ...content... }
 func Layout(page PageInfo) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -51,7 +51,7 @@ func Layout(page PageInfo) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -203,7 +203,7 @@ func Layout(page PageInfo) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<link rel=\"stylesheet\" href=\"/static/tokens.css\"><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body><header class=\"site-header\"><a href=\"/todos\"><strong>template</strong></a></header><main>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<link rel=\"stylesheet\" href=\"/static/app.css\"></head><body class=\"min-h-dvh bg-base-200\"><a href=\"#main\" class=\"sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:btn focus:btn-primary\">Aller au contenu</a><header class=\"navbar min-h-14 border-b border-base-300 bg-base-100 px-4\"><a href=\"/\" class=\"text-base font-semibold tracking-tight\">Garageband</a></header><main id=\"main\" class=\"mx-auto w-full max-w-2xl px-4 py-6 sm:py-10\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

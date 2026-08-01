@@ -18,16 +18,20 @@ type Config struct {
 	CookieSecure       bool
 	GoogleClientID     string
 	GoogleClientSecret string
+	// BusinessLookupURL can target a compatible stub in development. Empty
+	// means the official Recherche d'entreprises API.
+	BusinessLookupURL string
 }
 
 func ConfigFromEnv() Config {
 	return Config{
 		Addr:               envOr("ADDR", ":8080"),
-		DatabaseURL:        envOr("DATABASE_URL", "file:app.db?_fk=on&_journal=WAL"),
+		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		BaseURL:            envOr("BASE_URL", "http://localhost:8080"),
 		CookieSecure:       os.Getenv("COOKIE_SECURE") != "false",
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		BusinessLookupURL:  os.Getenv("BUSINESS_LOOKUP_URL"),
 	}
 }
 

@@ -7,13 +7,19 @@ import (
 
 type ctxKey struct{}
 
+type requestIdentity struct {
+	User      User
+	tokenHash string
+}
+
 // WithUser loads the session user (if any) into the request context. Mounted
 // globally in the router; anonymous requests pass through untouched.
 func (s *Store) WithUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			if u, err := s.UserByToken(r.Context(), c.Value); err == nil {
-				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, u))
+				identity := requestIdentity{User: u, tokenHash: hashToken(c.Value)}
+				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, identity))
 			}
 		}
 		next.ServeHTTP(w, r)
@@ -22,8 +28,32 @@ func (s *Store) WithUser(next http.Handler) http.Handler {
 
 // UserFrom returns the logged-in user, if any.
 func UserFrom(ctx context.Context) (User, bool) {
-	u, ok := ctx.Value(ctxKey{}).(User)
-	return u, ok
+	identity, ok := identityFrom(ctx)
+	return identity.User, ok
+}
+
+func identityFrom(ctx context.Context) (requestIdentity, bool) {
+	identity, ok := ctx.Value(ctxKey{}).(requestIdentity)
+	return identity, ok
+}
+
+// TenantFrom returns the session's database-constrained active tenant.
+func TenantFrom(ctx context.Context) (string, bool) {
+	user, ok := UserFrom(ctx)
+	return user.ActiveTenantID, ok && user.ActiveTenantID != ""
+}
+
+// RequireTenant protects tenant-owned feature routes. The active tenant is
+// guaranteed by the sessions-to-memberships foreign key, and stores must still
+// use db.WithinTenant for every tenant query.
+func RequireTenant(next http.Handler) http.Handler {
+	return RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := TenantFrom(r.Context()); !ok {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}))
 }
 
 // RequireUser redirects anonymous requests to /login. Wrap any handler that

@@ -1,44 +1,60 @@
-package db
+package db_test
 
 import (
 	"database/sql"
 	"errors"
 	"testing"
+
+	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/dbtest"
 )
 
-func TestRebind(t *testing.T) {
-	pg := &DB{dialect: "postgres"}
-	lite := &DB{dialect: "sqlite"}
-
-	q := `INSERT INTO t (a, b, c) VALUES (?, ?, ?)`
-	if got, want := pg.R(q), `INSERT INTO t (a, b, c) VALUES ($1, $2, $3)`; got != want {
-		t.Errorf("postgres: got %q, want %q", got, want)
-	}
-	if got := lite.R(q); got != q {
-		t.Errorf("sqlite: got %q, want unchanged", got)
-	}
-	if got := pg.R(`SELECT 1`); got != `SELECT 1` {
-		t.Errorf("no placeholders: got %q", got)
+func TestOpenRequiresDatabaseURL(t *testing.T) {
+	if _, err := db.Open(""); err == nil {
+		t.Fatal("empty DATABASE_URL unexpectedly accepted")
 	}
 }
 
 func TestExecOne(t *testing.T) {
-	d, err := Open("file:" + t.TempDir() + "/test.db")
+	d := dbtest.Open(t)
+	if _, err := d.Exec(`CREATE TABLE exec_one_test (id UUID PRIMARY KEY DEFAULT uuidv7())`); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecOne(t.Context(), `INSERT INTO exec_one_test DEFAULT VALUES`); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := d.ExecOne(
+		t.Context(),
+		`DELETE FROM exec_one_test WHERE id = $1`,
+		"00000000-0000-0000-0000-000000000000",
+	); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown id: got %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestWithinTenant(t *testing.T) {
+	d := dbtest.Open(t)
+	const tenantID = "0198a421-8b51-7f34-a723-4c1b49a4174e"
+
+	var got string
+	err := d.WithinTenant(t.Context(), tenantID, func(tx *sql.Tx) error {
+		return tx.QueryRow(
+			`SELECT current_setting('app.current_tenant_id')`,
+		).Scan(&got)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := d.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	if _, err := d.Exec(`CREATE TABLE t (id TEXT PRIMARY KEY)`); err != nil {
-		t.Fatal(err)
+	if got != tenantID {
+		t.Fatalf("tenant context: got %q, want %q", got, tenantID)
 	}
-	if err := d.ExecOne(t.Context(), `INSERT INTO t (id) VALUES (?)`, "a"); err != nil {
-		t.Fatalf("insert: %v", err)
-	}
-	if err := d.ExecOne(t.Context(), `DELETE FROM t WHERE id = ?`, "missing"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown id: got %v, want sql.ErrNoRows", err)
+}
+
+func TestWithinTenantRequiresID(t *testing.T) {
+	d := dbtest.Open(t)
+	if err := d.WithinTenant(t.Context(), "", func(*sql.Tx) error {
+		return nil
+	}); !errors.Is(err, db.ErrTenantRequired) {
+		t.Fatalf("got %v, want ErrTenantRequired", err)
 	}
 }

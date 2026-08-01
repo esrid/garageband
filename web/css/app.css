@@ -1,0 +1,97 @@
+/* Tailwind CSS 4 + daisyUI 5 source. Built by `make css` into
+   web/static/app.css, which is the committed, embedded artifact — same rule as
+   the generated *_templ.go files. Never edit web/static/app.css by hand.
+
+   Built with the Tailwind standalone CLI so the repo stays Node-free.
+   Verified against https://daisyui.com/docs/install/standalone/ 2026-08-01. */
+@import "tailwindcss" source(none);
+
+/* templ sources hold every class name; the generated *_templ.go copies are
+   scanned too, which is harmless. */
+@source "../../internal";
+
+@plugin "../../bin/tailwind/daisyui.mjs";
+
+/* Theme = the single source of truth for themable values; components consume
+   daisyUI semantic colors only.
+   Provenance of the neutrals: a warm stone ramp (#fafaf9 / #e7e5e4 / #1c1917).
+   Provenance of primary/accent: brand decision
+   for this product — steel blue and workshop ochre, chosen to read as
+   operational rather than as a generic SaaS indigo. depth/noise stay 0 so the
+   UI has no decorative gloss. */
+@plugin "../../bin/tailwind/daisyui-theme.mjs" {
+  name: "garageband";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(98.5% 0.002 75);
+  --color-base-200: oklch(96.5% 0.003 75);
+  --color-base-300: oklch(91% 0.004 75);
+  --color-base-content: oklch(21% 0.006 60);
+  --color-primary: oklch(45% 0.085 232);
+  --color-primary-content: oklch(98% 0.005 232);
+  --color-secondary: oklch(42% 0.03 250);
+  --color-secondary-content: oklch(98% 0.005 250);
+  --color-accent: oklch(58% 0.12 55);
+  --color-accent-content: oklch(98% 0.01 55);
+  --color-neutral: oklch(30% 0.008 60);
+  --color-neutral-content: oklch(97% 0.003 60);
+  --color-info: oklch(52% 0.09 235);
+  --color-info-content: oklch(98% 0.005 235);
+  --color-success: oklch(50% 0.12 150);
+  --color-success-content: oklch(98% 0.01 150);
+  /* Dark text on amber: light-on-amber only reaches 3.5:1, below WCAG AA. */
+  --color-warning: oklch(72% 0.15 70);
+  --color-warning-content: oklch(26% 0.05 70);
+  --color-error: oklch(51% 0.19 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Dark counterpart. Provenance: the dark end of the same stone ramp
+   (#1c1917 / #292524 / #44403c / #fafaf9). */
+@plugin "../../bin/tailwind/daisyui-theme.mjs" {
+  name: "garageband-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(21% 0.006 60);
+  --color-base-200: oklch(25% 0.006 60);
+  --color-base-300: oklch(32% 0.006 60);
+  --color-base-content: oklch(97% 0.003 75);
+  --color-primary: oklch(72% 0.1 232);
+  --color-primary-content: oklch(18% 0.02 232);
+  --color-secondary: oklch(70% 0.04 250);
+  --color-secondary-content: oklch(18% 0.02 250);
+  --color-accent: oklch(72% 0.12 55);
+  --color-accent-content: oklch(18% 0.02 55);
+  --color-neutral: oklch(32% 0.008 60);
+  --color-neutral-content: oklch(97% 0.003 60);
+  --color-info: oklch(72% 0.09 235);
+  --color-info-content: oklch(18% 0.02 235);
+  --color-success: oklch(70% 0.13 150);
+  --color-success-content: oklch(18% 0.02 150);
+  --color-warning: oklch(76% 0.14 70);
+  --color-warning-content: oklch(18% 0.02 70);
+  --color-error: oklch(68% 0.17 25);
+  --color-error-content: oklch(18% 0.02 25);
+
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}

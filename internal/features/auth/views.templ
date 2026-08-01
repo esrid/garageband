@@ -2,24 +2,37 @@ package auth
 
 import "github.com/esrid/garageband/internal/ui"
 
+// Interface copy is French; identifiers and comments stay English.
+
 templ LoginPage(providers []string) {
-	@ui.Layout(ui.PageInfo{Title: "Log in", NoIndex: true}) {
-		<h1>Log in</h1>
-		if len(providers) == 0 {
-			<p class="empty">
-				No OAuth provider configured. Set
-				<code>GOOGLE_CLIENT_ID</code>/<code>GOOGLE_CLIENT_SECRET</code> or
-				<code>GITHUB_CLIENT_ID</code>/<code>GITHUB_CLIENT_SECRET</code>,
-				then restart.
-			</p>
-		} else {
-			<ul class="provider-list">
-				for _, name := range providers {
-					<li>
-						<a class="provider" href={ templ.URL("/auth/" + name) }>Continue with { name }</a>
-					</li>
+	@ui.Layout(ui.PageInfo{Title: "Connexion", NoIndex: true}) {
+		<div class="card card-border mx-auto max-w-sm border-base-300 bg-base-100">
+			<div class="card-body gap-4">
+				<h1 class="card-title text-xl">Connexion</h1>
+				if len(providers) == 0 {
+					<div role="alert" class="alert alert-warning items-start text-left">
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
+						</svg>
+						<div class="grid gap-1">
+							<span class="font-semibold">Aucun fournisseur OAuth configuré</span>
+							<span class="text-sm">
+								Définissez <code class="kbd kbd-sm">GOOGLE_CLIENT_ID</code>/<code class="kbd kbd-sm">GOOGLE_CLIENT_SECRET</code>
+								ou <code class="kbd kbd-sm">GITHUB_CLIENT_ID</code>/<code class="kbd kbd-sm">GITHUB_CLIENT_SECRET</code>,
+								puis redémarrez.
+							</span>
+						</div>
+					</div>
+				} else {
+					<ul class="grid gap-2">
+						for _, name := range providers {
+							<li>
+								<a class="btn btn-block" href={ templ.URL("/auth/" + name) }>Continuer avec { name }</a>
+							</li>
+						}
+					</ul>
 				}
-			</ul>
-		}
+			</div>
+		</div>
 	}
 }

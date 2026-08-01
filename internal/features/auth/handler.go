@@ -3,9 +3,12 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"maps"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -17,6 +20,8 @@ const (
 	sessionCookie = "session"
 	stateCookie   = "oauth_state"
 )
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type handler struct {
 	store     *Store
@@ -111,6 +116,23 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	clearCookie(w, sessionCookie, "/", h.secure)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+func (h *handler) activateWorkspace(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.PathValue("tenantID")
+	if !uuidPattern.MatchString(tenantID) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.store.ActivateTenant(r.Context(), tenantID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.fail(w, err)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *handler) fail(w http.ResponseWriter, err error) {

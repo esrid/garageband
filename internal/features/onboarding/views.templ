@@ -1,0 +1,249 @@
+package onboarding
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French: the product serves French garages and reads the
+// French business registry. Code, identifiers and comments stay English.
+
+// pendingHandle renders the submit-pending script once per page. The forms are
+// plain POSTs and work unchanged without it.
+var pendingHandle = templ.NewOnceHandle()
+
+templ LookupPage(siret string, message string, kind string) {
+	@ui.Layout(ui.PageInfo{Title: "Configurer votre garage", NoIndex: true}) {
+		@stepHeader(1)
+		<div class="card card-border border-base-300 bg-base-100">
+			<div class="card-body gap-4">
+				<div>
+					<h1 class="card-title text-xl">Trouvez votre entreprise</h1>
+					<p class="mt-1 text-sm opacity-70">
+						Nous consultons le registre officiel des entreprises pour préremplir
+						votre garage. Rien n'est créé tant que vous n'avez pas vérifié chaque champ.
+					</p>
+				</div>
+				@notice(kind, message)
+				<form method="post" action="/onboarding/lookup" class="grid gap-4" data-pending-form>
+					<fieldset class="fieldset gap-1 p-0">
+						<legend class="sr-only">Identifiant de l'entreprise</legend>
+						<label class="label font-medium text-base-content" for="siret">SIRET</label>
+						<input
+							id="siret"
+							name="siret"
+							class="input input-lg validator w-full font-mono tracking-wider"
+							value={ siret }
+							inputmode="numeric"
+							autocomplete="off"
+							minlength="14"
+							maxlength="14"
+							pattern="[0-9]{14}"
+							aria-describedby="siret-hint"
+							required
+						/>
+						<p id="siret-hint" class="label text-xs leading-snug whitespace-normal">
+							14 chiffres, indiqués sur votre extrait Kbis et vos factures. Un SIRET
+							identifie un seul établissement : utilisez celui de ce garage.
+						</p>
+					</fieldset>
+					<button
+						type="submit"
+						class="btn btn-primary btn-block sm:w-auto sm:justify-self-start"
+						data-pending-label="Recherche dans le registre…"
+					>
+						Rechercher dans le registre
+					</button>
+				</form>
+				<p class="flex items-start gap-2 text-xs leading-snug opacity-70">
+					<span class="badge badge-sm badge-ghost shrink-0">Bientôt</span>
+					<span>Le préremplissage depuis votre site web. Pour l'instant, nous lisons uniquement le registre public.</span>
+				</p>
+			</div>
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+templ ConfirmationPage(data formData) {
+	@ui.Layout(ui.PageInfo{Title: "Confirmer votre garage", NoIndex: true}) {
+		@stepHeader(2)
+		<div class="grid gap-4">
+			<div>
+				<h1 class="text-xl font-semibold">Vérifiez ce que nous avons trouvé</h1>
+				<p class="mt-1 text-sm opacity-70">
+					Les données du registre peuvent être obsolètes. Tous les champs restent
+					modifiables : ce que vous confirmez crée votre garage et son premier site.
+				</p>
+			</div>
+			@notice(data.ErrorKind, data.Error)
+			<form method="post" action="/onboarding/confirm" class="grid gap-4" data-pending-form>
+				<input type="hidden" name="draft_id" value={ data.DraftID }/>
+				<section class="card card-border border-base-300 bg-base-100">
+					<div class="card-body gap-4">
+						<div>
+							<h2 class="card-title text-base">
+								<span class="badge badge-sm badge-neutral">Étape 2</span>
+								Identité de l'entreprise
+							</h2>
+							<p class="text-sm opacity-70">
+								L'entreprise. Elle reste la même quel que soit le nombre d'ateliers.
+							</p>
+						</div>
+						<div class="grid gap-4 sm:grid-cols-2">
+							@field("name", "Nom commercial du garage", "Le nom sous lequel vos clients vous connaissent.", true) {
+								<input id="name" name="name" class="input validator w-full" value={ data.Name } autocomplete="organization" aria-describedby="name-hint" required/>
+							}
+							@field("legal_name", "Raison sociale", "Telle qu'enregistrée au registre.", true) {
+								<input id="legal_name" name="legal_name" class="input w-full" value={ data.LegalName } aria-describedby="legal_name-hint"/>
+							}
+							@field("slug", "Identifiant de l'espace", "Votre adresse dans Garageband. Lettres minuscules, chiffres et tirets.", true) {
+								<input id="slug" name="slug" class="input validator w-full font-mono" value={ data.Slug } minlength="2" maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="slug-hint" required/>
+							}
+							@field("siret-confirm", "SIRET", "Verrouillé sur l'établissement recherché. Relancez une recherche pour le changer.", false) {
+								<input id="siret-confirm" name="siret" class="input w-full bg-base-200 font-mono tracking-wider" value={ data.SIRET } inputmode="numeric" minlength="14" maxlength="14" pattern="[0-9]{14}" aria-describedby="siret-confirm-hint" readonly required/>
+							}
+							@field("siren", "SIREN", "Le numéro de l'entreprise, repris des 9 premiers chiffres du SIRET.", false) {
+								<input id="siren" class="input w-full bg-base-200 font-mono tracking-wider" value={ data.SIREN() } aria-describedby="siren-hint" readonly/>
+							}
+							@field("website_url", "Site web", "Enregistré dès maintenant. La reprise des informations depuis le site viendra plus tard.", true) {
+								<input id="website_url" name="website_url" type="url" class="input validator w-full" value={ data.WebsiteURL } placeholder="https://" inputmode="url" aria-describedby="website_url-hint"/>
+							}
+						</div>
+					</div>
+				</section>
+				<section class="card card-border border-base-300 bg-base-100">
+					<div class="card-body gap-4">
+						<div>
+							<h2 class="card-title text-base">
+								<span class="badge badge-sm badge-neutral">Étape 3</span>
+								Premier site
+							</h2>
+							<p class="text-sm opacity-70">
+								L'atelier où vos clients se rendent. Vous pourrez en ajouter d'autres ensuite.
+							</p>
+						</div>
+						<div class="grid gap-4 sm:grid-cols-2">
+							@field("location_name", "Nom du site", "Par exemple : Atelier principal, ou le nom de la rue.", true) {
+								<input id="location_name" name="location_name" class="input validator w-full" value={ data.LocationName } aria-describedby="location_name-hint" required/>
+							}
+							@field("address_line1", "Adresse", "", true) {
+								<input id="address_line1" name="address_line1" class="input w-full" value={ data.AddressLine1 } autocomplete="address-line1"/>
+							}
+							@field("postal_code", "Code postal", "", false) {
+								<input id="postal_code" name="postal_code" class="input w-full" value={ data.PostalCode } inputmode="numeric" autocomplete="postal-code"/>
+							}
+							@field("city", "Ville", "", false) {
+								<input id="city" name="city" class="input w-full" value={ data.City } autocomplete="address-level2"/>
+							}
+							@field("country_code", "Code pays", "Deux lettres, par exemple FR.", false) {
+								<input id="country_code" name="country_code" class="input validator w-24 uppercase" value={ data.CountryCode } minlength="2" maxlength="2" pattern="[A-Za-z]{2}" autocomplete="country" aria-describedby="country_code-hint" required/>
+							}
+						</div>
+						<details class="collapse-arrow collapse border border-base-300 bg-base-200" open?={ data.AddressLine2 != "" }>
+							<summary class="collapse-title min-h-0 py-3 text-sm font-medium">Complément d'adresse</summary>
+							<div class="collapse-content">
+								@field("address_line2", "Bâtiment, étage ou zone d'activité", "Uniquement si l'adresse ci-dessus ne suffit pas à vous localiser.", true) {
+									<input id="address_line2" name="address_line2" class="input w-full" value={ data.AddressLine2 } autocomplete="address-line2" aria-describedby="address_line2-hint"/>
+								}
+							</div>
+						</details>
+					</div>
+				</section>
+				<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+					<a href="/onboarding" class="btn btn-ghost btn-block sm:w-auto">Rechercher un autre SIRET</a>
+					<button
+						type="submit"
+						class="btn btn-primary btn-block sm:w-auto"
+						data-pending-label="Création de votre espace…"
+					>
+						Créer l'espace du garage
+					</button>
+				</div>
+			</form>
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// stepHeader shows where the user stands. Steps 2 and 3 share one page, so both
+// light up once the registry has answered.
+templ stepHeader(current int) {
+	<nav aria-label="Progression de la configuration" class="mb-6">
+		<ol class="steps w-full text-xs sm:text-sm">
+			<li class="step step-primary" data-content={ stepMarker(1, current) } aria-current={ stepCurrent(1, current) }>
+				Trouver l'entreprise
+			</li>
+			<li
+				class={ "step", templ.KV("step-primary", current >= 2) }
+				data-content={ stepMarker(2, current) }
+				aria-current={ stepCurrent(2, current) }
+			>
+				Confirmer l'entreprise
+			</li>
+			<li class={ "step", templ.KV("step-primary", current >= 2) } data-content={ stepMarker(3, current) }>
+				Confirmer le premier site
+			</li>
+		</ol>
+	</nav>
+}
+
+// field pairs a visible label and a hint with its control. The hint id matches
+// the aria-describedby written on the control at the call site.
+templ field(id string, label string, hint string, wide bool) {
+	<div class={ "grid content-start gap-1", templ.KV("sm:col-span-2", wide) }>
+		<label class="label font-medium text-base-content" for={ id }>{ label }</label>
+		{ children... }
+		if hint != "" {
+			<p id={ id + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
+		}
+	</div>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the meaning,
+// so no state depends on colour alone.
+templ notice(kind string, message string) {
+	if message != "" {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(kind) }>
+			@noticeIcon(kind)
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(kind) }</span>
+				<span class="text-sm">{ message }</span>
+				if kind == noticeExpired || kind == noticeMismatch {
+					<a href="/onboarding" class="btn btn-sm mt-1 w-fit">Recommencer</a>
+				}
+			</div>
+		</div>
+	}
+}
+
+templ noticeIcon(kind string) {
+	switch kind {
+		case noticeUnavailable, noticeExpired, noticeMismatch:
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
+			</svg>
+		default:
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+			</svg>
+	}
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button || !form.checkValidity()) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}

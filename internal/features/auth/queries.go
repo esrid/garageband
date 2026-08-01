@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -17,15 +18,20 @@ import (
 // ponytail: no idle timeout — add a last_seen column if you need one.
 const sessionTTL = 7 * 24 * time.Hour
 
-// timeFormat is fixed-width RFC 3339 UTC so TEXT comparison in SQL is safe.
-const timeFormat = time.RFC3339
-
 type User struct {
-	ID        string
-	Provider  string
-	Email     string
-	Name      string
-	CreatedAt time.Time
+	ID             string
+	Provider       string
+	Email          string
+	Name           string
+	ActiveTenantID string
+	CreatedAt      time.Time
+}
+
+type Workspace struct {
+	ID   string
+	Slug string
+	Name string
+	Role string
 }
 
 type Store struct{ db *db.DB }
@@ -33,23 +39,20 @@ type Store struct{ db *db.DB }
 func NewStore(d *db.DB) *Store { return &Store{db: d} }
 
 // UpsertUser creates or refreshes the user identified by (provider, provider
-// id). ON CONFLICT ... RETURNING runs on both SQLite (3.35+) and PostgreSQL.
+// id).
 func (s *Store) UpsertUser(ctx context.Context, provider string, info oauth.UserInfo) (User, error) {
 	u := User{Provider: provider, Email: info.Email, Name: info.Name}
-	var created string
-	err := s.db.QueryRowContext(ctx, s.db.R(`
-		INSERT INTO users (id, provider, provider_id, email, name, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+	err := s.db.QueryRowContext(ctx, `
+		INSERT INTO users (provider, provider_id, email, name, created_at)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (provider, provider_id)
-		DO UPDATE SET email = excluded.email, name = excluded.name
-		RETURNING id, email, name, created_at`),
-		rand.Text(), provider, info.ProviderID, info.Email, info.Name,
-		time.Now().UTC().Format(timeFormat),
-	).Scan(&u.ID, &u.Email, &u.Name, &created)
-	if err != nil {
-		return User{}, err
-	}
-	u.CreatedAt, err = time.Parse(timeFormat, created)
+		DO UPDATE SET
+			email = excluded.email,
+			name = excluded.name,
+			updated_at = now()
+		RETURNING id, email, name, created_at`,
+		provider, info.ProviderID, info.Email, info.Name, time.Now().UTC(),
+	).Scan(&u.ID, &u.Email, &u.Name, &u.CreatedAt)
 	return u, err
 }
 
@@ -60,14 +63,14 @@ func (s *Store) CreateSession(ctx context.Context, userID string) (string, error
 	token := rand.Text() + rand.Text()
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx,
-		s.db.R(`INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`),
-		hashToken(token), userID, now.Add(sessionTTL).Format(timeFormat), now.Format(timeFormat))
+		`INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4)`,
+		hashToken(token), userID, now.Add(sessionTTL), now)
 	if err != nil {
 		return "", err
 	}
 	// Opportunistic cleanup; ponytail: move to a periodic job if the table grows.
 	// A failure must not fail the login, but it must not be silent either.
-	if _, err := s.db.ExecContext(ctx, s.db.R(`DELETE FROM sessions WHERE expires_at < ?`), now.Format(timeFormat)); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < $1`, now); err != nil {
 		slog.Error("purge expired sessions", "err", err)
 	}
 	return token, nil
@@ -77,32 +80,98 @@ func (s *Store) CreateSession(ctx context.Context, userID string) (string, error
 // Returns sql.ErrNoRows for unknown or expired tokens.
 func (s *Store) UserByToken(ctx context.Context, token string) (User, error) {
 	var u User
-	var expires, created string
-	err := s.db.QueryRowContext(ctx, s.db.R(`
-		SELECT u.id, u.provider, u.email, u.name, u.created_at, se.expires_at
+	var expires time.Time
+	err := s.db.QueryRowContext(ctx, `
+		SELECT u.id, u.provider, u.email, u.name,
+		       COALESCE(se.active_tenant_id::text, ''), u.created_at,
+		       se.expires_at
 		FROM sessions se JOIN users u ON u.id = se.user_id
-		WHERE se.token_hash = ?`), hashToken(token),
-	).Scan(&u.ID, &u.Provider, &u.Email, &u.Name, &created, &expires)
+		WHERE se.token_hash = $1`, hashToken(token),
+	).Scan(
+		&u.ID, &u.Provider, &u.Email, &u.Name, &u.ActiveTenantID,
+		&u.CreatedAt, &expires,
+	)
 	if err != nil {
 		return User{}, err
 	}
-	exp, err := time.Parse(timeFormat, expires)
-	if err != nil {
-		return User{}, err
-	}
-	if time.Now().UTC().After(exp) {
+	if time.Now().UTC().After(expires) {
 		if err := s.DeleteSession(ctx, token); err != nil {
 			slog.Error("delete expired session", "err", err)
 		}
 		return User{}, sql.ErrNoRows
 	}
-	u.CreatedAt, err = time.Parse(timeFormat, created)
-	return u, err
+	return u, nil
+}
+
+// Workspaces lists only tenants the user belongs to. WithinUser supplies the
+// separate RLS identity needed before an active tenant has been selected.
+func (s *Store) Workspaces(ctx context.Context, userID string) (workspaces []Workspace, err error) {
+	err = s.db.WithinUser(ctx, userID, func(tx *sql.Tx) (returnErr error) {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT tenant.id, tenant.slug, tenant.name, membership.role
+			FROM tenant_memberships membership
+			JOIN tenants tenant ON tenant.id = membership.tenant_id
+			WHERE membership.user_id = $1
+			ORDER BY tenant.name, tenant.id`, userID)
+		if err != nil {
+			return err
+		}
+		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+		for rows.Next() {
+			var workspace Workspace
+			if err := rows.Scan(
+				&workspace.ID, &workspace.Slug, &workspace.Name, &workspace.Role,
+			); err != nil {
+				return err
+			}
+			workspaces = append(workspaces, workspace)
+		}
+		return rows.Err()
+	})
+	return workspaces, err
+}
+
+// ActivateTenant changes only the session represented by ctx. Membership is
+// checked under tenant RLS in the same transaction, while the database's
+// composite foreign key makes the authorization invariant permanent.
+func (s *Store) ActivateTenant(ctx context.Context, tenantID string) error {
+	identity, ok := identityFrom(ctx)
+	if !ok {
+		return sql.ErrNoRows
+	}
+	return s.db.WithinTenant(ctx, tenantID, func(tx *sql.Tx) error {
+		var role string
+		if err := tx.QueryRowContext(ctx, `
+			SELECT role
+			FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`,
+			tenantID, identity.User.ID,
+		).Scan(&role); err != nil {
+			return err
+		}
+		result, err := tx.ExecContext(ctx, `
+			UPDATE sessions
+			SET active_tenant_id = $1
+			WHERE token_hash = $2 AND user_id = $3 AND expires_at > now()`,
+			tenantID, identity.tokenHash, identity.User.ID,
+		)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows != 1 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
 }
 
 // DeleteSession revokes a session server-side (logout). Idempotent.
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
-	_, err := s.db.ExecContext(ctx, s.db.R(`DELETE FROM sessions WHERE token_hash = ?`), hashToken(token))
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = $1`, hashToken(token))
 	return err
 }
 
