@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/esrid/template/internal/features/todos"
-	"github.com/esrid/template/internal/platform/db"
+	"github.com/esrid/garageband/internal/features/todos"
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 func setup(t *testing.T) *http.ServeMux {

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/esrid/template/internal/app"
-	"github.com/esrid/template/internal/platform/db"
+	"github.com/esrid/garageband/internal/app"
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 func main() {

@@ -3,10 +3,10 @@ package app
 import (
 	"net/http"
 
-	"github.com/esrid/template/internal/features/auth"
-	"github.com/esrid/template/internal/features/todos"
-	"github.com/esrid/template/internal/platform/db"
-	"github.com/esrid/template/web"
+	"github.com/esrid/garageband/internal/features/auth"
+	"github.com/esrid/garageband/internal/features/todos"
+	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/esrid/garageband/web"
 )
 
 // NewRouter composes feature routers and global middleware. Each feature

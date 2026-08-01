@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/esrid/template/internal/features/auth"
-	"github.com/esrid/template/internal/platform/db"
-	"github.com/esrid/template/internal/platform/oauth"
+	"github.com/esrid/garageband/internal/features/auth"
+	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
 // fakeProvider exercises the oauth.Provider port without any network — the

@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/esrid/template/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 // Run wires dependencies, starts the HTTP server and blocks until SIGINT or

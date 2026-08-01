@@ -1,4 +1,4 @@
-module github.com/esrid/template
+module github.com/esrid/garageband
 
 go 1.26.5
 

@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/esrid/template/internal/platform/db"
-	"github.com/esrid/template/internal/platform/oauth"
+	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
 // sessionTTL is an absolute expiry (OWASP session management).

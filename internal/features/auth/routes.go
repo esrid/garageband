@@ -3,7 +3,7 @@ package auth
 import (
 	"net/http"
 
-	"github.com/esrid/template/internal/platform/oauth"
+	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
 // Register mounts the login/logout routes. providers may be empty: the login

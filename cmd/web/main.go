@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/esrid/template/internal/app"
+	"github.com/esrid/garageband/internal/app"
 )
 
 func main() {

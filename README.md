@@ -100,6 +100,6 @@ in `Config.OAuthProviders`. Tests inject a fake `Provider` — see
 
 ```sh
 go mod edit -module github.com/you/yourapp
-grep -rl 'github.com/esrid/template' --include='*.go' --include='*.templ' . | xargs sed -i '' 's|github.com/esrid/template|github.com/you/yourapp|g'
+grep -rl 'github.com/esrid/garageband' --include='*.go' --include='*.templ' . | xargs sed -i '' 's|github.com/esrid/garageband|github.com/you/yourapp|g'
 make generate
 ```

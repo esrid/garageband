@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"time"
 
-	"github.com/esrid/template/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 type Todo struct {

@@ -3,7 +3,7 @@ package app
 import (
 	"os"
 
-	"github.com/esrid/template/internal/platform/oauth"
+	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
 // Config holds all runtime configuration, read from environment variables

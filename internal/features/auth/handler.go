@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/esrid/template/internal/platform/oauth"
+	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
 const (
