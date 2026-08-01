@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/esrid/garageband/internal/features/assistant"
+	"github.com/esrid/garageband/internal/features/catalog"
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -227,16 +228,53 @@ func TestAssistantRejectsStalePreviewAndResumesAppliedExecution(t *testing.T) {
 	}
 }
 
+func TestAssistantReadsOnlyCurrentlyQuotableCatalogPrices(t *testing.T) {
+	fixture := newAssistantFixture(t)
+	amount := int64(7900)
+	duration := 45
+	if _, err := fixture.catalogStore.Create(
+		t.Context(), fixture.tenantID, fixture.ownerID, catalog.ItemInput{
+			Kind: catalog.KindService, Reference: "VID-01", Name: "Vidange",
+			PriceKind: catalog.PriceFrom, AmountCents: &amount,
+			TaxBasis: catalog.TaxInclusive, VATBasisPoints: 2000,
+			DurationMinutes: &duration, LocationScope: catalog.ScopeAll,
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	conversationID, err := fixture.service.Send(
+		t.Context(), fixture.tenantID, fixture.ownerID, "", fixture.locationA,
+		"Quel est le prix de la vidange ?",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := fixture.store.Workspace(t.Context(), fixture.tenantID, fixture.ownerID, conversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(workspace.Executions) != 1 || workspace.Executions[0].ToolName != catalog.ToolSearchCatalog ||
+		workspace.Executions[0].Status != "succeeded" || workspace.Executions[0].ConfirmedAt.Valid {
+		t.Fatalf("catalog read execution = %#v", workspace.Executions)
+	}
+	answer := workspace.Messages[len(workspace.Messages)-1].Content
+	if !strings.Contains(answer, "Vidange — à partir de 79,00 € TTC") ||
+		!strings.Contains(answer, "45 min") || !strings.Contains(answer, "VID-01") {
+		t.Fatalf("catalog answer = %q", answer)
+	}
+}
+
 type assistantFixture struct {
-	fixtures  *db.DB
-	store     *assistant.Store
-	service   *assistant.Service
-	tools     *assistanttools.Registry
-	tenantID  string
-	ownerID   string
-	memberID  string
-	locationA string
-	locationB string
+	fixtures     *db.DB
+	store        *assistant.Store
+	service      *assistant.Service
+	tools        *assistanttools.Registry
+	catalogStore *catalog.Store
+	tenantID     string
+	ownerID      string
+	memberID     string
+	locationA    string
+	locationB    string
 }
 
 func newAssistantFixture(t *testing.T) assistantFixture {
@@ -270,9 +308,10 @@ func newAssistantFixture(t *testing.T) assistantFixture {
 		t.Fatal(err)
 	}
 	store := assistant.NewStore(runtime)
-	tools := assistanttools.NewRegistry(locationStore)
+	catalogStore := catalog.NewStore(runtime)
+	tools := assistanttools.NewRegistry(locationStore, catalogStore)
 	return assistantFixture{
-		fixtures: fixtures, store: store, tools: tools,
+		fixtures: fixtures, store: store, tools: tools, catalogStore: catalogStore,
 		service: assistant.NewService(
 			store, llm.NewDemonstrationProvider(),
 			tools,

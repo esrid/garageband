@@ -87,13 +87,14 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 		},
 	)
 	assistantStore := assistant.NewStore(database)
+	catalogStore := catalog.NewStore(database)
 	assistant.Register(
 		mux,
 		assistantStore,
 		assistant.NewService(
 			assistantStore,
 			llm.NewDemonstrationProvider(),
-			assistanttools.NewRegistry(locationStore),
+			assistanttools.NewRegistry(locationStore, catalogStore),
 		),
 		auth.RequireTenant,
 		func(ctx context.Context) (assistant.Principal, bool) {
@@ -154,7 +155,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 	)
 	catalog.Register(
 		mux,
-		catalog.NewStore(database),
+		catalogStore,
 		auth.RequireTenant,
 		func(ctx context.Context) (catalog.Principal, bool) {
 			user, userOK := auth.UserFrom(ctx)

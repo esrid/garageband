@@ -303,6 +303,67 @@ func (s *Store) ProposeTool(
 	return executionID, err
 }
 
+func (s *Store) StartReadTool(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	conversationID string,
+	userSequence int,
+	callID string,
+	definition assistanttools.Definition,
+	preview assistanttools.Preview,
+) (execution ToolExecution, err error) {
+	previewJSON, err := json.Marshal(map[string]string{"summary": preview.Summary})
+	if err != nil {
+		return execution, err
+	}
+	idempotencyKey := fmt.Sprintf("message-%d:%s", userSequence, callID)
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+		locationID, err := lockConversation(ctx, tx, tenantID, userID, conversationID)
+		if err != nil {
+			return err
+		}
+		err = tx.QueryRowContext(ctx, `
+			INSERT INTO assistant_tool_executions (
+			    tenant_id, location_id, conversation_id, requested_by_user_id,
+			    idempotency_key, tool_name, consequence, status, input, preview
+			) VALUES ($1, $2, $3, $4, $5, $6, 'read', 'running', $7, $8)
+			ON CONFLICT (tenant_id, conversation_id, idempotency_key) DO NOTHING
+			RETURNING id::text`, tenantID, locationID, conversationID, userID,
+			idempotencyKey, definition.Name, preview.Input, previewJSON,
+		).Scan(&execution.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return tx.QueryRowContext(ctx, `
+				SELECT id::text, conversation_id::text, location_id::text, tool_name,
+				       consequence, status, input, preview->>'summary',
+				       COALESCE(output, '{}'::jsonb), COALESCE(error_message, ''),
+				       proposed_at, confirmed_at, completed_at
+				FROM assistant_tool_executions
+				WHERE tenant_id = $1 AND conversation_id = $2
+				  AND idempotency_key = $3`, tenantID, conversationID, idempotencyKey,
+			).Scan(
+				&execution.ID, &execution.ConversationID, &execution.LocationID,
+				&execution.ToolName, &execution.Consequence, &execution.Status,
+				&execution.Input, &execution.PreviewSummary, &execution.Output,
+				&execution.ErrorMessage, &execution.ProposedAt,
+				&execution.ConfirmedAt, &execution.CompletedAt,
+			)
+		}
+		if err != nil {
+			return err
+		}
+		execution.ConversationID = conversationID
+		execution.LocationID = locationID
+		execution.ToolName = definition.Name
+		execution.Consequence = assistanttools.ConsequenceRead
+		execution.Status = "running"
+		execution.Input = preview.Input
+		execution.PreviewSummary = preview.Summary
+		return nil
+	})
+	return execution, err
+}
+
 func (s *Store) BeginExecution(
 	ctx context.Context,
 	tenantID string,

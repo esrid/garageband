@@ -73,7 +73,7 @@ templ View(page Page) {
 									for _, execution := range page.Workspace.Executions {
 										<li class="grid gap-3 rounded-box border border-base-300 p-4">
 											<div class="flex flex-wrap items-center justify-between gap-2">
-												<span class="text-sm font-semibold">Modification des coordonnées du site</span>
+												<span class="text-sm font-semibold">{ toolLabel(execution.ToolName) }</span>
 												<span class={ "badge", executionBadge(execution.Status) }>{ executionStatusLabel(execution.Status) }</span>
 											</div>
 											<p class="text-sm">{ execution.PreviewSummary }</p>

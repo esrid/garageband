@@ -56,10 +56,44 @@ func (p *DemonstrationProvider) Stream(_ context.Context, request Request) (Stre
 			Done: true,
 		}}}, nil
 	}
+	if (strings.Contains(lower, "prix") || strings.Contains(lower, "tarif") ||
+		strings.Contains(lower, "combien coûte") || strings.Contains(lower, "combien coute")) &&
+		hasTool(request.Tools, "search_catalog") {
+		query := demonstrationCatalogQuery(last)
+		encoded, err := json.Marshal(map[string]string{"query": query})
+		if err != nil {
+			return nil, err
+		}
+		hash := sha256.Sum256([]byte(last))
+		return &sliceStream{chunks: []Chunk{{
+			ToolCalls: []ToolCall{{
+				ID:   "demo-" + hex.EncodeToString(hash[:8]),
+				Name: "search_catalog", Arguments: encoded,
+			}},
+			Done: true,
+		}}}, nil
+	}
 	return &sliceStream{chunks: []Chunk{{
 		Text: "Le modèle de démonstration peut seulement préparer une modification explicite de l’e-mail, du téléphone international ou du site web de l’établissement sélectionné. Aucune action n’est effectuée sans votre confirmation.",
 		Done: true,
 	}}}, nil
+}
+
+func demonstrationCatalogQuery(message string) string {
+	lower := strings.ToLower(message)
+	markers := []string{
+		"prix de la ", "prix du ", "prix de ",
+		"tarif de la ", "tarif du ", "tarif de ",
+		"combien coûte la ", "combien coûte le ", "combien coûte ",
+		"combien coute la ", "combien coute le ", "combien coute ",
+	}
+	for _, marker := range markers {
+		if index := strings.Index(lower, marker); index >= 0 {
+			query := message[index+len(marker):]
+			return strings.Trim(strings.TrimSpace(query), "?.!,;:\"'«»")
+		}
+	}
+	return strings.Trim(strings.TrimSpace(message), "?.!,;:\"'«»")
 }
 
 func lastUserMessage(messages []Message) string {

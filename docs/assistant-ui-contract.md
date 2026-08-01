@@ -38,6 +38,13 @@ unknown JSON fields, normalizes and validates values, authorizes owner/admin
 roles inside the tenant/user transaction, and takes location scope only from the
 application. Model arguments cannot redirect it to another site.
 
+The first read tool, `search_catalog`, is owned by `catalog` and calls the same
+`Store.Quotable` contract reserved for future telephone agents. It returns only
+currently effective prices applicable to the scoped accessible location,
+preserving fixed/from/range/quote, HT/TTC, duration, and reference semantics.
+Read executions run immediately, are still audited, and have no fake
+confirmation timestamp.
+
 ## Confirmation, concurrency, and audit
 
 A write call first produces canonical validated arguments and a human-readable
@@ -63,7 +70,7 @@ RLS independently enforces ownership and location access.
 
 ## Current limitation
 
-This tracer bullet intentionally exposes one reversible write tool and a fake
-model adapter. Customer, vehicle, catalog, appointment, and read-only tools;
-real model providers; richer follow-up turns; and stricter destructive-action
-policies remain separate slices.
+This tracer bullet intentionally exposes one reversible write tool, one catalog
+read tool, and a fake model adapter. Customer, vehicle, and appointment tools;
+real model providers; richer model follow-up turns; and stricter
+destructive-action policies remain separate slices.

@@ -78,12 +78,28 @@ func (s *Service) Send(
 		}
 		return conversation.ID, nil
 	}
-	if !definition.ConfirmationRequired {
-		return conversation.ID, errors.New("assistant tool without confirmation is not supported yet")
-	}
 	callID := call.ID
 	if callID == "" {
 		callID = fmt.Sprintf("tool-%d", userSequence)
+	}
+	if !definition.ConfirmationRequired {
+		execution, err := s.store.StartReadTool(
+			ctx, tenantID, userID, conversation.ID, userSequence,
+			callID, definition, preview,
+		)
+		if err != nil || execution.Status != "running" {
+			return conversation.ID, err
+		}
+		result, executionErr := s.tools.Execute(ctx, assistanttools.Scope{
+			TenantID: tenantID, UserID: userID, LocationID: conversation.LocationID,
+			IdempotencyKey: execution.ID,
+		}, call.Name, preview.Input)
+		if err := s.store.FinishExecution(
+			ctx, tenantID, userID, execution, result, executionErr,
+		); err != nil {
+			return conversation.ID, err
+		}
+		return conversation.ID, nil
 	}
 	_, err = s.store.ProposeTool(
 		ctx, tenantID, userID, conversation.ID, userSequence,

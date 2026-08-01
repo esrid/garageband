@@ -72,6 +72,17 @@ func executionStatusLabel(status string) string {
 	}
 }
 
+func toolLabel(name string) string {
+	switch name {
+	case "search_catalog":
+		return "Consultation du catalogue"
+	case "update_location_contact":
+		return "Modification des coordonnées du site"
+	default:
+		return "Action de l’assistant"
+	}
+}
+
 func executionBadge(status string) string {
 	switch status {
 	case "succeeded":
