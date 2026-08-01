@@ -8,8 +8,8 @@ never query anything, never compute availability, and never decide permissions.
 
 | Method | Path | Effect |
 |---|---|---|
-| `GET` | `/agenda?date=YYYY-MM-DD` | `Show(Day)`; today when the parameter is absent or unparsable |
-| `GET` | `/agenda/new?customer=…` | `Form(FormPage)` with an empty `ID` |
+| `GET` | `/agenda?location_id=…&date=YYYY-MM-DD` | `Show(Day)`; the first accessible active location and today are defaults |
+| `GET` | `/agenda/new?location_id=…&customer_id=…` | `Form(FormPage)` with an empty `ID` |
 | `POST` | `/agenda` | create, then redirect to `/agenda?date=…` of the booked day |
 | `GET` | `/agenda/{id}` | `Form(FormPage)` for an existing appointment |
 | `POST` | `/agenda/{id}` | update, then redirect to the agenda |
@@ -22,6 +22,12 @@ that registers the routes.
 
 The agenda links each appointment to `/customers/{id}`, so land the customer
 routes too or the day ships with dead links.
+
+`location_id` is explicit because an organization may have several physical
+sites and sessions do not yet carry an active working location. The day renders
+a selector when the actor reaches more than one active location. Navigation,
+date changes, creation, validation retries, saves, and cancellations preserve
+the selected location instead of silently falling back to another workshop.
 
 ## Timezones are the handler's problem
 

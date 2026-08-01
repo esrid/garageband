@@ -14,23 +14,37 @@ templ Show(page Day) {
 		Nav:     ui.Nav{Section: ui.SectionAgenda, Workspace: page.Organization, InWorkspace: true},
 	}) {
 		<div class="grid gap-5">
-			<header class="grid gap-1">
+			<header class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+				<div class="grid gap-1">
 				<h1 class="text-xl font-semibold">{ ui.FormatDayHeading(page.Date) }</h1>
 				<p class="text-sm opacity-70">
 					{ page.LocationName }
 					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
 					{ bookedSummary(page.Booked()) }
 				</p>
+				</div>
+				if len(page.Locations) > 1 {
+					<form method="get" action="/agenda" class="grid gap-1">
+						<label for="agenda-location" class="text-xs font-medium opacity-70">Établissement</label>
+						<input type="hidden" name="date" value={ page.DateValue() }/>
+						<select id="agenda-location" name={ FieldLocation } class="select select-sm min-h-11" onchange="this.form.submit()">
+							for _, option := range page.Locations {
+								<option value={ option.Value } selected?={ option.Value == page.LocationID }>{ option.Label }</option>
+							}
+						</select>
+					</form>
+				}
 			</header>
 			@notice(page.Notice)
 			<nav aria-label="Changer de jour" class="flex flex-wrap items-center gap-2">
-				<a href={ templ.URL("/agenda?date=" + page.PreviousDate()) } class="btn btn-sm min-h-11">
+				<a href={ templ.URL(page.Path(page.PreviousDate())) } class="btn btn-sm min-h-11">
 					<span aria-hidden="true">←</span> Veille
 				</a>
-				<a href={ templ.URL("/agenda?date=" + page.NextDate()) } class="btn btn-sm min-h-11">
+				<a href={ templ.URL(page.Path(page.NextDate())) } class="btn btn-sm min-h-11">
 					Lendemain <span aria-hidden="true">→</span>
 				</a>
 				<form method="get" action="/agenda" class="flex items-center gap-2">
+					<input type="hidden" name={ FieldLocation } value={ page.LocationID }/>
 					<label class="sr-only" for="date-jump">Aller à une date</label>
 					<input
 						id="date-jump"
@@ -42,7 +56,7 @@ templ Show(page Day) {
 					<button type="submit" class="btn btn-sm min-h-11">Aller</button>
 				</form>
 				if page.CanManage {
-					<a href="/agenda/new" class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
+					<a href={ templ.URL(page.NewPath()) } class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
 						Nouveau rendez-vous
 					</a>
 				}
@@ -142,7 +156,7 @@ templ Form(page FormPage) {
 	}) {
 		<div class="grid gap-5">
 			<nav aria-label="Fil d'Ariane" class="text-sm">
-				<a href="/agenda" class="link">Agenda</a>
+				<a href={ templ.URL(agendaPath(page)) } class="link">Agenda</a>
 			</nav>
 			<header class="grid gap-1">
 				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
@@ -162,6 +176,8 @@ templ Form(page FormPage) {
 				</div>
 			} else {
 				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+					<input type="hidden" name={ FieldLocation } value={ page.LocationID }/>
+					<input type="hidden" name={ FieldCustomer } value={ page.Customer.ID }/>
 					<section class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<div class="grid gap-1">
@@ -264,7 +280,7 @@ templ Form(page FormPage) {
 						</div>
 					</section>
 					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-						<a href="/agenda" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<a href={ templ.URL(agendaPath(page)) } class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
 						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Enregistrement…">
 							if page.IsNew() {
 								Prendre le rendez-vous

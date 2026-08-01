@@ -22,6 +22,8 @@ const DateLayout = "2006-01-02"
 
 // Form field names, which are also what the handler parses.
 const (
+	FieldLocation  = "location_id"
+	FieldCustomer  = "customer_id"
 	FieldDate      = "date"
 	FieldStartTime = "start_time"
 	FieldVehicle   = "vehicle_id"
@@ -65,7 +67,9 @@ type Appointment struct {
 // Day backs the agenda screen.
 type Day struct {
 	Organization string
+	LocationID   string
 	LocationName string
+	Locations    []Option
 	Date         time.Time
 	Appointments []Appointment
 	CanManage    bool // false hides booking and editing
@@ -77,6 +81,20 @@ type Day struct {
 func (d Day) PreviousDate() string { return d.Date.AddDate(0, 0, -1).Format(DateLayout) }
 func (d Day) NextDate() string     { return d.Date.AddDate(0, 0, 1).Format(DateLayout) }
 func (d Day) DateValue() string    { return d.Date.Format(DateLayout) }
+
+func (d Day) Path(date string) string {
+	if d.LocationID == "" {
+		return "/agenda?date=" + date
+	}
+	return "/agenda?location_id=" + d.LocationID + "&date=" + date
+}
+
+func (d Day) NewPath() string {
+	if d.LocationID == "" {
+		return "/agenda/new"
+	}
+	return "/agenda/new?location_id=" + d.LocationID
+}
 
 // Booked counts the appointments that still occupy the workshop. A cancelled
 // or no-show entry stays visible for the record but does not fill the day.
@@ -128,7 +146,9 @@ type FormValues struct {
 type FormPage struct {
 	ID           string // empty when booking a new appointment
 	Organization string
+	LocationID   string
 	LocationName string
+	Locations    []Option
 	Customer     CustomerRef
 	Vehicles     []Option
 	Services     []Option
@@ -165,6 +185,21 @@ func formActionPath(p FormPage) string {
 		return "/agenda"
 	}
 	return "/agenda/" + p.ID
+}
+
+func agendaPath(p FormPage) string {
+	path := "/agenda"
+	if p.LocationID != "" {
+		path += "?location_id=" + p.LocationID
+	}
+	if p.Values.Date != "" {
+		separator := "?"
+		if p.LocationID != "" {
+			separator = "&"
+		}
+		path += separator + "date=" + p.Values.Date
+	}
+	return path
 }
 
 func cancelPath(p FormPage) string { return "/agenda/" + p.ID + "/cancel" }
