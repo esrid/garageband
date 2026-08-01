@@ -1,0 +1,1136 @@
+package catalog
+
+import (
+	"time"
+
+	"github.com/esrid/garageband/internal/ui"
+)
+
+// Interface copy is French; identifiers and comments stay English.
+
+var pendingHandle = templ.NewOnceHandle()
+var pollHandle = templ.NewOnceHandle()
+
+// List shows everything the organization sells, because this is what the
+// telephone agent is allowed to quote from.
+templ List(page Index) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Catalogue",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Catalogue</h1>
+				<p class="text-sm opacity-70">
+					Vos prestations, pièces, forfaits et taux horaires. L'agent ne cite que
+					les prix qui figurent ici.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if page.Stranded() {
+				@emptyCard("Aucun site accessible",
+					"Un prix s'applique à un site. Créez-en un, ou demandez à un administrateur de vous en donner l'accès.",
+					"/locations", "Voir les sites")
+			} else {
+				<div class="flex flex-wrap items-center gap-2">
+					@searchForm(page)
+					if page.CanManage {
+						<a href="/catalog/new" class="btn btn-primary btn-sm min-h-11">Nouvelle ligne</a>
+					}
+					<a href="/catalog/imports" class="btn btn-ghost btn-sm min-h-11">Imports</a>
+				</div>
+				@kindFilter(page)
+				if page.Total() == 0 {
+					@emptyCatalog(page)
+				} else if len(page.Items) == 0 {
+					<div class="card card-border border-base-300 border-dashed bg-base-100">
+						<div class="card-body items-start gap-2 p-5">
+							<h2 class="text-base font-semibold">Aucune ligne ne correspond</h2>
+							<p class="text-sm opacity-70">
+								Votre catalogue compte { itemSummary(page.Total()) }, mais aucune ne
+								correspond à cette recherche.
+							</p>
+							<a href="/catalog" class="btn btn-sm mt-1 min-h-11">Voir tout le catalogue</a>
+						</div>
+					</div>
+				} else {
+					<p class="text-sm opacity-70" aria-live="polite">{ itemSummary(len(page.Items)) }</p>
+					<ul class="grid gap-3">
+						for _, item := range page.Items {
+							<li>
+								@itemCard(item, page.Now, page.CanManage)
+							</li>
+						}
+					</ul>
+				}
+			}
+		</div>
+	}
+}
+
+// searchForm is a GET form so a search is a URL a person can bookmark and go
+// back to. The kind filter rides along in a hidden field, otherwise searching
+// would silently drop it.
+templ searchForm(page Index) {
+	<search class="grow">
+		<form method="get" action="/catalog" class="join w-full" role="search">
+			if page.Kind != "" {
+				<input type="hidden" name="kind" value={ page.Kind }/>
+			}
+			<label class="sr-only" for="catalog-search">Rechercher dans le catalogue</label>
+			<input
+				id="catalog-search"
+				type="search"
+				name="q"
+				value={ page.Query }
+				placeholder="Vidange, plaquettes, forfait…"
+				class="input join-item min-h-11 w-full"
+			/>
+			<button type="submit" class="btn join-item min-h-11">Rechercher</button>
+		</form>
+	</search>
+}
+
+// kindFilter is page navigation, not a tab widget: each entry loads a new URL.
+// It keeps <nav> and aria-current rather than borrowing role="tablist", which
+// would promise panels that do not exist.
+templ kindFilter(page Index) {
+	<nav aria-label="Filtrer par type">
+		<ul class="flex flex-wrap gap-1">
+			<li>
+				<a
+					href={ templ.URL(filterPath(page, "")) }
+					aria-current={ currentPage(page.Kind == "") }
+					class={ "btn btn-sm min-h-11", templ.KV("btn-active", page.Kind == "") }
+				>
+					Tout<span class="badge badge-sm">{ intText(page.Total()) }</span>
+				</a>
+			</li>
+			for _, kind := range Kinds {
+				<li>
+					<a
+						href={ templ.URL(filterPath(page, kind)) }
+						aria-current={ currentPage(page.Kind == kind) }
+						class={ "btn btn-sm min-h-11", templ.KV("btn-active", page.Kind == kind) }
+					>
+						{ kindPlural(kind) }<span class="badge badge-sm">{ intText(page.Count(kind)) }</span>
+					</a>
+				</li>
+			}
+		</ul>
+	</nav>
+}
+
+// emptyCatalog is the first thing a new organization sees, so it offers both
+// ways in rather than only the slow one.
+templ emptyCatalog(page Index) {
+	<div class="card card-border border-base-300 bg-base-100">
+		<div class="card-body items-start gap-2 p-5">
+			<h2 class="text-base font-semibold">Votre catalogue est vide</h2>
+			<p class="text-sm opacity-70">
+				Tant qu'il est vide, l'agent ne peut annoncer aucun prix : il proposera un
+				rappel plutôt que d'avancer un montant.
+			</p>
+			if page.CanManage {
+				<div class="card-actions mt-1">
+					<a href="/catalog/imports/new" class="btn btn-primary min-h-11">Importer un fichier</a>
+					<a href="/catalog/new" class="btn min-h-11">Ajouter une ligne</a>
+				</div>
+			} else {
+				<p class="text-sm opacity-70">
+					Seul un propriétaire ou un administrateur peut le remplir.
+				</p>
+			}
+		</div>
+	</div>
+}
+
+// itemCard shows one priced line. A price the agent cannot quote today is said
+// so in words, not left to a colour.
+templ itemCard(item Item, now time.Time, canManage bool) {
+	<article
+		class={ "card card-border",
+			templ.KV("border-base-300 bg-base-100", item.Quotable(now)),
+			templ.KV("border-dashed border-base-300 bg-base-200", !item.Quotable(now)) }
+	>
+		<div class="card-body gap-2 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">{ item.Name }</h2>
+				<span class="badge badge-sm shrink-0">{ kindLabel(item.Kind) }</span>
+			</div>
+			<p class="text-base font-medium">{ priceLabel(item.Price) }</p>
+			<p class="text-xs opacity-60">
+				if vat := vatLabel(item.Price); vat != "" {
+					{ vat }
+				}
+				if item.Duration > 0 {
+					{ " · " }{ durationLabel(item.Duration) }
+				}
+				if item.Reference != "" {
+					{ " · réf. " }{ item.Reference }
+				}
+			</p>
+			if item.Description != "" {
+				<p class="text-sm opacity-70">{ item.Description }</p>
+			}
+			<p class="text-xs opacity-60">
+				{ locationsLabel(item.LocationNames) }{ " · " }{ effectiveLabel(item.EffectiveFrom, item.EffectiveTo) }
+			</p>
+			if !item.Quotable(now) {
+				<p class="text-sm">
+					<span class="font-medium">{ availabilityLabel(item.Availability(now)) }.</span>
+					<span class="opacity-80">
+						if item.Availability(now) == AvailabilityScheduled {
+							L'agent ne l'annoncera qu'à partir du { formatDate(item.EffectiveFrom) }.
+						} else {
+							L'agent ne l'annonce plus. Prolongez la date de fin pour le remettre en service.
+						}
+					</span>
+				</p>
+			}
+			if canManage {
+				<div class="card-actions">
+					<a href={ templ.URL(itemPath(item)) } class="btn btn-sm min-h-11">
+						Modifier<span class="sr-only">{ " " + item.Name }</span>
+					</a>
+				</div>
+			}
+		</div>
+	</article>
+}
+
+// Form creates or edits one priced line.
+templ Form(page FormPage) {
+	@ui.Layout(ui.PageInfo{
+		Title:   formTitle(page),
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/catalog" class="link">Catalogue</a>
+			</nav>
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
+				<p class="text-sm opacity-70">
+					Ce que vous écrivez ici est ce que l'agent dira au téléphone.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if page.Stranded() {
+				@emptyCard("Aucun site accessible",
+					"Un prix s'applique à un site. Créez-en un, ou demandez à un administrateur de vous en donner l'accès.",
+					"/locations", "Voir les sites")
+			} else if !page.CanManage {
+				<div role="status" class="alert items-start text-left">
+					@infoIcon()
+					<span class="text-sm">
+						Vous consultez cette ligne en lecture seule. Seul un propriétaire ou un
+						administrateur peut modifier les prix.
+					</span>
+				</div>
+			} else {
+				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Ce que vous vendez</h2>
+							@field(FieldKind, "Type", true, "", page.Error(FieldKind)) {
+								<select
+									id={ FieldKind }
+									name={ FieldKind }
+									class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldKind)) }
+									aria-invalid={ ariaInvalid(page.HasError(FieldKind)) }
+									aria-describedby={ describedBy(FieldKind, false, page.HasError(FieldKind)) }
+									required
+								>
+									for _, kind := range Kinds {
+										<option value={ kind } selected?={ kind == page.Values.Kind }>{ kindLabel(kind) }</option>
+									}
+								</select>
+							}
+							@field(FieldName, "Libellé", true, "Le nom que vos clients emploient, pas votre code interne.", page.Error(FieldName)) {
+								<input
+									id={ FieldName }
+									name={ FieldName }
+									class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldName)) }
+									value={ page.Values.Name }
+									aria-invalid={ ariaInvalid(page.HasError(FieldName)) }
+									aria-describedby={ describedBy(FieldName, true, page.HasError(FieldName)) }
+									required
+								/>
+							}
+							@field(FieldReference, "Référence", false, "Votre code interne, si vous en avez un. Il sert à reconnaître la ligne lors des imports.", page.Error(FieldReference)) {
+								<input
+									id={ FieldReference }
+									name={ FieldReference }
+									class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldReference)) }
+									value={ page.Values.Reference }
+									aria-invalid={ ariaInvalid(page.HasError(FieldReference)) }
+									aria-describedby={ describedBy(FieldReference, true, page.HasError(FieldReference)) }
+								/>
+							}
+							@field(FieldDescription, "Description", false, "Ce que comprend la prestation. L'agent s'en sert pour répondre aux questions.", page.Error(FieldDescription)) {
+								<textarea
+									id={ FieldDescription }
+									name={ FieldDescription }
+									class="textarea min-h-24 w-full"
+									rows="3"
+									aria-describedby={ describedBy(FieldDescription, true, false) }
+								>{ page.Values.Description }</textarea>
+							}
+							@field(FieldDuration, "Durée d'immobilisation", false, "En minutes. Sert à réserver le bon créneau à l'atelier.", page.Error(FieldDuration)) {
+								<input
+									id={ FieldDuration }
+									name={ FieldDuration }
+									type="number"
+									min="0"
+									step="5"
+									inputmode="numeric"
+									class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldDuration)) }
+									value={ page.Values.Duration }
+									aria-invalid={ ariaInvalid(page.HasError(FieldDuration)) }
+									aria-describedby={ describedBy(FieldDuration, true, page.HasError(FieldDuration)) }
+								/>
+							}
+						</div>
+					</section>
+					@priceSection(page)
+					@periodSection(page)
+					@scopeSection(page)
+					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<a href="/catalog" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Enregistrement…">
+							Enregistrer
+						</button>
+					</div>
+				</form>
+				if page.Editing() && page.Deletable {
+					@deleteSection(page)
+				}
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// priceSection asks how the price is expressed before asking for the number,
+// because "à partir de 90 €" and "90 €" are different promises.
+templ priceSection(page FormPage) {
+	<section class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-4 p-5">
+			<h2 class="text-base font-semibold">Le prix</h2>
+			<fieldset class="grid gap-2">
+				<legend class="label font-medium text-base-content">Comment ce prix s'annonce</legend>
+				for _, kind := range []string{PriceFixed, PriceFrom, PriceRange, PriceQuote} {
+					<label class="label min-h-11 cursor-pointer justify-start gap-3">
+						<input
+							type="radio"
+							name={ FieldPriceKind }
+							value={ kind }
+							class="radio"
+							checked?={ kind == page.Values.PriceKind }
+							required
+						/>
+						<span class="grid gap-0.5">
+							<span class="font-medium text-base-content">{ priceKindLabel(kind) }</span>
+							<span class="text-xs opacity-70">{ priceKindHint(kind) }</span>
+						</span>
+					</label>
+				}
+			</fieldset>
+			@field(FieldAmount, "Montant", false, "Laissez vide pour une ligne sur devis.", page.Error(FieldAmount)) {
+				<label class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldAmount)) }>
+					<input
+						id={ FieldAmount }
+						name={ FieldAmount }
+						type="text"
+						inputmode="decimal"
+						class="grow"
+						value={ page.Values.Amount }
+						aria-invalid={ ariaInvalid(page.HasError(FieldAmount)) }
+						aria-describedby={ describedBy(FieldAmount, true, page.HasError(FieldAmount)) }
+					/>
+					<span class="opacity-60">€</span>
+				</label>
+			}
+			@field(FieldMaxAmount, "Montant maximum", false, "Uniquement pour une fourchette : le haut de la fourchette.", page.Error(FieldMaxAmount)) {
+				<label class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldMaxAmount)) }>
+					<input
+						id={ FieldMaxAmount }
+						name={ FieldMaxAmount }
+						type="text"
+						inputmode="decimal"
+						class="grow"
+						value={ page.Values.MaxAmount }
+						aria-invalid={ ariaInvalid(page.HasError(FieldMaxAmount)) }
+						aria-describedby={ describedBy(FieldMaxAmount, true, page.HasError(FieldMaxAmount)) }
+					/>
+					<span class="opacity-60">€</span>
+				</label>
+			}
+			<fieldset class="grid gap-2">
+				<legend class="label font-medium text-base-content">Ce montant est</legend>
+				<div class="flex flex-wrap gap-2">
+					for _, basis := range []string{TaxExclusive, TaxInclusive} {
+						<label class="label min-h-11 cursor-pointer justify-start gap-2">
+							<input
+								type="radio"
+								name={ FieldTaxBasis }
+								value={ basis }
+								class="radio"
+								checked?={ basis == page.Values.TaxBasis }
+							/>
+							<span class="font-medium text-base-content">{ taxBasisLabel(basis) }</span>
+						</label>
+					}
+				</div>
+				<p class="text-xs opacity-70">
+					Un particulier entend un prix TTC ; une flotte raisonne en HT. L'agent
+					précisera lequel.
+				</p>
+			</fieldset>
+			@field(FieldVATRate, "Taux de TVA", true, "", page.Error(FieldVATRate)) {
+				<select
+					id={ FieldVATRate }
+					name={ FieldVATRate }
+					class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldVATRate)) }
+					aria-invalid={ ariaInvalid(page.HasError(FieldVATRate)) }
+					aria-describedby={ describedBy(FieldVATRate, false, page.HasError(FieldVATRate)) }
+					required
+				>
+					for _, rate := range page.VATRates {
+						<option value={ rate.Value } selected?={ rate.Value == page.Values.VATRate }>{ rate.Label }</option>
+					}
+				</select>
+			}
+		</div>
+	</section>
+}
+
+// periodSection carries the effective dates. Both are optional and each
+// absence means something, so the screen says what leaving them empty does.
+templ periodSection(page FormPage) {
+	<section class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-4 p-5">
+			<div class="grid gap-1">
+				<h2 class="text-base font-semibold">Quand ce prix s'applique</h2>
+				<p class="text-sm opacity-70">
+					Hors de cette période, l'agent n'annonce pas ce prix. Les deux dates
+					sont facultatives.
+				</p>
+			</div>
+			<div class="grid gap-4 sm:grid-cols-2">
+				@field(FieldFrom, "À partir du", false, "Vide : s'applique déjà.", page.Error(FieldFrom)) {
+					<input
+						id={ FieldFrom }
+						name={ FieldFrom }
+						type="date"
+						class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldFrom)) }
+						value={ page.Values.From }
+						aria-invalid={ ariaInvalid(page.HasError(FieldFrom)) }
+						aria-describedby={ describedBy(FieldFrom, true, page.HasError(FieldFrom)) }
+					/>
+				}
+				@field(FieldTo, "Jusqu'au", false, "Vide : sans date de fin. Ce jour est inclus.", page.Error(FieldTo)) {
+					<input
+						id={ FieldTo }
+						name={ FieldTo }
+						type="date"
+						class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldTo)) }
+						value={ page.Values.To }
+						aria-invalid={ ariaInvalid(page.HasError(FieldTo)) }
+						aria-describedby={ describedBy(FieldTo, true, page.HasError(FieldTo)) }
+					/>
+				}
+			</div>
+		</div>
+	</section>
+}
+
+// scopeSection makes "everywhere" an explicit choice. Deducing it from an
+// empty checkbox list would make a forgotten tick look like a decision.
+templ scopeSection(page FormPage) {
+	<section class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-4 p-5">
+			<h2 class="text-base font-semibold">Où ce prix s'applique</h2>
+			<fieldset class="grid gap-2">
+				<legend class="sr-only">Étendue</legend>
+				<label class="label min-h-11 cursor-pointer justify-start gap-3">
+					<input
+						type="radio"
+						name={ FieldScope }
+						value={ ScopeAll }
+						class="radio"
+						checked?={ page.Values.Scope != ScopeSelected }
+					/>
+					<span class="font-medium text-base-content">Tous les sites</span>
+				</label>
+				<label class="label min-h-11 cursor-pointer justify-start gap-3">
+					<input
+						type="radio"
+						name={ FieldScope }
+						value={ ScopeSelected }
+						class="radio"
+						checked?={ page.Values.Scope == ScopeSelected }
+					/>
+					<span class="font-medium text-base-content">Certains sites seulement</span>
+				</label>
+			</fieldset>
+			<fieldset class="grid gap-1">
+				<legend class="label font-medium text-base-content">Sites concernés</legend>
+				if page.HasError(FieldLocations) {
+					<p id={ FieldLocations + "-error" } role="alert" class="label text-xs leading-snug font-medium whitespace-normal text-error">
+						{ page.Error(FieldLocations) }
+					</p>
+				}
+				for _, location := range page.Locations {
+					<label class="label min-h-11 cursor-pointer justify-start gap-3">
+						<input
+							type="checkbox"
+							name={ FieldLocations }
+							value={ location.ID }
+							class="checkbox"
+							checked?={ page.Values.Selected(location.ID) }
+						/>
+						<span class="text-base-content">
+							{ location.Name }
+							if !location.Active {
+								<span class="badge badge-sm ml-2">Inactif</span>
+							}
+						</span>
+					</label>
+				}
+			</fieldset>
+		</div>
+	</section>
+}
+
+// deleteSection sits apart from the save button: it is the control that
+// removes a price the agent may already have quoted.
+templ deleteSection(page FormPage) {
+	<section class="card card-border border-error/40 bg-base-100" aria-labelledby="delete-heading">
+		<div class="card-body gap-3 p-5">
+			<h2 id="delete-heading" class="text-base font-semibold">Supprimer cette ligne</h2>
+			<p class="text-sm opacity-70">
+				L'agent cessera immédiatement de l'annoncer. Les rendez-vous déjà pris qui
+				s'y réfèrent ne changent pas.
+			</p>
+			<form method="post" action={ templ.URL(deletePath(page)) } data-pending-form>
+				<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Suppression…">
+					Supprimer
+				</button>
+			</form>
+		</div>
+	</section>
+}
+
+// ImportList shows the staged files and where each one stopped.
+templ ImportList(page Imports) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Imports du catalogue",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/catalog" class="link">Catalogue</a>
+			</nav>
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Imports</h1>
+				<p class="text-sm opacity-70">
+					Un fichier déposé ici n'entre jamais seul dans le catalogue : vous voyez
+					d'abord ce qu'il contient, puis vous validez.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if page.CanManage {
+				<div>
+					<a href="/catalog/imports/new" class="btn btn-primary btn-sm min-h-11">Importer un fichier</a>
+				</div>
+			}
+			if len(page.Imports) == 0 {
+				<div class="card card-border border-base-300 border-dashed bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Aucun import</h2>
+						<p class="text-sm opacity-70">
+							Exportez votre catalogue depuis votre logiciel de gestion, puis
+							déposez le fichier ici.
+						</p>
+					</div>
+				</div>
+			} else {
+				<ul class="grid gap-3">
+					for _, imp := range page.Imports {
+						<li>
+							@importCard(imp, page.CanManage)
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+}
+
+templ importCard(imp Import, canManage bool) {
+	<article class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-2 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold break-all">{ imp.Filename }</h2>
+				<span class={ "badge badge-sm shrink-0", importStatusColor(imp.Status) }>
+					{ importStatusLabel(imp.Status) }
+				</span>
+			</div>
+			<p class="text-xs opacity-60">
+				{ imp.LocationName }
+				if imp.UploadedBy != "" {
+					{ " · déposé par " }{ imp.UploadedBy }
+				}
+				{ " · " }{ formatDate(imp.UploadedAt) }
+			</p>
+			if imp.Refused() {
+				<p class="text-sm">{ rejectionMessage(imp.Reason) }</p>
+			} else if imp.Analyzing() {
+				<p class="text-sm opacity-70">Le fichier est en cours de lecture.</p>
+			} else {
+				<p class="text-sm">{ countsSentence(imp) }</p>
+				if imp.Published() && imp.Mode != "" {
+					<p class="text-xs opacity-60">Publié en mode « { modeLabel(imp.Mode) } ».</p>
+				}
+			}
+			if canManage && !imp.Refused() {
+				<div class="card-actions">
+					<a href={ templ.URL(importPath(imp)) } class="btn btn-sm min-h-11">
+						if imp.Ready() {
+							Vérifier et publier
+						} else {
+							Voir le détail
+						}
+						<span class="sr-only">{ " " + imp.Filename }</span>
+					</a>
+				</div>
+			}
+		</div>
+	</article>
+}
+
+// UploadForm drops a file. It says what happens next, because a person about
+// to hand over their whole price list needs to know it is not going live.
+templ UploadForm(page Upload) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Importer un fichier",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/catalog" class="link">Catalogue</a>
+				{ " / " }
+				<a href="/catalog/imports" class="link">Imports</a>
+			</nav>
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Importer un fichier</h1>
+				<p class="text-sm opacity-70">
+					Rien n'est publié à ce stade. Vous verrez chaque ligne avant de décider.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if page.Refused() {
+				<div role="alert" class="alert alert-error items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">Ce fichier n'a pas été accepté</span>
+						<span class="text-sm">{ rejectionMessage(page.Reason) }</span>
+					</div>
+				</div>
+			}
+			if page.Stranded() {
+				@emptyCard("Aucun site accessible",
+					"Un import s'applique à un site. Créez-en un, ou demandez à un administrateur de vous en donner l'accès.",
+					"/locations", "Voir les sites")
+			} else {
+				<form
+					method="post"
+					action="/catalog/imports"
+					enctype="multipart/form-data"
+					class="grid gap-4"
+					data-pending-form
+					novalidate
+				>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							@field(FieldLocation, "Site concerné", true, "Les prix importés ne s'appliqueront qu'à ce site.", page.Error(FieldLocation)) {
+								<select
+									id={ FieldLocation }
+									name={ FieldLocation }
+									class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldLocation)) }
+									aria-invalid={ ariaInvalid(page.HasError(FieldLocation)) }
+									aria-describedby={ describedBy(FieldLocation, true, page.HasError(FieldLocation)) }
+									required
+								>
+									<option value="">Choisir un site</option>
+									for _, location := range page.Locations {
+										<option value={ location.ID } selected?={ location.ID == page.Location }>{ location.Name }</option>
+									}
+								</select>
+							}
+							@field(FieldFile, "Fichier", true, "CSV ou XLSX, "+uploadLimitLabel()+" maximum.", page.Error(FieldFile)) {
+								<input
+									id={ FieldFile }
+									name={ FieldFile }
+									type="file"
+									accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+									class={ "file-input min-h-11 w-full", templ.KV("file-input-error", page.HasError(FieldFile)) }
+									aria-invalid={ ariaInvalid(page.HasError(FieldFile)) }
+									aria-describedby={ describedBy(FieldFile, true, page.HasError(FieldFile)) }
+									required
+								/>
+							}
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-2 p-5">
+							<h2 class="text-base font-semibold">Ce que le fichier doit contenir</h2>
+							<ul class="grid list-disc gap-1 pl-5 text-sm opacity-80">
+								<li>Une colonne pour le libellé de la ligne.</li>
+								<li>Une colonne pour le prix.</li>
+								<li>Si vous en avez : le type, la référence, la TVA et la durée.</li>
+							</ul>
+							<p class="text-sm opacity-70">
+								Les intitulés français et anglais courants sont reconnus. L'aperçu
+								vous montrera chaque ligne interprétée avant publication.
+							</p>
+						</div>
+					</section>
+					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<a href="/catalog/imports" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Envoi…">
+							Analyser le fichier
+						</button>
+					</div>
+				</form>
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// PreviewPage shows what the file holds and asks for a decision. Nothing here
+// writes to the catalog until the publish form is submitted.
+templ PreviewPage(page Preview) {
+	@ui.Layout(ui.PageInfo{
+		Title:   page.Import.Filename,
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/catalog" class="link">Catalogue</a>
+				{ " / " }
+				<a href="/catalog/imports" class="link">Imports</a>
+			</nav>
+			<header class="grid gap-1">
+				<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+					<h1 class="text-xl font-semibold break-all">{ page.Import.Filename }</h1>
+					<span class={ "badge badge-sm shrink-0", importStatusColor(page.Import.Status) }>
+						{ importStatusLabel(page.Import.Status) }
+					</span>
+				</div>
+				<p class="text-sm opacity-70">{ page.Import.LocationName }</p>
+			</header>
+			@notice(page.Notice)
+			if page.Import.Analyzing() {
+				@analyzingCard(page.Import)
+			} else if page.Import.Refused() {
+				<div role="alert" class="alert alert-error items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">Ce fichier n'a pas pu être utilisé</span>
+						<span class="text-sm">{ rejectionMessage(page.Import.Reason) }</span>
+					</div>
+				</div>
+				<div>
+					<a href="/catalog/imports/new" class="btn btn-primary min-h-11">Déposer un autre fichier</a>
+				</div>
+			} else if page.Import.Published() {
+				<div role="status" class="alert alert-success items-start text-left">
+					@successIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">Cet import est publié</span>
+						<span class="text-sm">
+							{ countsSentence(page.Import) } Il a été publié en mode « { modeLabel(page.Import.Mode) } ».
+						</span>
+					</div>
+				</div>
+				<div>
+					<a href="/catalog" class="btn btn-primary min-h-11">Voir le catalogue</a>
+				</div>
+			} else {
+				@summaryCard(page.Import)
+				@rowGroups(page)
+				if page.CanManage && page.Import.Ready() && page.Import.Usable() {
+					@modeChoice(page)
+					if page.Chosen() {
+						@publishCard(page)
+					}
+					@cancelSection(page)
+				} else if !page.CanManage {
+					<div role="status" class="alert items-start text-left">
+						@infoIcon()
+						<span class="text-sm">
+							Vous consultez cet import en lecture seule. Seul un propriétaire ou
+							un administrateur peut le publier.
+						</span>
+					</div>
+				}
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// analyzingCard is the waiting state. The page reloads itself, and also offers
+// a link, so the state is not a dead end when scripting is off.
+templ analyzingCard(imp Import) {
+	<div class="card card-border border-base-300 bg-base-100">
+		<div class="card-body items-start gap-3 p-5" aria-live="polite" aria-busy="true">
+			<div class="flex items-center gap-3">
+				<span class="loading loading-spinner loading-md"></span>
+				<h2 class="text-base font-semibold">Lecture du fichier en cours</h2>
+			</div>
+			<p class="text-sm opacity-70">
+				Nous classons chaque ligne. C'est plus long sur un gros fichier. Rien
+				n'est encore écrit dans votre catalogue.
+			</p>
+			<a href={ templ.URL(importPath(imp)) } class="btn btn-sm min-h-11">Actualiser</a>
+		</div>
+	</div>
+	@pollHandle.Once() {
+		@pollScript()
+	}
+}
+
+// summaryCard counts the three outcomes. A partially valid file is the common
+// case and gets said explicitly, because the number that matters is what will
+// NOT be imported.
+templ summaryCard(imp Import) {
+	<div class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-3 p-5">
+			<h2 class="text-base font-semibold">Ce que contient le fichier</h2>
+			<dl class="grid grid-cols-3 gap-2 text-center">
+				@countBox("Lignes valides", imp.Valid, "text-success")
+				@countBox("À vérifier", imp.Ambiguous, "text-warning")
+				@countBox("Rejetées", imp.Rejected, "text-error")
+			</dl>
+			if !imp.Usable() {
+				<p class="text-sm font-medium">
+					Aucune ligne de ce fichier ne peut être importée.
+				</p>
+			} else if imp.Partial() {
+				<p class="text-sm">
+					<span class="font-medium">Ce fichier est partiellement exploitable.</span>
+					<span class="opacity-80">
+						{ rowSummary(imp.Valid+imp.Ambiguous, "ligne sera importée", "lignes seront importées") },
+						{ rowSummary(imp.Rejected, "sera ignorée", "seront ignorées") }.
+					</span>
+				</p>
+			}
+		</div>
+	</div>
+}
+
+templ countBox(label string, count int, tone string) {
+	<div class="grid gap-0.5">
+		<dt class="text-xs opacity-70">{ label }</dt>
+		<dd class={ "text-2xl font-semibold tabular-nums", tone }>{ intText(count) }</dd>
+	</div>
+}
+
+// rowGroups lists the file line by line, worst first: what is broken is more
+// urgent than what already works.
+templ rowGroups(page Preview) {
+	for _, status := range []string{RowRejected, RowAmbiguous, RowValid} {
+		if rows := page.Group(status); len(rows) > 0 {
+			@rowTable(status, rows)
+		}
+	}
+}
+
+templ rowTable(status string, rows []Row) {
+	<section class="card card-border border-base-300 bg-base-100" aria-labelledby={ "rows-" + status }>
+		<div class="card-body gap-2 p-5">
+			<h2 id={ "rows-" + status } class="text-base font-semibold">
+				{ rowGroupTitle(status) }<span class="badge badge-sm ml-2">{ intText(len(rows)) }</span>
+			</h2>
+			<p class="text-sm opacity-70">{ rowGroupHint(status) }</p>
+			<div class="overflow-x-auto">
+				<table class="table table-sm">
+					<thead>
+						<tr>
+							<th scope="col">Ligne</th>
+							<th scope="col">Libellé</th>
+							<th scope="col">Prix</th>
+							if status != RowValid {
+								<th scope="col">Motif</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range rows {
+							<tr>
+								<th scope="row" class="font-normal tabular-nums">{ intText(row.Number) }</th>
+								<td>
+									<span class="font-medium">{ row.Name }</span>
+									if row.Kind != "" {
+										<span class="block text-xs opacity-60">{ kindLabel(row.Kind) }</span>
+									}
+								</td>
+								<td class="whitespace-nowrap">
+									if row.Status == RowRejected && row.Price.Kind == "" {
+										<span class="opacity-60">—</span>
+									} else {
+										{ priceLabel(row.Price) }
+									}
+								</td>
+								if status != RowValid {
+									<td class="text-sm">
+										{ row.Issue }
+										if row.Collides != "" {
+											<span class="block text-xs opacity-60">Déjà au catalogue : { row.Collides }</span>
+										}
+									</td>
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+}
+
+// modeChoice makes the two outcomes readable before either is picked. It is
+// two links rather than a submit: choosing only recomputes what would happen.
+templ modeChoice(page Preview) {
+	<section class="card card-border border-base-300 bg-base-100" aria-labelledby="mode-heading">
+		<div class="card-body gap-3 p-5">
+			<div class="grid gap-1">
+				<h2 id="mode-heading" class="text-base font-semibold">Comment appliquer ce fichier</h2>
+				<p class="text-sm opacity-70">
+					Les deux modes ne font pas la même chose. Choisissez, puis vérifiez le
+					récapitulatif avant de publier.
+				</p>
+			</div>
+			<div class="grid gap-2">
+				@modeOption(page, ModeMerge,
+					"Ajoute les nouvelles lignes et met à jour celles qui existent déjà. Rien n'est supprimé.")
+				@modeOption(page, ModeReplace,
+					"Le fichier devient le catalogue de ce site. Les lignes absentes du fichier sont supprimées.")
+			</div>
+		</div>
+	</section>
+}
+
+templ modeOption(page Preview, mode string, description string) {
+	<a
+		href={ templ.URL(modePath(page.Import, mode)) }
+		aria-current={ currentFilter(page.Mode == mode) }
+		class={ "card card-border min-h-11 bg-base-100 p-4 text-left",
+			templ.KV("border-primary border-2", page.Mode == mode),
+			templ.KV("border-base-300", page.Mode != mode) }
+	>
+		<span class="flex flex-wrap items-baseline gap-2">
+			<span class="font-semibold">{ modeLabel(mode) }</span>
+			if page.Mode == mode {
+				<span class="badge badge-primary badge-sm">Choisi</span>
+			}
+		</span>
+		<span class="text-sm opacity-80">{ description }</span>
+	</a>
+}
+
+// publishCard is the last step. A destructive plan gets a heavier warning and
+// a confirmation the person has to tick, because a replace can empty a site's
+// catalog.
+templ publishCard(page Preview) {
+	<section
+		class={ "card card-border bg-base-100",
+			templ.KV("border-error/60 border-2", page.Plan.Destructive()),
+			templ.KV("border-base-300", !page.Plan.Destructive()) }
+		aria-labelledby="publish-heading"
+	>
+		<div class="card-body gap-3 p-5">
+			<h2 id="publish-heading" class="text-base font-semibold">
+				Publier en mode « { modeLabel(page.Mode) } »
+			</h2>
+			<ul class="grid gap-1 text-sm">
+				<li>{ rowSummary(page.Plan.Create, "ligne ajoutée", "lignes ajoutées") }</li>
+				<li>{ rowSummary(page.Plan.Update, "ligne mise à jour", "lignes mises à jour") }</li>
+				if page.Plan.Destructive() {
+					<li class="font-semibold text-error">
+						{ rowSummary(page.Plan.Remove, "ligne supprimée", "lignes supprimées") }
+					</li>
+				}
+				if page.Plan.Skip > 0 {
+					<li class="opacity-70">{ rowSummary(page.Plan.Skip, "ligne ignorée", "lignes ignorées") }</li>
+				}
+			</ul>
+			if page.Plan.Destructive() {
+				<div role="alert" class="alert alert-error items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">Cette publication supprime des prix</span>
+						<span class="text-sm">
+							{ rowSummary(page.Plan.Remove, "ligne du catalogue de ce site sera supprimée", "lignes du catalogue de ce site seront supprimées") }
+							car elles ne figurent pas dans le fichier. L'agent cessera de les
+							annoncer.
+						</span>
+					</div>
+				</div>
+			}
+			if page.Plan.Changes() == 0 {
+				<p class="text-sm font-medium">
+					Ce mode ne changerait rien à votre catalogue.
+				</p>
+			} else {
+				<form method="post" action={ templ.URL(publishPath(page.Import)) } class="grid gap-3" data-pending-form>
+					<input type="hidden" name={ FieldMode } value={ page.Mode }/>
+					<label class="label min-h-11 cursor-pointer items-start justify-start gap-3">
+						<input type="checkbox" name={ FieldConfirm } value="1" class="checkbox mt-1" required/>
+						<span class="text-sm whitespace-normal text-base-content">
+							if page.Plan.Destructive() {
+								J'ai lu ce récapitulatif et j'accepte la suppression des lignes
+								absentes du fichier.
+							} else {
+								J'ai vérifié ce récapitulatif et je publie ces prix.
+							}
+						</span>
+					</label>
+					<button
+						type="submit"
+						class={ "btn min-h-11 sm:w-auto", templ.KV("btn-error", page.Plan.Destructive()), templ.KV("btn-primary", !page.Plan.Destructive()) }
+						data-pending-label="Publication…"
+					>
+						Publier le catalogue
+					</button>
+				</form>
+			}
+		</div>
+	</section>
+}
+
+templ cancelSection(page Preview) {
+	<form method="post" action={ templ.URL(cancelPath(page.Import)) } data-pending-form>
+		<button type="submit" class="btn btn-ghost min-h-11 sm:w-auto" data-pending-label="Abandon…">
+			Abandonner cet import
+		</button>
+	</form>
+}
+
+// ---- shared pieces ------------------------------------------------------
+
+// emptyCard is the dead-end state: nothing can be done here, and the way out
+// is a link somewhere else.
+templ emptyCard(title string, body string, href string, action string) {
+	<div class="card card-border border-base-300 bg-base-100">
+		<div class="card-body items-start gap-2 p-5">
+			<h2 class="text-base font-semibold">{ title }</h2>
+			<p class="text-sm opacity-70">{ body }</p>
+			<a href={ templ.URL(href) } class="btn btn-primary mt-1 min-h-11">{ action }</a>
+		</div>
+	</div>
+}
+
+// field wraps one control with its label, its required marker, its hint and
+// its inline error. It takes the error text rather than the page so the upload
+// screen can use it too.
+templ field(key string, label string, required bool, hint string, errText string) {
+	<div class="grid content-start gap-1">
+		<label class="label flex-wrap justify-start gap-2 font-medium text-base-content" for={ key }>
+			{ label }
+			if required {
+				<span class="text-xs font-normal opacity-60">Requis</span>
+			} else {
+				<span class="text-xs font-normal opacity-60">Optionnel</span>
+			}
+		</label>
+		{ children... }
+		if hint != "" {
+			<p id={ key + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
+		}
+		if errText != "" {
+			<p id={ key + "-error" } role="alert" class="label text-xs leading-snug font-medium whitespace-normal text-error">
+				{ errText }
+			</p>
+		}
+	</div>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			if n.Kind == NoticeSuccess {
+				@successIcon()
+			} else {
+				@warningIcon()
+			}
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
+
+templ successIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+	</svg>
+}
+
+templ infoIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"></path>
+	</svg>
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}
+
+// pollScript refreshes the analysing screen. Without it the page still works:
+// the card carries a link that does the same thing by hand.
+templ pollScript() {
+	<script>
+		setTimeout(function () {
+			window.location.reload();
+		}, 5000);
+	</script>
+}

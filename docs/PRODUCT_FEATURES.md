@@ -346,6 +346,28 @@ These are database contracts and ports, not working provider integrations.
   text, and tests cover automatic provisioning, uniqueness, cross-kind
   rejection, role enforcement, readiness, activation, pause, and reachability.
 
+### Structured offer catalog and imports
+
+- Organization catalog for services, products, packages, supplements, and
+  labor rates, with fixed, starting, range, and quote-only prices.
+- Integer-cent EUR amounts, explicit HT/TTC basis, VAT basis points, optional
+  duration, effective dates, references, and all-site or selected-site scope.
+- Owners and admins manage the catalog; other members have RLS-filtered,
+  read-only access based on their location assignments.
+- CSV and XLSX uploads are limited to 5 MiB, checksummed, retained with source
+  metadata and uploader provenance, and idempotent per location.
+- Every parsed row is staged as valid, ambiguous, or rejected. No upload writes
+  directly into the published catalog.
+- Human-confirmed merge and replace plans share their predicates with the
+  publication transaction. Replace archives only absent single-location items
+  and cannot silently alter shared multi-location prices.
+- Each publication has an organization version plus immutable before/after
+  snapshots. The latest unchanged publication can be rolled back safely.
+- `Store.Quotable` is the shared agent read contract and returns only currently
+  effective prices for an accessible selected location.
+- PostgreSQL constraints, deferred scope triggers, immutable audit triggers,
+  and forced RLS enforce the catalog contract independently from HTTP code.
+
 ## In progress
 
 - No partially implemented vertical slice is currently tracked. Scheduling
@@ -448,28 +470,12 @@ These are database contracts and ports, not working provider integrations.
 - Provide a human-readable explanation of what changed and a recoverable error
   when an action is rejected.
 
-### Offers, products, packages, and intelligent imports
+### Additional intelligent import formats
 
-- Let each organization maintain products, services, fixed-price packages,
-  optional extras, labor rates, descriptions, taxes, effective dates, and
-  location availability.
-- Allow CSV and XLSX uploads, plus less structured documents such as PDF or
-  office documents when a parser/provider is selected.
-- Store every upload and parsing run as an auditable import batch with source,
-  checksum, status, errors, and provenance.
-- Parse imported content into a staging area rather than writing directly to
-  the published catalog.
-- Validate normalized rows with PostgreSQL constraints, show ambiguities and
-  rejected rows, and require a human preview/approval before publication.
-- Support idempotent re-imports, versioned publication, rollback, and explicit
-  replacement versus merge behavior.
-- Let the telephone agent and internal assistant answer price and offer
-  questions only from currently published catalog data, including whether a
-  price is fixed, estimated, location-specific, tax-inclusive, or conditional.
-- Never invent a price when the catalog is missing or ambiguous; the agent must
-  explain the uncertainty and offer a human follow-up.
-- Open decisions include document retention, maximum file size, accepted
-  formats, tax representation, price ranges, and who may approve publication.
+- Add less structured PDF or office-document ingestion only after selecting a
+  parser/provider and defining malware scanning and retention.
+- Add a user-controlled column-mapping step for exports whose headings are not
+  among the supported French and English aliases.
 
 ### Organization administration
 
@@ -511,8 +517,9 @@ These are recommendations, not accepted scope:
    before customer CRUD so authorization is not retrofitted later.
 2. **Complete:** customer and vehicle profiles now provide search and a
    repair/appointment timeline under location-aware RLS.
-3. Build the structured offers/products/packages catalog and CSV/XLSX staging
-   import before an agent is allowed to answer pricing questions.
+3. **Complete:** the structured offers/products/packages catalog, CSV/XLSX
+   staging, confirmed publication, safe rollback, and quotable-price contract
+   exist before an agent is allowed to answer pricing questions.
 4. **Partially complete:** appointment CRUD and conflict-safe day scheduling are
    implemented; add opening-hours and multi-resource availability search before
    connecting an external calendar.
