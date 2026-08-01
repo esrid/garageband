@@ -118,6 +118,26 @@ The following also remain open:
 - Business enrichment audit records.
 - Forced RLS on all organization-owned tables.
 
+### Physical location management
+
+- Authenticated `/locations` list, add, edit, deactivate, and reopen flows.
+- Owners and organization admins can manage locations; managers and members
+  receive a read-only presentation.
+- Locations are durable records and cannot be hard-deleted through the runtime
+  PostgreSQL role.
+- PostgreSQL RLS independently verifies both the active organization and the
+  authenticated user's membership role for reads and writes.
+- The database validates SIRET, normalized email, E.164 telephone numbers,
+  website URLs, country codes, lifecycle status, and real PostgreSQL timezone
+  names.
+- UUIDv7-backed internal location slugs are generated without requiring users
+  to invent another identifier.
+- PostgreSQL updates `updated_at` automatically for every location mutation.
+- Responsive DaisyUI views cover single-site, multi-site, inactive, read-only,
+  validation, loading, success, and failure states.
+- HTTP, store, database-validation, cross-tenant, and adversarial runtime-role
+  tests cover the complete slice.
+
 ### Business onboarding
 
 - Authenticated SIRET onboarding flow.
@@ -233,7 +253,6 @@ No implementation slice is currently open.
 
 - Invite users and manage membership roles.
 - Assign staff to one or more locations.
-- Add, edit, deactivate, and reopen locations.
 - Configure opening hours, holidays, services, prices, bays, technicians, and
   equipment per location.
 - Switch active organization and active working location.
