@@ -1,0 +1,250 @@
+package calls
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+// Index is the call inbox, newest first.
+templ Index(page Inbox) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Appels",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCalls, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Appels</h1>
+				<p class="text-sm opacity-70">
+					Ce que l'agent téléphonique a répondu, et ce qu'il n'a pas su traiter.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if page.AttentionCount() > 0 && !page.FilteringAttention() {
+				<div role="status" class="alert alert-warning items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">{ attentionSummary(page.AttentionCount()) }</span>
+						<span class="text-sm">
+							Un appel sans réponse, ou dont le correspondant n'a pas été reconnu.
+						</span>
+					</div>
+				</div>
+			}
+			<nav aria-label="Filtrer les appels" class="flex flex-wrap items-center gap-2">
+				<a
+					href="/calls"
+					aria-current={ currentFilter(!page.FilteringAttention()) }
+					class={ "btn btn-sm min-h-11", templ.KV("btn-active", !page.FilteringAttention()) }
+				>
+					Tous
+				</a>
+				<a
+					href={ templ.URL("/calls?" + FieldStatus + "=" + FilterNeedsAttention) }
+					aria-current={ currentFilter(page.FilteringAttention()) }
+					class={ "btn btn-sm min-h-11", templ.KV("btn-active", page.FilteringAttention()) }
+				>
+					À traiter
+				</a>
+				<p class="text-sm opacity-70 sm:ml-auto">{ callSummary(len(page.Calls)) }</p>
+			</nav>
+			if len(page.Calls) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						if page.FilteringAttention() {
+							<h2 class="text-base font-semibold">Rien à traiter</h2>
+							<p class="text-sm opacity-70">
+								Tous les appels ont été répondus et rattachés à un client.
+							</p>
+							<a href="/calls" class="btn mt-1 min-h-11">Voir tous les appels</a>
+						} else {
+							<h2 class="text-base font-semibold">Aucun appel pour l'instant</h2>
+							<p class="text-sm opacity-70">
+								Les appels reçus par votre agent téléphonique apparaîtront ici, avec
+								leur transcription.
+							</p>
+						}
+					</div>
+				</div>
+			} else {
+				<ul class="grid gap-2">
+					for _, call := range page.Calls {
+						<li>
+							@callRow(call)
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+}
+
+// callRow leads with who called and when. Whether the agent recognised them is
+// the second thing the desk needs, so it is stated rather than implied.
+templ callRow(call Call) {
+	<article
+		class={ "card card-border border-base-300",
+			templ.KV("bg-base-100", !call.NeedsAttention()),
+			templ.KV("border-dashed bg-base-200", call.NeedsAttention()) }
+	>
+		<div class="card-body gap-2 p-4">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">
+					if call.Identified() {
+						<a href={ templ.URL(customerPath(call)) } class="link-hover link">{ call.CustomerName }</a>
+					} else if call.CallerNumber != "" {
+						{ call.CallerNumber }
+					} else {
+						Numéro masqué
+					}
+				</h2>
+				<span class="badge badge-sm shrink-0">{ statusLabel(call.Status) }</span>
+			</div>
+			<p class="text-xs opacity-60">
+				{ directionLabel(call.Direction) }
+				<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+				{ ui.FormatDate(call.StartedAt) }
+				<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+				{ ui.FormatTime(call.StartedAt) }
+				if call.Duration() != "" {
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ call.Duration() }
+				}
+				if call.LocationName != "" {
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ call.LocationName }
+				}
+			</p>
+			if !call.Identified() {
+				<p class="text-xs font-medium">Correspondant non reconnu</p>
+			}
+			if call.Summary != "" {
+				<p class="text-sm opacity-80">{ call.Summary }</p>
+			}
+			<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+				if call.HasRecording {
+					<p class="text-xs opacity-60">Enregistrement disponible</p>
+				} else {
+					<span></span>
+				}
+				if call.Answered() {
+					<a href={ templ.URL(callPath(call)) } class="btn btn-ghost btn-sm min-h-11">
+						Transcription<span class="sr-only">{ " de l'appel de " + call.Label() }</span>
+					</a>
+				} else {
+					<p class="text-xs opacity-60">Pas de conversation à lire</p>
+				}
+			</div>
+		</div>
+	</article>
+}
+
+// Show is one call: what happened, then what was said, in order.
+templ Show(page Transcript) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Appel",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionCalls, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/calls" class="link">Appels</a>
+			</nav>
+			<header class="grid gap-2">
+				<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+					<h1 class="text-xl font-semibold">
+						if page.Call.Identified() {
+							<a href={ templ.URL(customerPath(page.Call)) } class="link-hover link">{ page.Call.CustomerName }</a>
+						} else {
+							{ page.Call.Label() }
+						}
+					</h1>
+					<span class="badge badge-sm shrink-0">{ statusLabel(page.Call.Status) }</span>
+				</div>
+				<p class="text-sm opacity-70">
+					{ directionLabel(page.Call.Direction) }
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ ui.FormatDayHeading(page.Call.StartedAt) }
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ ui.FormatTime(page.Call.StartedAt) }
+					if page.Call.Duration() != "" {
+						<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+						{ page.Call.Duration() }
+					}
+				</p>
+				if !page.Call.Identified() {
+					<p class="text-sm font-medium">
+						Correspondant non reconnu. Rattachez cet appel depuis la fiche du client
+						une fois que vous savez de qui il s'agit.
+					</p>
+				}
+			</header>
+			@notice(page.Notice)
+			if page.Call.Summary != "" {
+				<section class="card card-border border-base-300 bg-base-100" aria-labelledby="summary-heading">
+					<div class="card-body gap-2 p-5">
+						<h2 id="summary-heading" class="text-base font-semibold">Résumé</h2>
+						<p class="text-sm opacity-80">{ page.Call.Summary }</p>
+						if page.Call.Outcome != "" {
+							<p class="text-xs opacity-60">Issue : { page.Call.Outcome }</p>
+						}
+					</div>
+				</section>
+			}
+			<section class="grid gap-3" aria-labelledby="transcript-heading">
+				<h2 id="transcript-heading" class="text-base font-semibold">Transcription</h2>
+				if len(page.Messages) == 0 {
+					<p class="text-sm opacity-60">
+						Aucune transcription pour cet appel.
+					</p>
+				} else {
+					<ol class="grid gap-2">
+						for _, message := range page.Messages {
+							<li>
+								@transcriptLine(message)
+							</li>
+						}
+					</ol>
+				}
+			</section>
+		</div>
+	}
+}
+
+// transcriptLine keeps the caller and the agent visually apart, and marks the
+// lines that are not speech at all.
+templ transcriptLine(message Message) {
+	<article
+		class={ "card card-border",
+			templ.KV("border-base-300 bg-base-100", message.Speaker == SpeakerCaller),
+			templ.KV("border-base-300 bg-base-200", message.Speaker == SpeakerAgent),
+			templ.KV("border-dashed border-base-300 bg-base-200", message.Speaker != SpeakerCaller && message.Speaker != SpeakerAgent) }
+	>
+		<div class="card-body gap-1 p-4">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3">
+				<p class="text-xs font-semibold">{ speakerLabel(message.Speaker) }</p>
+				<p class="font-mono text-xs opacity-60">{ ui.FormatTime(message.OccurredAt) }</p>
+			</div>
+			<p class="text-sm">{ message.Content }</p>
+		</div>
+	</article>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			@warningIcon()
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
