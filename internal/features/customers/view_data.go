@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/esrid/garageband/internal/ui"
 )
 
 // FieldQuery is the search input name, and therefore the query-string key the
@@ -206,19 +208,9 @@ type Profile struct {
 	Notice  Notice
 }
 
-var frenchMonths = [...]string{
-	"janvier", "février", "mars", "avril", "mai", "juin",
-	"juillet", "août", "septembre", "octobre", "novembre", "décembre",
-}
-
-// formatDate writes a date the French way. Go has no locale support, and a
-// garage should not read "March" on a French screen.
-func formatDate(at time.Time) string {
-	if at.IsZero() {
-		return "Date inconnue"
-	}
-	return strconv.Itoa(at.Day()) + " " + frenchMonths[int(at.Month())-1] + " " + strconv.Itoa(at.Year())
-}
+// formatDate delegates to the shared French formatter in internal/ui rather
+// than carrying a second month table here.
+func formatDate(at time.Time) string { return ui.FormatDate(at) }
 
 // formatAmount renders money from integer cents, French style: a comma for the
 // decimal separator and a non-breaking space before the symbol.

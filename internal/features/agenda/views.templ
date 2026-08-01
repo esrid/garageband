@@ -1,0 +1,370 @@
+package agenda
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+var pendingHandle = templ.NewOnceHandle()
+
+// Show is one workshop day, in order.
+templ Show(page Day) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Agenda",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionAgenda, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">{ ui.FormatDayHeading(page.Date) }</h1>
+				<p class="text-sm opacity-70">
+					{ page.LocationName }
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ bookedSummary(page.Booked()) }
+				</p>
+			</header>
+			@notice(page.Notice)
+			<nav aria-label="Changer de jour" class="flex flex-wrap items-center gap-2">
+				<a href={ templ.URL("/agenda?date=" + page.PreviousDate()) } class="btn btn-sm min-h-11">
+					<span aria-hidden="true">←</span> Veille
+				</a>
+				<a href={ templ.URL("/agenda?date=" + page.NextDate()) } class="btn btn-sm min-h-11">
+					Lendemain <span aria-hidden="true">→</span>
+				</a>
+				<form method="get" action="/agenda" class="flex items-center gap-2">
+					<label class="sr-only" for="date-jump">Aller à une date</label>
+					<input
+						id="date-jump"
+						name="date"
+						type="date"
+						class="input input-sm min-h-11"
+						value={ page.DateValue() }
+					/>
+					<button type="submit" class="btn btn-sm min-h-11">Aller</button>
+				</form>
+				if page.CanManage {
+					<a href="/agenda/new" class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
+						Nouveau rendez-vous
+					</a>
+				}
+			</nav>
+			if len(page.Appointments) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Journée libre</h2>
+						<p class="text-sm opacity-70">
+							Aucun rendez-vous ce jour-là. Les rendez-vous pris par l'agent
+							téléphonique apparaissent ici automatiquement.
+						</p>
+					</div>
+				</div>
+			} else {
+				<ul class="grid gap-2">
+					for _, appointment := range page.Appointments {
+						<li>
+							@appointmentRow(appointment, page.CanManage)
+						</li>
+					}
+				</ul>
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// appointmentRow puts the time first: on a day screen that is the column the
+// eye follows.
+templ appointmentRow(appointment Appointment, canManage bool) {
+	<article
+		class={ "card card-border border-base-300",
+			templ.KV("bg-base-100", appointment.Occupies()),
+			templ.KV("border-dashed bg-base-200", !appointment.Occupies()) }
+	>
+		<div class="card-body gap-2 p-4">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p class="font-mono text-sm font-medium">
+					{ ui.FormatTimeRange(appointment.StartsAt, appointment.EndsAt) }
+				</p>
+				<span class="badge badge-sm shrink-0">{ statusLabel(appointment.Status) }</span>
+			</div>
+			<p class="text-base font-semibold">
+				if appointment.CustomerID != "" {
+					<a href={ templ.URL(customerPath(appointment)) } class="link-hover link">
+						{ appointment.CustomerName }
+					</a>
+				} else {
+					{ appointment.CustomerName }
+				}
+			</p>
+			<p class="text-sm opacity-80">
+				if appointment.ServiceName != "" {
+					{ appointment.ServiceName }
+				} else {
+					Prestation à préciser
+				}
+				if appointment.VehicleLabel != "" {
+					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+					{ appointment.VehicleLabel }
+				}
+			</p>
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<p class="text-xs opacity-60">
+					if appointment.ResourceName != "" {
+						{ appointment.ResourceName }
+					} else {
+						Aucune ressource affectée
+					}
+					if sourceLabel(appointment.Source) != "" {
+						<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+						{ sourceLabel(appointment.Source) }
+					}
+				</p>
+				if canManage {
+					<a href={ templ.URL(appointmentPath(appointment)) } class="btn btn-ghost btn-sm min-h-11">
+						Modifier<span class="sr-only">{ " le rendez-vous de " + appointment.CustomerName }</span>
+					</a>
+				}
+			</div>
+			if appointment.Note != "" {
+				<p class="text-xs opacity-70">{ appointment.Note }</p>
+			}
+		</div>
+	</article>
+}
+
+// Form books an appointment or edits one; both use the same screen.
+templ Form(page FormPage) {
+	@ui.Layout(ui.PageInfo{
+		Title:   formTitle(page),
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionAgenda, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<nav aria-label="Fil d'Ariane" class="text-sm">
+				<a href="/agenda" class="link">Agenda</a>
+			</nav>
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">{ formTitle(page) }</h1>
+				<p class="text-sm opacity-70">{ page.LocationName }</p>
+			</header>
+			@notice(page.Notice)
+			if !page.Ready() {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Choisissez d'abord un client</h2>
+						<p class="text-sm opacity-70">
+							Un rendez-vous se prend pour quelqu'un. Trouvez le client, puis
+							revenez ici depuis sa fiche.
+						</p>
+						<a href="/customers" class="btn btn-primary mt-1 min-h-11">Chercher un client</a>
+					</div>
+				</div>
+			} else {
+				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<div class="grid gap-1">
+								<h2 class="text-base font-semibold">Client</h2>
+								<p class="text-sm">{ page.Customer.Label }</p>
+								<p class="text-xs opacity-60">
+									Pour changer de client, ouvrez sa fiche et repartez de là.
+								</p>
+							</div>
+							@field(page, FieldVehicle, "Véhicule", true, "", false) {
+								<select
+									id={ FieldVehicle }
+									name={ FieldVehicle }
+									class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldVehicle)) }
+									aria-invalid={ ariaInvalid(page.HasError(FieldVehicle)) }
+									aria-describedby={ describedBy(FieldVehicle, false, page.HasError(FieldVehicle)) }
+									required
+								>
+									<option value="">Choisir un véhicule</option>
+									for _, option := range page.Vehicles {
+										<option value={ option.Value } selected?={ option.Value == page.Values.VehicleID }>{ option.Label }</option>
+									}
+								</select>
+							}
+							@field(page, FieldService, "Prestation", true, "La durée du rendez-vous en découle.", false) {
+								<select
+									id={ FieldService }
+									name={ FieldService }
+									class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldService)) }
+									aria-invalid={ ariaInvalid(page.HasError(FieldService)) }
+									aria-describedby={ describedBy(FieldService, true, page.HasError(FieldService)) }
+									required
+								>
+									<option value="">Choisir une prestation</option>
+									for _, option := range page.Services {
+										<option value={ option.Value } selected?={ option.Value == page.Values.ServiceID }>{ option.Label }</option>
+									}
+								</select>
+							}
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Créneau</h2>
+							<div class="grid gap-4 sm:grid-cols-2">
+								@field(page, FieldDate, "Date", true, "", false) {
+									<input
+										id={ FieldDate }
+										name={ FieldDate }
+										type="date"
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldDate)) }
+										value={ page.Values.Date }
+										aria-invalid={ ariaInvalid(page.HasError(FieldDate)) }
+										aria-describedby={ describedBy(FieldDate, false, page.HasError(FieldDate)) }
+										required
+									/>
+								}
+								@field(page, FieldStartTime, "Heure de début", true, "", false) {
+									<input
+										id={ FieldStartTime }
+										name={ FieldStartTime }
+										type="time"
+										class={ "input min-h-11 w-full", templ.KV("input-error", page.HasError(FieldStartTime)) }
+										value={ page.Values.StartTime }
+										aria-invalid={ ariaInvalid(page.HasError(FieldStartTime)) }
+										aria-describedby={ describedBy(FieldStartTime, false, page.HasError(FieldStartTime)) }
+										required
+									/>
+								}
+								@field(page, FieldResource, "Ressource", true, "Le pont, le technicien ou l'équipement occupé.", true) {
+									<select
+										id={ FieldResource }
+										name={ FieldResource }
+										class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldResource)) }
+										aria-invalid={ ariaInvalid(page.HasError(FieldResource)) }
+										aria-describedby={ describedBy(FieldResource, true, page.HasError(FieldResource)) }
+										required
+									>
+										<option value="">Choisir une ressource</option>
+										for _, option := range page.Resources {
+											<option value={ option.Value } selected?={ option.Value == page.Values.ResourceID }>{ option.Label }</option>
+										}
+									</select>
+								}
+							</div>
+						</div>
+					</section>
+					<section class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<h2 class="text-base font-semibold">Note</h2>
+							@field(page, FieldNote, "Ce que le client a demandé", false, "Visible par l'atelier, pas par le client.", true) {
+								<textarea
+									id={ FieldNote }
+									name={ FieldNote }
+									class="textarea min-h-24 w-full"
+									rows="3"
+									aria-describedby={ describedBy(FieldNote, true, false) }
+								>{ page.Values.Note }</textarea>
+							}
+						</div>
+					</section>
+					<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<a href="/agenda" class="btn btn-ghost min-h-11 sm:w-auto">Annuler</a>
+						<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Enregistrement…">
+							if page.IsNew() {
+								Prendre le rendez-vous
+							} else {
+								Enregistrer les modifications
+							}
+						</button>
+					</div>
+				</form>
+				if !page.IsNew() && page.Cancellable {
+					<section class="card card-border border-error/40 bg-base-100" aria-labelledby="cancel-heading">
+						<div class="card-body gap-3 p-5">
+							<h2 id="cancel-heading" class="text-base font-semibold">Annuler ce rendez-vous</h2>
+							<p class="text-sm opacity-70">
+								Le créneau est libéré et le rendez-vous reste dans l'historique du
+								client. Rien n'est supprimé.
+							</p>
+							<form method="post" action={ templ.URL(cancelPath(page)) } data-pending-form>
+								<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Annulation…">
+									Annuler le rendez-vous
+								</button>
+							</form>
+						</div>
+					</section>
+				}
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// field wraps one control with its label, its required marker, its hint and
+// its inline error. The ids match what describedBy builds.
+templ field(page FormPage, key string, label string, required bool, hint string, wide bool) {
+	<div class={ "grid content-start gap-1", templ.KV("sm:col-span-2", wide) }>
+		<label class="label flex-wrap justify-start gap-2 font-medium text-base-content" for={ key }>
+			{ label }
+			if required {
+				<span class="text-xs font-normal opacity-60">Requis</span>
+			} else {
+				<span class="text-xs font-normal opacity-60">Optionnel</span>
+			}
+		</label>
+		{ children... }
+		if hint != "" {
+			<p id={ key + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
+		}
+		if page.HasError(key) {
+			<p id={ key + "-error" } role="alert" class="label text-xs leading-snug font-medium whitespace-normal text-error">
+				{ page.Error(key) }
+			</p>
+		}
+	</div>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			if n.Kind == NoticeSuccess {
+				@successIcon()
+			} else {
+				@warningIcon()
+			}
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
+
+templ successIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+	</svg>
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}
