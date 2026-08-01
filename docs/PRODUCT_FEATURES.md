@@ -21,8 +21,9 @@ AI telephone agents that can answer calls, recognize customers, retain useful
 customer information, look up vehicles, and schedule garage appointments.
 
 Provider choices for telephony, speech-to-text, text-to-speech, LLMs, calendar,
-vehicle lookup, secrets, and web search are intentionally deferred. Product
-features depend on provider-neutral Go interfaces.
+vehicle lookup, conversational messaging, secrets, and web search are
+intentionally deferred. Product features depend on provider-neutral Go
+interfaces.
 
 ## Accepted domain decisions
 
@@ -74,6 +75,57 @@ features depend on provider-neutral Go interfaces.
 - While a share is active, it automatically includes future vehicles,
   appointments, repairs, and memories added to the living customer dossier; it
   is not a snapshot taken at grant time.
+
+### WhatsApp conversational channel
+
+- WhatsApp is an optional post-onboarding capability and never blocks a garage
+  from starting to use Garageband while provider or Meta approval is pending.
+- Each organization has one dedicated public AI number for both telephone calls
+  and WhatsApp when the selected number and provider support both capabilities.
+  The garage keeps any pre-existing WhatsApp Business number and application.
+- A multi-location organization shares this public number. Before answering a
+  location-dependent question about prices, services, availability, or booking,
+  the agent requires the customer to choose the relevant location.
+- Customer-facing confirmations always identify the selected location and
+  include its useful details, such as address and appointment time.
+- Automated WhatsApp replies are available 24 hours a day by default. An
+  organization can configure different behavior and human-response promises per
+  location, including outside opening hours.
+- The V1 supports inbound conversations and transactional outbound messages:
+  appointment confirmations, reminders, changes, cancellations, requested
+  follow-ups, and information needed to complete those operations. Promotional
+  campaigns are out of scope for V1.
+- Outbound confirmations and reminders that require WhatsApp opt-in use an
+  explicit, non-preselected consent. The consent text, response, source, and
+  timestamp are retained as evidence, and opt-out is respected.
+- The V1 accepts text and private JPEG/PNG attachments. Images may help extract
+  a registration plate, but the customer must confirm the extracted value. The
+  agent does not diagnose damage or create an estimate from an image. Automated
+  document, audio, and video processing are deferred.
+- The same verified customer may continue context between a telephone call and
+  WhatsApp on a best-effort basis. When identity is ambiguous, the agent starts
+  a fresh conversation instead of guessing. A name and registration plate are
+  required before using existing customer history, especially when a telephone
+  number is shared by multiple people.
+- Low-risk facts explicitly stated by a customer, such as a preferred callback
+  period, may be saved directly to the customer profile with their exact
+  conversation provenance. Identity, contact, address, and vehicle changes
+  require explicit confirmation; inferred or ambiguous facts require human
+  review. Consent and financial commitments are never stored as ordinary agent
+  memories.
+- When the agent cannot safely complete a request, it collects the customer's
+  name, reason, and telephone number, pauses automated replies, and assigns the
+  conversation to the selected location's Garageband inbox. The promised human
+  response delay is configurable per location. Owners and admins may supervise
+  every location; other users remain limited by their location assignments.
+- The garage owns its Meta business identity, WhatsApp Business Account, sender
+  identity, and reusable messaging assets. Garageband operates them through a
+  provider integration and must support an exit path without provider lock-in.
+  Embedded provider onboarding should reuse SIRET, business, location, website,
+  and logo data already collected by Garageband to minimize manual input.
+- Garageband owns the channel-neutral conversation, message, consent,
+  attachment, assignment, tool-execution, and audit records. A provider such as
+  Twilio is an adapter and must not define the application data model.
 
 ## Implemented
 
@@ -299,6 +351,33 @@ These are database contracts and ports, not working provider integrations.
 - Call summaries, outcomes, searchable transcripts, and quality review.
 - Explicit confirmation before consequential tool actions.
 
+### WhatsApp agent runtime
+
+- Define a provider-neutral conversational-messaging port before adding a
+  Twilio adapter.
+- Model channel-neutral conversations so telephone and WhatsApp interactions
+  can share a verified customer context without merging ambiguous identities.
+- Add organization-level sender configuration with per-location routing,
+  business-hour behavior, response promises, and human inbox assignment.
+- Implement signed inbound webhooks, idempotent message ingestion, delivery
+  status reconciliation, ordered message history, retries, and dead-letter
+  handling.
+- Implement explicit WhatsApp consent and opt-out records independently from
+  ordinary customer memories.
+- Add private attachment ingestion with size/type validation, checksums,
+  location-aware access control, configurable retention, and deletion.
+- Add approved transactional-template management and prohibit promotional sends
+  in the V1 application tools.
+- Pause automation during human ownership and require an explicit release before
+  the agent resumes the conversation.
+- Prove one real French tracer bullet before promising the combined number:
+  provision a dedicated number, receive voice and WhatsApp traffic, configure
+  the business profile, send a consented template, and verify the documented
+  provider-exit path.
+- Open provider questions include French number inventory and regulatory
+  eligibility, combined voice/WhatsApp capability, Meta and provider approval
+  lead times, pricing, sender migration, and number portability.
+
 ### Garage operations assistant
 
 - Add an embedded conversational assistant for garage employees.
@@ -393,3 +472,6 @@ These are recommendations, not accepted scope:
 7. Implement one end-to-end telephone provider tracer bullet reusing the same
    customer, catalog, and scheduling tools with fake LLM and speech adapters.
 8. Add real voice/model providers only after call and tool contracts are proven.
+9. Add WhatsApp after a French-number provider tracer bullet proves combined
+   voice/messaging capability and sender portability; reuse the same customer,
+   catalog, scheduling, and authorized-action tools.
