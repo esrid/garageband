@@ -8,6 +8,7 @@ import (
 
 	"github.com/esrid/garageband/internal/features/accesscontrol"
 	"github.com/esrid/garageband/internal/features/agenda"
+	"github.com/esrid/garageband/internal/features/agents"
 	"github.com/esrid/garageband/internal/features/auth"
 	"github.com/esrid/garageband/internal/features/calls"
 	"github.com/esrid/garageband/internal/features/customers"
@@ -112,6 +113,18 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return calls.Principal{
+				UserID: user.ID, TenantID: tenantID,
+			}, userOK && tenantOK
+		},
+	)
+	agents.Register(
+		mux,
+		agents.NewStore(database),
+		auth.RequireTenant,
+		func(ctx context.Context) (agents.Principal, bool) {
+			user, userOK := auth.UserFrom(ctx)
+			tenantID, tenantOK := auth.TenantFrom(ctx)
+			return agents.Principal{
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
 		},

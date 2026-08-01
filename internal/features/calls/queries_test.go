@@ -118,10 +118,14 @@ func newCallsFixture(t *testing.T) callsFixture {
 		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
 		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
 		fixture.tenantID, locationID)
-	agentID := insertReturningID(t, fixtures, `
-		INSERT INTO agents (tenant_id, location_id, name)
-		VALUES ($1, $2, 'Agent accueil') RETURNING id::text`,
-		fixture.tenantID, locationID)
+	var agentID string
+	if err := fixtures.QueryRow(`
+		SELECT id::text FROM agents
+		WHERE tenant_id = $1 AND location_id = $2`,
+		fixture.tenantID, locationID,
+	).Scan(&agentID); err != nil {
+		t.Fatal(err)
+	}
 	started := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
 	fixture.callID = insertReturningID(t, fixtures, `
 		INSERT INTO calls (

@@ -292,16 +292,64 @@ interfaces.
 
 These are database contracts and ports, not working provider integrations.
 
+### Day agenda and appointment booking
+
+- Authenticated day agenda for each accessible physical location, with explicit
+  location selection preserved through day navigation and booking flows.
+- Appointment creation, editing, and cancellation for a customer and one of
+  their vehicles.
+- Location-timezone conversion on reads and location-timezone parsing on writes
+  prevents UTC shifts from changing workshop bookings.
+- Appointment duration is derived from the selected service duration and its
+  buffers rather than trusted from browser input.
+- Active services, active resources, customer/vehicle ownership, membership,
+  and location access are revalidated inside the tenant/user transaction.
+- PostgreSQL exclusion violations are rendered as slot conflicts rather than
+  malformed-input errors; cancelled appointments remain visible but stop
+  occupying capacity.
+- Testcontainers integration tests cover local-time persistence, service
+  buffers, concurrent-slot rejection, HTTP conflict presentation, and
+  cancellation.
+
+### Call inbox and transcripts
+
+- Authenticated call inbox across the actor's accessible locations, newest
+  first, with an attention filter using the same recognition/answer rule as the
+  views.
+- Caller numbers are formatted for display, customer links exist only while
+  the customer dossier is visible, and every timestamp is converted using the
+  call location's timezone.
+- Transcript messages are loaded strictly by their durable `sequence`; equal or
+  non-monotonic event timestamps cannot scramble speech and tool activity.
+- Missed calls remain visible without pretending they contain a transcript;
+  recording presence is shown without exposing playback before the retention
+  workflow exists.
+- Runtime-role tests cover location-aware RLS, attention filtering, telephone
+  formatting, timezone conversion, and transcript order.
+
+### Telephone-agent configuration
+
+- PostgreSQL creates exactly one draft telephone agent for every new location
+  and backfills existing locations. A unique constraint makes the rule durable.
+- Provider foreign keys enforce that selected LLM, speech-to-text, and
+  text-to-speech connections belong to the agent's location and have the
+  correct provider kind.
+- Owners and admins can edit the name, greeting, fallback, instructions,
+  language, and provider selections; assigned managers and members have
+  read-only access.
+- Copy can be prepared before providers exist, but activation independently
+  verifies three selected active provider connections. Pause is a separate
+  consequential action.
+- The list distinguishes missing providers, missing telephone routing, paused
+  agents, and agents that callers can actually reach.
+- PostgreSQL length constraints mirror handler validation for agent-controlled
+  text, and tests cover automatic provisioning, uniqueness, cross-kind
+  rejection, role enforcement, readiness, activation, pause, and reachability.
+
 ## In progress
 
-### Prepared UI awaiting backend
-
-- The day-agenda and appointment-form views are present; appointment queries,
-  availability rules, writes, conflict handling, and routes remain to build.
-- The call inbox and transcript views are present; call queries, filters,
-  transcript loading, and routes remain to build.
-- The telephone-agent configuration views are present; configuration queries,
-  validated writes, provider selection, and routes remain to build.
+- No partially implemented vertical slice is currently tracked. Scheduling
+  availability and provider integrations remain planned as separate slices.
 
 ## Planned
 
@@ -329,7 +377,7 @@ These are database contracts and ports, not working provider integrations.
 
 ### Scheduling and calendars
 
-- Appointment CRUD and availability search.
+- Availability search around the existing appointment CRUD.
 - Opening-hours, service-duration, buffer, technician, bay, and equipment
   constraints.
 - Google Calendar OAuth connection and synchronization.
@@ -465,7 +513,9 @@ These are recommendations, not accepted scope:
    repair/appointment timeline under location-aware RLS.
 3. Build the structured offers/products/packages catalog and CSV/XLSX staging
    import before an agent is allowed to answer pricing questions.
-4. Build scheduling and availability without an external calendar first.
+4. **Partially complete:** appointment CRUD and conflict-safe day scheduling are
+   implemented; add opening-hours and multi-resource availability search before
+   connecting an external calendar.
 5. Implement the internal operations chat using explicit, authorized tools and
    fake model adapters.
 6. Add Google Calendar synchronization.

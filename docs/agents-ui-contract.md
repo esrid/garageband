@@ -33,10 +33,10 @@ whatever its status column says, and the screen refuses to pretend otherwise.
   one telephone number pointing at it. The list distinguishes the three ways it
   can fail, because "not configured", "no line" and "switched off" call for
   different actions.
-- On the form, `FormPage.Missing()` is derived from the connection lists being
-  empty, so hand over exactly the connections that exist for that location and
-  kind. When a list is empty the screen explains it instead of rendering an
-  empty select, and the activation control is not offered at all.
+- On the form, `FormPage.Missing()` requires a selected, active connection from
+  each location-specific list. When a list is empty the screen explains it
+  instead of rendering an empty select; when choices exist but none is selected,
+  the form remains editable but the activation control is not offered.
 
 Configuration stays editable while unready, on purpose: writing the greeting is
 useful before a provider exists, and the screen says so.

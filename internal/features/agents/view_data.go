@@ -130,13 +130,13 @@ func (p FormPage) HasError(field string) bool { return p.FieldErrors[field] != "
 // Missing names the provider kinds with nothing to choose from.
 func (p FormPage) Missing() []string {
 	var missing []string
-	if len(p.LLMConnections) == 0 {
+	if !optionSelected(p.LLMConnections, p.Values.LLM) {
 		missing = append(missing, KindLLM)
 	}
-	if len(p.STTConnections) == 0 {
+	if !optionSelected(p.STTConnections, p.Values.STT) {
 		missing = append(missing, KindSTT)
 	}
-	if len(p.TTSConnections) == 0 {
+	if !optionSelected(p.TTSConnections, p.Values.TTS) {
 		missing = append(missing, KindTTS)
 	}
 	return missing
@@ -146,6 +146,15 @@ func (p FormPage) Missing() []string {
 func (p FormPage) Ready() bool { return len(p.Missing()) == 0 }
 
 func (p FormPage) Answering() bool { return p.Status == StatusActive }
+
+func optionSelected(options []Option, selected string) bool {
+	for _, option := range options {
+		if option.Value == selected {
+			return true
+		}
+	}
+	return false
+}
 
 // statusLabel translates agents.status.
 func statusLabel(status string) string {
