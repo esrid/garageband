@@ -5,6 +5,10 @@ package ui
 const (
 	SectionDashboard = "dashboard"
 	SectionLocations = "locations"
+	// SectionTeam has no navigation link yet: /team has no route, and the shell
+	// must not offer a link into a screen that 404s. Add the link in shell()
+	// when the route lands.
+	SectionTeam = "team"
 )
 
 // Nav describes the application shell around a page. Its zero value renders no

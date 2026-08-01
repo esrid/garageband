@@ -1,0 +1,197 @@
+package team
+
+import "github.com/esrid/garageband/internal/ui"
+
+// Interface copy is French; identifiers and comments stay English.
+
+// pendingHandle renders the submit-pending script once per page. Every form
+// here is a plain POST and works unchanged without it.
+var pendingHandle = templ.NewOnceHandle()
+
+// Index lists the organization's members and the sites each of them reaches.
+templ Index(page Page) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Accès aux sites",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionTeam, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-1">
+				<h1 class="text-xl font-semibold">Accès aux sites</h1>
+				<p class="text-sm opacity-70">
+					Qui travaille sur quel atelier. Les propriétaires et les administrateurs
+					atteignent tous les sites ; les responsables et les membres uniquement
+					ceux que vous leur donnez.
+				</p>
+			</header>
+			@notice(page.Notice)
+			if !page.CanManage {
+				<div role="status" class="alert items-start text-left">
+					@infoIcon()
+					<span class="text-sm">
+						Vous consultez ces accès en lecture seule. Seul un propriétaire ou un
+						administrateur de l'espace peut les modifier.
+					</span>
+				</div>
+			}
+			if page.UnassignedCount() > 0 {
+				<div role="status" class="alert alert-warning items-start text-left">
+					@warningIcon()
+					<div class="grid gap-1">
+						<span class="font-semibold">{ unassignedHeading(page.UnassignedCount()) }</span>
+						<span class="text-sm">
+							Sans site, une personne peut se connecter mais ne voit aucun client,
+							aucun rendez-vous et aucune réparation.
+						</span>
+					</div>
+				</div>
+			}
+			if len(page.Locations) == 0 {
+				<div class="card card-border border-base-300 bg-base-100">
+					<div class="card-body items-start gap-2 p-5">
+						<h2 class="text-base font-semibold">Aucun site à attribuer</h2>
+						<p class="text-sm opacity-70">
+							Créez d'abord un site : il n'y a rien à donner tant que votre garage
+							n'a pas d'atelier.
+						</p>
+						<a href="/locations" class="btn btn-primary mt-1 min-h-11">Voir les sites</a>
+					</div>
+				</div>
+			} else {
+				<ul class="grid gap-3">
+					for _, member := range page.Members {
+						<li>
+							@memberCard(member, page)
+						</li>
+					}
+				</ul>
+			}
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+// memberCard shows who someone is and what they reach, and — for the roles
+// where it is editable — folds the site checkboxes away until asked for.
+templ memberCard(member Member, page Page) {
+	<article class="card card-border border-base-300 bg-base-100">
+		<div class="card-body gap-3 p-5">
+			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<h2 class="text-base font-semibold">{ member.Label() }</h2>
+				<span class="badge badge-sm shrink-0">{ roleLabel(member.Role) }</span>
+			</div>
+			if member.Name != "" && member.Email != "" {
+				<p class="text-xs opacity-60">{ member.Email }</p>
+			}
+			<p class="text-sm">
+				<span class="opacity-60">Accès :</span>
+				if member.Unassigned() {
+					<span class="font-medium">Aucun site</span>
+				} else {
+					<span class="opacity-80">{ accessSummary(member, page.Locations) }</span>
+				}
+			</p>
+			if member.ReachesEveryLocation() {
+				<p class="text-xs opacity-60">
+					Ce rôle donne accès à tous les sites, présents et futurs. Pour le
+					restreindre, changez le rôle de la personne.
+				</p>
+			} else if page.CanManage {
+				<details class="collapse-arrow collapse border border-base-300 bg-base-200">
+					<summary class="collapse-title min-h-11 py-3 text-sm font-medium">
+						Modifier ses sites<span class="sr-only">{ " pour " + member.Label() }</span>
+					</summary>
+					<div class="collapse-content">
+						<form method="post" action={ templ.URL(assignmentPath(member)) } class="grid gap-3" data-pending-form>
+							<fieldset class="fieldset gap-2 p-0">
+								<legend class="fieldset-legend px-0 text-sm">
+									{ "Sites de " + member.Label() }
+								</legend>
+								for _, location := range page.Locations {
+									<label class="label min-h-11 cursor-pointer justify-start gap-3" for={ checkboxID(member, location) }>
+										<input
+											type="checkbox"
+											id={ checkboxID(member, location) }
+											name={ FieldLocations }
+											value={ location.ID }
+											class="checkbox"
+											checked?={ member.HasLocation(location.ID) }
+										/>
+										<span class="flex flex-wrap items-center gap-2 text-base-content">
+											{ location.Name }
+											if !location.Active {
+												<span class="badge badge-sm">Inactif</span>
+											}
+										</span>
+									</label>
+								}
+							</fieldset>
+							<p class="text-xs opacity-60">
+								Décocher un site retire l'accès sans effacer ce que la personne y a
+								déjà enregistré.
+							</p>
+							<button type="submit" class="btn btn-primary min-h-11 w-full sm:w-auto sm:justify-self-start" data-pending-label="Enregistrement…">
+								Enregistrer ses sites
+							</button>
+						</form>
+					</div>
+				</details>
+			}
+		</div>
+	</article>
+}
+
+// notice reports a server-side outcome. An icon and a heading carry the
+// meaning, so no state depends on colour alone.
+templ notice(n Notice) {
+	if !n.Empty() {
+		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+			if n.Kind == NoticeSuccess {
+				@successIcon()
+			} else {
+				@warningIcon()
+			}
+			<div class="grid gap-1">
+				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="text-sm">{ n.Message }</span>
+			</div>
+		</div>
+	}
+}
+
+templ warningIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+	</svg>
+}
+
+templ successIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+	</svg>
+}
+
+templ infoIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"></path>
+	</svg>
+}
+
+templ pendingScript() {
+	<script>
+		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
+			form.addEventListener("submit", function () {
+				var button = form.querySelector("[data-pending-label]");
+				if (!button) {
+					return;
+				}
+				button.disabled = true;
+				button.innerHTML =
+					'<span class="loading loading-spinner loading-sm"></span>' +
+					button.dataset.pendingLabel;
+			});
+		});
+	</script>
+}
