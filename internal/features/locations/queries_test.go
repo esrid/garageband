@@ -2,10 +2,13 @@ package locations_test
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/esrid/garageband/internal/features/locations"
+	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
 )
@@ -426,6 +429,76 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	}
 	if len(schedule.Services) != 1 || schedule.Services[0].CatalogAvailable || schedule.Services[0].Active {
 		t.Fatalf("out-of-scope schedule = %#v", schedule.Services)
+	}
+}
+
+func TestLocationContactAssistantToolTrustsScopeAndIsIdempotent(t *testing.T) {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "tool-location-owner@example.com")
+	memberID := createUser(t, fixtures, "tool-location-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	store := locations.NewStore(runtime)
+	location, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier outil", CountryCode: "FR", Timezone: "Europe/Paris",
+		Email: "before@garage.fr",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixtures.Exec(`
+		INSERT INTO user_location_assignments (
+		    tenant_id, user_id, location_id, assigned_by_user_id
+		) VALUES ($1, $2, $3, $4)`, tenantID, memberID, location.ID, ownerID); err != nil {
+		t.Fatal(err)
+	}
+	scope := assistanttools.Scope{
+		TenantID: tenantID, UserID: ownerID, LocationID: location.ID,
+		IdempotencyKey: "location-tool-test-1",
+	}
+	if _, err := store.Preview(t.Context(), scope, locations.ToolUpdateLocationContact, json.RawMessage(`{
+		"email":"forged@garage.fr","location_id":"00000000-0000-7000-8000-000000000000"
+	}`)); err == nil {
+		t.Fatal("model-controlled location id unexpectedly accepted")
+	}
+	preview, err := store.Preview(
+		t.Context(), scope, locations.ToolUpdateLocationContact,
+		json.RawMessage(`{"email":"AFTER@GARAGE.FR"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(preview.Input), "location_id") ||
+		!strings.Contains(string(preview.Input), "expected_updated_at") {
+		t.Fatalf("canonical tool input = %s", preview.Input)
+	}
+	result, err := store.Execute(t.Context(), scope, locations.ToolUpdateLocationContact, preview.Input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Summary, "mises à jour") {
+		t.Fatalf("tool result = %#v", result)
+	}
+	// Same key returns the durable receipt, without depending on the now-stale
+	// expected timestamp in the canonical arguments.
+	if _, err := store.Execute(t.Context(), scope, locations.ToolUpdateLocationContact, preview.Input); err != nil {
+		t.Fatal(err)
+	}
+	var email string
+	if err := fixtures.QueryRow(`SELECT email FROM locations WHERE id = $1`, location.ID).Scan(&email); err != nil {
+		t.Fatal(err)
+	}
+	if email != "after@garage.fr" {
+		t.Fatalf("tool email = %q", email)
+	}
+	memberScope := scope
+	memberScope.UserID = memberID
+	memberScope.IdempotencyKey = "location-tool-member"
+	if _, err := store.Preview(
+		t.Context(), memberScope, locations.ToolUpdateLocationContact,
+		json.RawMessage(`{"email":"member@garage.fr"}`),
+	); err == nil {
+		t.Fatal("member unexpectedly previewed manager-only tool")
 	}
 }
 

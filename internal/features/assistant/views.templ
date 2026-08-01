@@ -1,0 +1,148 @@
+package assistant
+
+import "github.com/esrid/garageband/internal/ui"
+
+templ View(page Page) {
+	@ui.Layout(ui.PageInfo{Title: "Assistant d’atelier", NoIndex: true, Nav: ui.Nav{Section: ui.SectionAssistant, Workspace: page.Workspace.Organization, InWorkspace: true}}) {
+		<div class="grid gap-5">
+			<header class="grid gap-2">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div class="grid gap-1">
+						<h1 class="text-xl font-semibold">Assistant d’atelier</h1>
+						<p class="text-sm opacity-70">Il peut préparer des actions limitées à l’établissement choisi. Vous gardez la décision finale.</p>
+					</div>
+					<a href="/assistant" class="btn btn-sm min-h-11">Nouvelle conversation</a>
+				</div>
+				<div role="status" class="alert alert-info items-start text-left">
+					<span aria-hidden="true">ℹ</span>
+					<span class="text-sm"><strong>Mode démonstration local.</strong> Il reconnaît uniquement les demandes explicites de modification de l’e-mail, du téléphone international ou du site web. Aucun fournisseur de modèle n’est imposé.</span>
+				</div>
+			</header>
+			@notice(page.Notice)
+			<div class="grid gap-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
+				<aside class="grid content-start gap-3" aria-label="Conversations">
+					<h2 class="text-sm font-semibold">Mes conversations</h2>
+					if len(page.Workspace.Conversations) == 0 {
+						<p class="text-sm opacity-60">Aucune conversation enregistrée.</p>
+					} else {
+						<ul class="menu rounded-box border border-base-300 bg-base-100 p-1">
+							for _, conversation := range page.Workspace.Conversations {
+								<li>
+									<a href={ templ.URL("/assistant?conversation=" + conversation.ID) } class={ templ.KV("menu-active", conversation.ID == page.Workspace.Current.ID) }>
+										<span class="line-clamp-2 text-sm">{ conversation.Title }</span>
+										<span class="text-xs opacity-60">{ conversation.Location }</span>
+									</a>
+								</li>
+							}
+						</ul>
+					}
+				</aside>
+				<section class="grid min-w-0 gap-4" aria-labelledby="conversation-heading">
+					<div class="card card-border border-base-300 bg-base-100">
+						<div class="card-body gap-4 p-5">
+							<div class="grid gap-1">
+								<h2 id="conversation-heading" class="text-base font-semibold">
+									if page.Workspace.Current.ID != "" {
+										{ page.Workspace.Current.Title }
+									} else {
+										Nouvelle conversation
+									}
+								</h2>
+								if page.Workspace.Current.Location != "" {
+									<p class="text-sm opacity-60">Établissement : { page.Workspace.Current.Location }</p>
+								}
+							</div>
+							if len(page.Workspace.Messages) == 0 {
+								<div class="rounded-box border border-dashed border-base-300 p-4 text-sm opacity-70">
+									Demandez par exemple : « Mets l’e-mail du site à accueil@garage.fr ». L’assistant préparera un aperçu ; il ne modifiera rien avant confirmation.
+								</div>
+							} else {
+								<ol class="grid gap-3" aria-label="Messages">
+									for _, message := range page.Workspace.Messages {
+										<li class={ "chat", templ.KV("chat-end", message.Role == "user"), templ.KV("chat-start", message.Role != "user") }>
+											<div class="chat-header mb-1 text-xs opacity-60">{ roleLabel(message.Role) }</div>
+											<div class={ "chat-bubble whitespace-pre-wrap", templ.KV("chat-bubble-primary", message.Role == "user") }>{ message.Content }</div>
+											<div class="chat-footer mt-1 text-xs opacity-50">{ ui.FormatDate(message.CreatedAt) } · { ui.FormatTime(message.CreatedAt) }</div>
+										</li>
+									}
+								</ol>
+							}
+							if len(page.Workspace.Executions) != 0 {
+								<div class="divider my-0">Actions auditées</div>
+								<ul class="grid gap-3">
+									for _, execution := range page.Workspace.Executions {
+										<li class="grid gap-3 rounded-box border border-base-300 p-4">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<span class="text-sm font-semibold">Modification des coordonnées du site</span>
+												<span class={ "badge", executionBadge(execution.Status) }>{ executionStatusLabel(execution.Status) }</span>
+											</div>
+											<p class="text-sm">{ execution.PreviewSummary }</p>
+											if execution.Status == "failed" && execution.ErrorMessage != "" {
+												<p class="text-error text-sm">{ execution.ErrorMessage }</p>
+											}
+											if execution.Status == "proposed" {
+												<div class="flex flex-wrap gap-2">
+													<form method="post" action={ templ.URL("/assistant/" + execution.ConversationID + "/tools/" + execution.ID + "/confirm") } data-pending-form>
+														<button type="submit" class="btn btn-primary min-h-11">Confirmer l’action</button>
+													</form>
+													<form method="post" action={ templ.URL("/assistant/" + execution.ConversationID + "/tools/" + execution.ID + "/reject") }>
+														<button type="submit" class="btn btn-ghost min-h-11">Abandonner</button>
+													</form>
+												</div>
+											}
+										</li>
+									}
+								</ul>
+							}
+						</div>
+					</div>
+					if !page.HasLocations() {
+						<div role="status" class="alert alert-warning"><span>Ajoutez ou réactivez un établissement avant d’ouvrir une conversation.</span></div>
+					} else {
+						<form method="post" action="/assistant/messages" class="card card-border border-base-300 bg-base-100" data-pending-form novalidate>
+							<div class="card-body gap-3 p-5">
+								if page.Workspace.Current.ID != "" {
+									<input type="hidden" name={ FieldConversation } value={ page.Workspace.Current.ID }/>
+									<input type="hidden" name={ FieldLocation } value={ page.Workspace.Current.LocationID }/>
+								} else {
+									<label class="form-control grid gap-1">
+										<span class="label-text text-sm font-medium">Établissement concerné</span>
+										<select name={ FieldLocation } class={ "select min-h-11 w-full", templ.KV("select-error", page.HasError(FieldLocation)) } required>
+											for _, location := range page.Workspace.Locations {
+												<option value={ location.ID } selected?={ location.ID == page.CurrentLocationID() }>{ location.Name }</option>
+											}
+										</select>
+										if page.HasError(FieldLocation) {
+											<span class="text-error text-xs">{ page.Error(FieldLocation) }</span>
+										}
+									</label>
+								}
+								<label class="form-control grid gap-1">
+									<span class="label-text text-sm font-medium">Votre demande</span>
+									<textarea name={ FieldMessage } maxlength="4000" rows="3" class={ "textarea w-full", templ.KV("textarea-error", page.HasError(FieldMessage)) } placeholder="Que voulez-vous vérifier ou modifier ?" required>{ page.MessageValue }</textarea>
+									if page.HasError(FieldMessage) {
+										<span class="text-error text-xs">{ page.Error(FieldMessage) }</span>
+									}
+								</label>
+								<div class="card-actions justify-end">
+									<button type="submit" class="btn btn-primary min-h-11">Envoyer</button>
+								</div>
+							</div>
+						</form>
+					}
+				</section>
+			</div>
+		</div>
+	}
+}
+
+templ notice(notice Notice) {
+	if !notice.Empty() {
+		<div role="status" class={ "alert items-start text-left", noticeClass(notice.Kind) }>
+			<div class="grid gap-0.5">
+				<span class="font-semibold">{ noticeTitle(notice.Kind) }</span>
+				<span class="text-sm">{ notice.Message }</span>
+			</div>
+		</div>
+	}
+}

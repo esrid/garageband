@@ -388,10 +388,31 @@ These are database contracts and ports, not working provider integrations.
 - PostgreSQL constraints, deferred scope triggers, immutable audit triggers,
   and forced RLS enforce the catalog contract independently from HTTP code.
 
+### Garage operations assistant tracer bullet
+
+- Private employee conversations are scoped to the active organization and one
+  accessible physical location under forced PostgreSQL RLS.
+- The assistant receives only explicit JSON-schema tools; trusted tenant, user,
+  and location scope comes from the authenticated application, never the model.
+- A provider-neutral local demonstration adapter prepares explicit site contact
+  changes without pretending to be a general model or imposing a provider.
+- The first shared tool is owned by the locations feature, independently
+  authorizes owner/admin roles, rejects unknown arguments, and can later be
+  reused by telephone or messaging orchestrators through `assistanttools`.
+- Consequential actions persist a human-readable before/after preview and wait
+  for explicit confirm/reject before changing data.
+- Optimistic version checks prevent a stale confirmation from overwriting a
+  concurrent edit. Generic application-tool receipts make recovery idempotent
+  across a crash between the domain write and conversation finalization.
+- Conversation messages, terminal action audits, and idempotency receipts are
+  immutable in PostgreSQL. Tests cover employee isolation, location RLS, role
+  refusal, stale previews, rejection, retry after interruption, and HTTP flow.
+
 ## In progress
 
-- No partially implemented vertical slice is currently tracked. Scheduling
-  availability and provider integrations remain planned as separate slices.
+- The operations assistant has a complete location-contact tracer bullet. Its
+  customer, catalog, and scheduling tools are the next tracked expansion;
+  external provider integrations remain separate later slices.
 
 ## Planned
 
@@ -467,25 +488,16 @@ These are database contracts and ports, not working provider integrations.
 
 ### Garage operations assistant
 
-- Add an embedded conversational assistant for garage employees.
-- Scope every conversation and tool execution to the active organization and,
-  where applicable, the active physical location.
-- Reuse the same explicit application tools for the internal chat and the
-  telephone agent; neither agent receives raw SQL or unrestricted database
-  access.
-- Let authorized users ask the assistant to find information and propose or
-  perform actions such as correcting customer details, updating operational
-  information, or managing appointments.
-- Authorize every tool independently from the user's membership role and
-  location assignments. Being allowed to use the chat does not imply being
-  allowed to perform every action.
-- Require preview and explicit confirmation for consequential or destructive
-  actions, with stricter rules still to be decided per tool.
-- Persist the requesting user, conversation, tool name, validated arguments,
-  affected records, outcome, and timestamps in an immutable audit trail.
-- Make tool execution idempotent so retries cannot create duplicate changes.
-- Provide a human-readable explanation of what changed and a recoverable error
-  when an action is rejected.
+- Add customer/vehicle lookup, catalog quotation, appointment, and operational
+  read tools behind the shared registry.
+- Add confirmed customer corrections and appointment management using the same
+  per-tool authorization, optimistic concurrency, audit, and receipt contract.
+- Select and inject real model adapters; retain the local demonstration adapter
+  for deterministic development and tests.
+- Continue model turns after read tools and completed writes instead of ending
+  the current tracer-bullet turn at the first proposal.
+- Decide and enforce stricter confirmation or dual-control rules for destructive
+  actions before exposing any of them.
 
 ### Additional intelligent import formats
 
@@ -541,8 +553,9 @@ These are recommendations, not accepted scope:
    working-time enforcement, closures, automatic multi-resource allocation,
    and catalog-backed scheduling services are implemented; add the external
    calendar connection and idempotent synchronization next.
-5. Implement the internal operations chat using explicit, authorized tools and
-   fake model adapters.
+5. **Partially complete:** the internal operations chat, fake model adapter,
+   confirmed location-contact tool, immutable audit, and idempotent recovery
+   exist; add customer, catalog, and scheduling tools before a real model.
 6. Add Google Calendar synchronization.
 7. Implement one end-to-end telephone provider tracer bullet reusing the same
    customer, catalog, and scheduling tools with fake LLM and speech adapters.

@@ -11,6 +11,7 @@ const (
 	SectionCalls     = "calls"
 	SectionAgents    = "agents"
 	SectionCatalog   = "catalog"
+	SectionAssistant = "assistant"
 )
 
 // Nav describes the application shell around a page. Its zero value renders no
@@ -130,6 +131,7 @@ templ shell(nav Nav) {
 						@navLink("/calls", "Appels", nav.current(SectionCalls))
 						@navLink("/agents", "Agent IA", nav.current(SectionAgents))
 						@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
+						@navLink("/assistant", "Assistant", nav.current(SectionAssistant))
 					}
 				</ul>
 			</nav>

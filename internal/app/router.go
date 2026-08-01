@@ -9,6 +9,7 @@ import (
 	"github.com/esrid/garageband/internal/features/accesscontrol"
 	"github.com/esrid/garageband/internal/features/agenda"
 	"github.com/esrid/garageband/internal/features/agents"
+	"github.com/esrid/garageband/internal/features/assistant"
 	"github.com/esrid/garageband/internal/features/auth"
 	"github.com/esrid/garageband/internal/features/calls"
 	"github.com/esrid/garageband/internal/features/catalog"
@@ -17,8 +18,10 @@ import (
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/features/onboarding"
 	"github.com/esrid/garageband/internal/features/team"
+	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/esrid/garageband/internal/platform/llm"
 	"github.com/esrid/garageband/web"
 )
 
@@ -70,14 +73,33 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			return result, nil
 		},
 	)
+	locationStore := locations.NewStore(database)
 	locations.Register(
 		mux,
-		locations.NewStore(database),
+		locationStore,
 		auth.RequireTenant,
 		func(ctx context.Context) (locations.Principal, bool) {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return locations.Principal{
+				UserID: user.ID, TenantID: tenantID,
+			}, userOK && tenantOK
+		},
+	)
+	assistantStore := assistant.NewStore(database)
+	assistant.Register(
+		mux,
+		assistantStore,
+		assistant.NewService(
+			assistantStore,
+			llm.NewDemonstrationProvider(),
+			assistanttools.NewRegistry(locationStore),
+		),
+		auth.RequireTenant,
+		func(ctx context.Context) (assistant.Principal, bool) {
+			user, userOK := auth.UserFrom(ctx)
+			tenantID, tenantOK := auth.TenantFrom(ctx)
+			return assistant.Principal{
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
 		},
