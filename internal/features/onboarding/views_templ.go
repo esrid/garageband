@@ -75,7 +75,7 @@ func LookupPage(siret string, message string, kind string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" inputmode=\"numeric\" autocomplete=\"off\" minlength=\"14\" maxlength=\"14\" pattern=\"[0-9]{14}\" aria-describedby=\"siret-hint\" required><p id=\"siret-hint\" class=\"label text-xs leading-snug whitespace-normal\">14 chiffres, indiqués sur votre extrait Kbis et vos factures. Un SIRET identifie un seul établissement : utilisez celui de ce garage.</p></fieldset><button type=\"submit\" class=\"btn btn-primary btn-block sm:w-auto sm:justify-self-start\" data-pending-label=\"Recherche dans le registre…\">Rechercher dans le registre</button></form><p class=\"flex items-start gap-2 text-xs leading-snug opacity-70\"><span class=\"badge badge-sm badge-ghost shrink-0\">Bientôt</span> <span>Le préremplissage depuis votre site web. Pour l'instant, nous lisons uniquement le registre public.</span></p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" inputmode=\"numeric\" autocomplete=\"off\" minlength=\"14\" maxlength=\"14\" pattern=\"[0-9]{14}\" aria-describedby=\"siret-hint\" required><p id=\"siret-hint\" class=\"label text-xs leading-snug whitespace-normal\">14 chiffres, indiqués sur votre extrait Kbis et vos factures. Un SIRET identifie un seul établissement : utilisez celui de ce garage.</p></fieldset><button type=\"submit\" class=\"btn btn-primary btn-block min-h-11 sm:w-auto sm:justify-self-start\" data-pending-label=\"Recherche dans le registre…\">Rechercher dans le registre</button></form><p class=\"flex items-start gap-2 text-xs leading-snug opacity-70\"><span class=\"badge badge-sm badge-ghost shrink-0\">Bientôt</span> <span>Le préremplissage depuis votre site web. Pour l'instant, nous lisons uniquement le registre public.</span></p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -169,7 +169,7 @@ func ConfirmationPage(data formData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4\"><div><h2 class=\"card-title text-base\"><span class=\"badge badge-sm badge-neutral\">Étape 2</span> Identité de l'entreprise</h2><p class=\"text-sm opacity-70\">L'entreprise. Elle reste la même quel que soit le nombre d'ateliers.</p></div><div class=\"grid gap-4 sm:grid-cols-2\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4\"><div><h2 class=\"card-title text-base\"><span class=\"badge badge-sm badge-neutral shrink-0\">Étape 2</span> Identité de l'entreprise</h2><p class=\"text-sm opacity-70\">L'entreprise. Elle reste la même quel que soit le nombre d'ateliers.</p></div><div class=\"grid gap-4 sm:grid-cols-2\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -185,14 +185,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<input id=\"name\" name=\"name\" class=\"input validator w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<input id=\"name\" name=\"name\" class=\"input validator min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 94, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 94, Col: 94}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 				if templ_7745c5c3_Err != nil {
@@ -220,14 +220,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<input id=\"legal_name\" name=\"legal_name\" class=\"input w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<input id=\"legal_name\" name=\"legal_name\" class=\"input min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.LegalName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 97, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 97, Col: 101}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
@@ -255,14 +255,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<input id=\"slug\" name=\"slug\" class=\"input validator w-full font-mono\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<input id=\"slug\" name=\"slug\" class=\"input validator min-h-11 w-full font-mono\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Slug)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 100, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 100, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 				if templ_7745c5c3_Err != nil {
@@ -290,14 +290,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<input id=\"siret-confirm\" name=\"siret\" class=\"input w-full bg-base-200 font-mono tracking-wider\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<input id=\"siret-confirm\" name=\"siret\" class=\"input min-h-11 w-full bg-base-200 font-mono tracking-wider\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var15 string
 				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SIRET)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 103, Col: 123}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 103, Col: 132}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 				if templ_7745c5c3_Err != nil {
@@ -325,14 +325,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<input id=\"siren\" class=\"input w-full bg-base-200 font-mono tracking-wider\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<input id=\"siren\" class=\"input min-h-11 w-full bg-base-200 font-mono tracking-wider\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SIREN())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 106, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 106, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
@@ -360,14 +360,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<input id=\"website_url\" name=\"website_url\" type=\"url\" class=\"input validator w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<input id=\"website_url\" name=\"website_url\" type=\"url\" class=\"input validator min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.WebsiteURL)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 109, Col: 116}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 109, Col: 125}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
@@ -383,7 +383,7 @@ func ConfirmationPage(data formData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div></section><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4\"><div><h2 class=\"card-title text-base\"><span class=\"badge badge-sm badge-neutral\">Étape 3</span> Premier site</h2><p class=\"text-sm opacity-70\">L'atelier où vos clients se rendent. Vous pourrez en ajouter d'autres ensuite.</p></div><div class=\"grid gap-4 sm:grid-cols-2\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div></section><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4\"><div><h2 class=\"card-title text-base\"><span class=\"badge badge-sm badge-neutral shrink-0\">Étape 3</span> Premier site</h2><p class=\"text-sm opacity-70\">L'atelier où vos clients se rendent. Vous pourrez en ajouter d'autres ensuite.</p></div><div class=\"grid gap-4 sm:grid-cols-2\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -399,14 +399,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<input id=\"location_name\" name=\"location_name\" class=\"input validator w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<input id=\"location_name\" name=\"location_name\" class=\"input validator min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.LocationName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 127, Col: 111}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 127, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -434,14 +434,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<input id=\"address_line1\" name=\"address_line1\" class=\"input w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<input id=\"address_line1\" name=\"address_line1\" class=\"input min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.AddressLine1)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 130, Col: 101}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 130, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 				if templ_7745c5c3_Err != nil {
@@ -469,14 +469,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<input id=\"postal_code\" name=\"postal_code\" class=\"input w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<input id=\"postal_code\" name=\"postal_code\" class=\"input min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.PostalCode)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 133, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 133, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 				if templ_7745c5c3_Err != nil {
@@ -504,14 +504,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<input id=\"city\" name=\"city\" class=\"input w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<input id=\"city\" name=\"city\" class=\"input min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.City)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 136, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 136, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 				if templ_7745c5c3_Err != nil {
@@ -539,14 +539,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<input id=\"country_code\" name=\"country_code\" class=\"input validator w-24 uppercase\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<input id=\"country_code\" name=\"country_code\" class=\"input validator min-h-11 w-24 uppercase\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.CountryCode)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 139, Col: 116}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 139, Col: 125}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 				if templ_7745c5c3_Err != nil {
@@ -588,14 +588,14 @@ func ConfirmationPage(data formData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<input id=\"address_line2\" name=\"address_line2\" class=\"input w-full\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<input id=\"address_line2\" name=\"address_line2\" class=\"input min-h-11 w-full\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.AddressLine2)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 146, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/onboarding/views.templ`, Line: 146, Col: 111}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 				if templ_7745c5c3_Err != nil {
@@ -611,7 +611,7 @@ func ConfirmationPage(data formData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></details></div></section><div class=\"flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between\"><a href=\"/onboarding\" class=\"btn btn-ghost btn-block sm:w-auto\">Rechercher un autre SIRET</a> <button type=\"submit\" class=\"btn btn-primary btn-block sm:w-auto\" data-pending-label=\"Création de votre espace…\">Créer l'espace du garage</button></div></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></details></div></section><div class=\"flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between\"><a href=\"/onboarding\" class=\"btn btn-ghost btn-block min-h-11 sm:w-auto\">Rechercher un autre SIRET</a> <button type=\"submit\" class=\"btn btn-primary btn-block min-h-11 sm:w-auto\" data-pending-label=\"Création de votre espace…\">Créer l'espace du garage</button></div></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -983,7 +983,7 @@ func notice(kind string, message string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if kind == noticeExpired || kind == noticeMismatch {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<a href=\"/onboarding\" class=\"btn btn-sm mt-1 w-fit\">Recommencer</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<a href=\"/onboarding\" class=\"btn btn-sm mt-1 min-h-11 w-fit\">Recommencer</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

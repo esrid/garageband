@@ -46,7 +46,7 @@ templ LookupPage(siret string, message string, kind string) {
 					</fieldset>
 					<button
 						type="submit"
-						class="btn btn-primary btn-block sm:w-auto sm:justify-self-start"
+						class="btn btn-primary btn-block min-h-11 sm:w-auto sm:justify-self-start"
 						data-pending-label="Recherche dans le registre…"
 					>
 						Rechercher dans le registre
@@ -82,7 +82,7 @@ templ ConfirmationPage(data formData) {
 					<div class="card-body gap-4">
 						<div>
 							<h2 class="card-title text-base">
-								<span class="badge badge-sm badge-neutral">Étape 2</span>
+								<span class="badge badge-sm badge-neutral shrink-0">Étape 2</span>
 								Identité de l'entreprise
 							</h2>
 							<p class="text-sm opacity-70">
@@ -91,22 +91,22 @@ templ ConfirmationPage(data formData) {
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
 							@field("name", "Nom commercial du garage", "Le nom sous lequel vos clients vous connaissent.", true) {
-								<input id="name" name="name" class="input validator w-full" value={ data.Name } autocomplete="organization" aria-describedby="name-hint" required/>
+								<input id="name" name="name" class="input validator min-h-11 w-full" value={ data.Name } autocomplete="organization" aria-describedby="name-hint" required/>
 							}
 							@field("legal_name", "Raison sociale", "Telle qu'enregistrée au registre.", true) {
-								<input id="legal_name" name="legal_name" class="input w-full" value={ data.LegalName } aria-describedby="legal_name-hint"/>
+								<input id="legal_name" name="legal_name" class="input min-h-11 w-full" value={ data.LegalName } aria-describedby="legal_name-hint"/>
 							}
 							@field("slug", "Identifiant de l'espace", "Votre adresse dans Garageband. Lettres minuscules, chiffres et tirets.", true) {
-								<input id="slug" name="slug" class="input validator w-full font-mono" value={ data.Slug } minlength="2" maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="slug-hint" required/>
+								<input id="slug" name="slug" class="input validator min-h-11 w-full font-mono" value={ data.Slug } minlength="2" maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="slug-hint" required/>
 							}
 							@field("siret-confirm", "SIRET", "Verrouillé sur l'établissement recherché. Relancez une recherche pour le changer.", false) {
-								<input id="siret-confirm" name="siret" class="input w-full bg-base-200 font-mono tracking-wider" value={ data.SIRET } inputmode="numeric" minlength="14" maxlength="14" pattern="[0-9]{14}" aria-describedby="siret-confirm-hint" readonly required/>
+								<input id="siret-confirm" name="siret" class="input min-h-11 w-full bg-base-200 font-mono tracking-wider" value={ data.SIRET } inputmode="numeric" minlength="14" maxlength="14" pattern="[0-9]{14}" aria-describedby="siret-confirm-hint" readonly required/>
 							}
 							@field("siren", "SIREN", "Le numéro de l'entreprise, repris des 9 premiers chiffres du SIRET.", false) {
-								<input id="siren" class="input w-full bg-base-200 font-mono tracking-wider" value={ data.SIREN() } aria-describedby="siren-hint" readonly/>
+								<input id="siren" class="input min-h-11 w-full bg-base-200 font-mono tracking-wider" value={ data.SIREN() } aria-describedby="siren-hint" readonly/>
 							}
 							@field("website_url", "Site web", "Enregistré dès maintenant. La reprise des informations depuis le site viendra plus tard.", true) {
-								<input id="website_url" name="website_url" type="url" class="input validator w-full" value={ data.WebsiteURL } placeholder="https://" inputmode="url" aria-describedby="website_url-hint"/>
+								<input id="website_url" name="website_url" type="url" class="input validator min-h-11 w-full" value={ data.WebsiteURL } placeholder="https://" inputmode="url" aria-describedby="website_url-hint"/>
 							}
 						</div>
 					</div>
@@ -115,7 +115,7 @@ templ ConfirmationPage(data formData) {
 					<div class="card-body gap-4">
 						<div>
 							<h2 class="card-title text-base">
-								<span class="badge badge-sm badge-neutral">Étape 3</span>
+								<span class="badge badge-sm badge-neutral shrink-0">Étape 3</span>
 								Premier site
 							</h2>
 							<p class="text-sm opacity-70">
@@ -124,36 +124,36 @@ templ ConfirmationPage(data formData) {
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
 							@field("location_name", "Nom du site", "Par exemple : Atelier principal, ou le nom de la rue.", true) {
-								<input id="location_name" name="location_name" class="input validator w-full" value={ data.LocationName } aria-describedby="location_name-hint" required/>
+								<input id="location_name" name="location_name" class="input validator min-h-11 w-full" value={ data.LocationName } aria-describedby="location_name-hint" required/>
 							}
 							@field("address_line1", "Adresse", "", true) {
-								<input id="address_line1" name="address_line1" class="input w-full" value={ data.AddressLine1 } autocomplete="address-line1"/>
+								<input id="address_line1" name="address_line1" class="input min-h-11 w-full" value={ data.AddressLine1 } autocomplete="address-line1"/>
 							}
 							@field("postal_code", "Code postal", "", false) {
-								<input id="postal_code" name="postal_code" class="input w-full" value={ data.PostalCode } inputmode="numeric" autocomplete="postal-code"/>
+								<input id="postal_code" name="postal_code" class="input min-h-11 w-full" value={ data.PostalCode } inputmode="numeric" autocomplete="postal-code"/>
 							}
 							@field("city", "Ville", "", false) {
-								<input id="city" name="city" class="input w-full" value={ data.City } autocomplete="address-level2"/>
+								<input id="city" name="city" class="input min-h-11 w-full" value={ data.City } autocomplete="address-level2"/>
 							}
 							@field("country_code", "Code pays", "Deux lettres, par exemple FR.", false) {
-								<input id="country_code" name="country_code" class="input validator w-24 uppercase" value={ data.CountryCode } minlength="2" maxlength="2" pattern="[A-Za-z]{2}" autocomplete="country" aria-describedby="country_code-hint" required/>
+								<input id="country_code" name="country_code" class="input validator min-h-11 w-24 uppercase" value={ data.CountryCode } minlength="2" maxlength="2" pattern="[A-Za-z]{2}" autocomplete="country" aria-describedby="country_code-hint" required/>
 							}
 						</div>
 						<details class="collapse-arrow collapse border border-base-300 bg-base-200" open?={ data.AddressLine2 != "" }>
 							<summary class="collapse-title min-h-0 py-3 text-sm font-medium">Complément d'adresse</summary>
 							<div class="collapse-content">
 								@field("address_line2", "Bâtiment, étage ou zone d'activité", "Uniquement si l'adresse ci-dessus ne suffit pas à vous localiser.", true) {
-									<input id="address_line2" name="address_line2" class="input w-full" value={ data.AddressLine2 } autocomplete="address-line2" aria-describedby="address_line2-hint"/>
+									<input id="address_line2" name="address_line2" class="input min-h-11 w-full" value={ data.AddressLine2 } autocomplete="address-line2" aria-describedby="address_line2-hint"/>
 								}
 							</div>
 						</details>
 					</div>
 				</section>
 				<div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-					<a href="/onboarding" class="btn btn-ghost btn-block sm:w-auto">Rechercher un autre SIRET</a>
+					<a href="/onboarding" class="btn btn-ghost btn-block min-h-11 sm:w-auto">Rechercher un autre SIRET</a>
 					<button
 						type="submit"
-						class="btn btn-primary btn-block sm:w-auto"
+						class="btn btn-primary btn-block min-h-11 sm:w-auto"
 						data-pending-label="Création de votre espace…"
 					>
 						Créer l'espace du garage
@@ -211,7 +211,7 @@ templ notice(kind string, message string) {
 				<span class="font-semibold">{ noticeTitle(kind) }</span>
 				<span class="text-sm">{ message }</span>
 				if kind == noticeExpired || kind == noticeMismatch {
-					<a href="/onboarding" class="btn btn-sm mt-1 w-fit">Recommencer</a>
+					<a href="/onboarding" class="btn btn-sm mt-1 min-h-11 w-fit">Recommencer</a>
 				}
 			</div>
 		</div>
