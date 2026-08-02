@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -45,7 +47,7 @@ func TestLocationLifecycleAndRoleCapabilities(t *testing.T) {
 	if created.Status != "active" {
 		t.Fatalf("new location status = %q, want active", created.Status)
 	}
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 			tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`,
@@ -177,7 +179,7 @@ func TestLocationScheduleLifecycleAndManagerBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	var serviceID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO service_offerings (
 		    tenant_id, location_id, code, name, duration_minutes
 		) VALUES ($1, $2, 'diagnostic', 'Diagnostic', 45)
@@ -269,7 +271,7 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	}
 
 	var catalogItemID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO catalog_items (
 		    tenant_id, kind, reference, name, description, price_kind,
 		    amount_cents, tax_basis, vat_basis_points, duration_minutes,
@@ -298,7 +300,7 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	var name string
 	var duration, price int
 	var active bool
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT name, duration_minutes, price_cents, active
 		FROM service_offerings WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID,
 	).Scan(&name, &duration, &price, &active); err != nil {
@@ -309,8 +311,8 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	}
 
 	// Linked fields cannot drift even through a direct SQL write.
-	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			UPDATE service_offerings
 			SET name = 'Nom divergent', duration_minutes = 5, price_cents = 1, active = FALSE
 			WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID)
@@ -318,8 +320,8 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			UPDATE catalog_items
 			SET name = 'Révision synchronisée', duration_minutes = 75,
 			    price_kind = 'range', amount_cents = 13900, max_amount_cents = 16900,
@@ -330,7 +332,7 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 		t.Fatal(err)
 	}
 	var nullablePrice sql.NullInt64
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT name, duration_minutes, price_cents, active
 		FROM service_offerings WHERE tenant_id = $1 AND id = $2`, tenantID, serviceID,
 	).Scan(&name, &duration, &nullablePrice, &active); err != nil {
@@ -343,15 +345,15 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	if err := store.SetCatalogServiceEnabled(t.Context(), tenantID, ownerID, location.ID, serviceID, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			UPDATE catalog_items SET name = 'Révision toujours liée', updated_by_user_id = $2
 			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+	if err := fixtures.QueryRow(t.Context(), `SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
 		t.Fatal(err)
 	}
 	if active {
@@ -367,14 +369,14 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	if _, err := store.LinkCatalogService(t.Context(), tenantID, ownerID, location.ID, catalogItemID); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(t.Context(), `
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(t.Context(), `
 			UPDATE catalog_items
 			SET archived_at = now(), archived_by_user_id = $2, updated_by_user_id = $2
 			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID); err != nil {
 			return err
 		}
-		if err := tx.QueryRowContext(t.Context(), `
+		if err := tx.QueryRow(t.Context(), `
 			SELECT active FROM service_offerings WHERE tenant_id = $1 AND id = $2`,
 			tenantID, serviceID,
 		).Scan(&active); err != nil {
@@ -383,7 +385,7 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 		if active {
 			return errors.New("archived catalog item left service active")
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			UPDATE catalog_items
 			SET archived_at = NULL, archived_by_user_id = NULL, updated_by_user_id = $2
 			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID)
@@ -391,7 +393,7 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+	if err := fixtures.QueryRow(t.Context(), `SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
 		t.Fatal(err)
 	}
 	if !active {
@@ -400,20 +402,20 @@ func TestCatalogServicesStaySynchronizedWithLocationScheduling(t *testing.T) {
 
 	// Removing this site from the catalog scope preserves the link and history,
 	// but PostgreSQL makes it non-bookable immediately.
-	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(t.Context(), `
+	if err := runtime.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(t.Context(), `
 			UPDATE catalog_items SET location_scope = 'selected', updated_by_user_id = $2
 			WHERE tenant_id = $1 AND id = $3`, tenantID, ownerID, catalogItemID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO catalog_item_locations (tenant_id, catalog_item_id, location_id)
 			VALUES ($1, $2, $3)`, tenantID, catalogItemID, otherLocation.ID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixtures.QueryRow(`SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
+	if err := fixtures.QueryRow(t.Context(), `SELECT active FROM service_offerings WHERE id = $1`, serviceID).Scan(&active); err != nil {
 		t.Fatal(err)
 	}
 	if active {
@@ -446,7 +448,7 @@ func TestLocationContactAssistantToolTrustsScopeAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 		    tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`, tenantID, memberID, location.ID, ownerID); err != nil {
@@ -485,7 +487,7 @@ func TestLocationContactAssistantToolTrustsScopeAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var email string
-	if err := fixtures.QueryRow(`SELECT email FROM locations WHERE id = $1`, location.ID).Scan(&email); err != nil {
+	if err := fixtures.QueryRow(t.Context(), `SELECT email FROM locations WHERE id = $1`, location.ID).Scan(&email); err != nil {
 		t.Fatal(err)
 	}
 	if email != "after@garage.fr" {
@@ -505,7 +507,7 @@ func TestLocationContactAssistantToolTrustsScopeAndIsIdempotent(t *testing.T) {
 func createUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var userID string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User')
 		RETURNING id`, email).Scan(&userID); err != nil {
@@ -517,15 +519,15 @@ func createUser(t *testing.T, database *db.DB, email string) string {
 func createTenant(t *testing.T, database *db.DB, ownerID string) string {
 	t.Helper()
 	var tenantID string
-	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx *sql.Tx, id string) error {
+	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx pgx.Tx, id string) error {
 		tenantID = id
-		if _, err := tx.ExecContext(t.Context(), `
+		if _, err := tx.Exec(t.Context(), `
 			INSERT INTO tenants (id, slug, name)
 			VALUES ($1::uuid, 'tenant-' || left(replace($1::text, '-', ''), 12), 'Garage')`, id,
 		); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'owner')`, id, ownerID)
 		return err
@@ -544,7 +546,7 @@ func addMembership(
 	role string,
 ) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, $3)`, tenantID, userID, role); err != nil {
 		t.Fatal(err)

@@ -1,10 +1,11 @@
 package catalog_test
 
 import (
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/features/catalog"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -142,22 +143,18 @@ func TestCatalogImportStagesPublishesAndRollsBack(t *testing.T) {
 	if imported.Status != "ready" || imported.ValidRows != 1 || imported.AmbiguousRows != 1 || imported.RejectedRows != 1 {
 		t.Fatalf("staged import = %#v", imported)
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE catalog_imports SET source_filename = 'rewritten.csv'
 		WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, imported.ID); err == nil {
 		t.Fatal("database unexpectedly allowed import audit evidence to change")
 	}
-	if err := fixture.runtime.WithinTenantUser(t.Context(), fixture.tenantID, fixture.ownerID, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(t.Context(), `
+	if err := fixture.runtime.WithinTenantUser(t.Context(), fixture.tenantID, fixture.ownerID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(), `
 			DELETE FROM catalog_imports WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, imported.ID)
 		if err != nil {
 			return err
 		}
-		deleted, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if deleted != 0 {
+		if deleted := result.RowsAffected(); deleted != 0 {
 			t.Fatalf("runtime deleted %d import audit rows", deleted)
 		}
 		return nil
@@ -260,9 +257,9 @@ func TestReplaceArchivesOnlySingleLocationItems(t *testing.T) {
 
 func TestPostgreSQLRejectsInvalidScopeAndPrice(t *testing.T) {
 	fixture := newCatalogFixture(t)
-	err := fixture.storeDBTransaction(t, func(tx *sql.Tx) error {
+	err := fixture.storeDBTransaction(t, func(tx pgx.Tx) error {
 		var itemID string
-		if err := tx.QueryRowContext(t.Context(), `
+		if err := tx.QueryRow(t.Context(), `
 			INSERT INTO catalog_items (
 			    tenant_id, kind, name, price_kind, amount_cents,
 			    tax_basis, vat_basis_points, location_scope,
@@ -272,7 +269,7 @@ func TestPostgreSQLRejectsInvalidScopeAndPrice(t *testing.T) {
 			RETURNING id::text`, fixture.tenantID, fixture.ownerID).Scan(&itemID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO catalog_item_locations (tenant_id, catalog_item_id, location_id)
 			VALUES ($1, $2, $3)`, fixture.tenantID, itemID, fixture.locationA)
 		return err
@@ -281,8 +278,8 @@ func TestPostgreSQLRejectsInvalidScopeAndPrice(t *testing.T) {
 		t.Fatal("quote with an amount unexpectedly committed")
 	}
 
-	err = fixture.storeDBTransaction(t, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	err = fixture.storeDBTransaction(t, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO catalog_items (
 			    tenant_id, kind, name, price_kind, amount_cents,
 			    tax_basis, vat_basis_points, location_scope,
@@ -310,12 +307,12 @@ func newCatalogFixture(t *testing.T) catalogFixture {
 	return fixture
 }
 
-func (fixture catalogFixture) storeDBTransaction(t *testing.T, fn func(*sql.Tx) error) error {
+func (fixture catalogFixture) storeDBTransaction(t *testing.T, fn func(pgx.Tx) error) error {
 	t.Helper()
 	return fixture.storeWithin(t, fn)
 }
 
-func (fixture catalogFixture) storeWithin(t *testing.T, fn func(*sql.Tx) error) error {
+func (fixture catalogFixture) storeWithin(t *testing.T, fn func(pgx.Tx) error) error {
 	t.Helper()
 	// Use the runtime role through the same transaction-scoped identity as the
 	// application store, so FORCE RLS and deferred constraints are both tested.
@@ -325,7 +322,7 @@ func (fixture catalogFixture) storeWithin(t *testing.T, fn func(*sql.Tx) error) 
 func catalogInsertID(t *testing.T, database *db.DB, query string, args ...any) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(query, args...).Scan(&id); err != nil {
+	if err := database.QueryRow(t.Context(), query, args...).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -333,7 +330,7 @@ func catalogInsertID(t *testing.T, database *db.DB, query string, args ...any) s
 
 func catalogExec(t *testing.T, database *db.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := database.Exec(query, args...); err != nil {
+	if _, err := database.Exec(t.Context(), query, args...); err != nil {
 		t.Fatal(err)
 	}
 }

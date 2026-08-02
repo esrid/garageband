@@ -200,10 +200,6 @@ func attentionSummary(count int) string {
 	return strconv.Itoa(count) + " appels demandent votre attention"
 }
 
-func noticeTitle(string) string { return "Action impossible pour le moment" }
-
-func noticeColor(string) string { return "alert-warning" }
-
 // Label is what to call this caller on screen: the customer when the agent
 // recognised them, the number otherwise, and a plain statement when the number
 // was withheld.

@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/ui"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrForbidden = errors.New("appointment management is forbidden")
@@ -74,9 +76,9 @@ func (s *Store) Availability(
 	resourceIDs []string,
 	dateValue string,
 ) (result AvailabilityResult, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		var timezoneName string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT timezone, availability_schedule_enabled FROM locations
 			WHERE tenant_id = $1 AND id = $2 AND status = 'active'
 			  AND app_current_user_can_access_location(id)`, tenantID, locationID,
@@ -92,7 +94,7 @@ func (s *Store) Availability(
 			return &FieldError{Field: FieldDate, Message: "Choisissez une date valide."}
 		}
 		var duration, before, after int
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT duration_minutes, buffer_before_minutes, buffer_after_minutes
 			FROM service_offerings
 			WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active`,
@@ -110,7 +112,7 @@ func (s *Store) Availability(
 		result.AutoAllocated = len(requirements) != 0
 		if !result.AutoAllocated {
 			var resourceCount int
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				SELECT count(*) FROM bookable_resources
 				WHERE tenant_id = $1 AND location_id = $2 AND id::text = ANY($3::text[]) AND active`,
 				tenantID, locationID, resourceIDs,
@@ -126,7 +128,7 @@ func (s *Store) Availability(
 		if !result.ScheduleConfigured {
 			return nil
 		}
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (
 			    SELECT 1 FROM location_opening_hours
 			    WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
@@ -139,7 +141,7 @@ func (s *Store) Availability(
 		}
 
 		totalMinutes := duration + before + after
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			WITH location_context AS (
 			    SELECT timezone FROM locations
 			    WHERE tenant_id = $1 AND id = $2
@@ -205,15 +207,16 @@ func (s *Store) Availability(
 		if err != nil {
 			return err
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var slot AvailabilitySlot
 			if err := rows.Scan(&slot.StartsAt, &slot.EndsAt); err != nil {
-				return errors.Join(err, rows.Close())
+				return err
 			}
 			slot.StartsAt, slot.EndsAt = slot.StartsAt.In(zone), slot.EndsAt.In(zone)
 			result.Slots = append(result.Slots, slot)
 		}
-		return errors.Join(rows.Err(), rows.Close())
+		return rows.Err()
 	})
 	return result, err
 }
@@ -231,7 +234,7 @@ func (s *Store) Day(
 	locationID string,
 	dateValue string,
 ) (page Day, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		organization, locations, location, err := loadLocationContext(
 			ctx, tx, tenantID, locationID,
 		)
@@ -247,7 +250,7 @@ func (s *Store) Day(
 
 		start := page.Date
 		end := start.AddDate(0, 0, 1)
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT appointment.id,
 			       appointment.starts_at,
 			       appointment.ends_at,
@@ -309,7 +312,7 @@ func (s *Store) Day(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+		defer rows.Close()
 		for rows.Next() {
 			var appointment Appointment
 			var customerID sql.NullString
@@ -339,9 +342,9 @@ func (s *Store) Form(
 	customerID string,
 	locationID string,
 ) (page FormPage, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if appointmentID != "" {
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				SELECT location_id::text
 				FROM appointments
 				WHERE tenant_id = $1 AND id = $2
@@ -380,7 +383,7 @@ func (s *Store) Form(
 			var startsAt time.Time
 			var customer, vehicle, service, resource sql.NullString
 			var status string
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				SELECT appointment.customer_id::text,
 				       COALESCE(
 				           NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
@@ -415,7 +418,7 @@ func (s *Store) Form(
 			page.Values.VehicleID = vehicle.String
 			page.Values.ServiceID = service.String
 			page.Values.ResourceID = resource.String
-			resourceRows, err := tx.QueryContext(ctx, `
+			resourceRows, err := tx.Query(ctx, `
 				SELECT resource_id::text
 				FROM appointment_resource_reservations
 				WHERE tenant_id = $1 AND appointment_id = $2
@@ -423,14 +426,8 @@ func (s *Store) Form(
 			if err != nil {
 				return err
 			}
-			for resourceRows.Next() {
-				var resourceID string
-				if err := resourceRows.Scan(&resourceID); err != nil {
-					return errors.Join(err, resourceRows.Close())
-				}
-				page.Values.ResourceIDs = append(page.Values.ResourceIDs, resourceID)
-			}
-			if err := errors.Join(resourceRows.Err(), resourceRows.Close()); err != nil {
+			page.Values.ResourceIDs, err = pgx.CollectRows(resourceRows, pgx.RowTo[string])
+			if err != nil {
 				return err
 			}
 			if len(page.Values.ResourceIDs) == 0 && resource.Valid {
@@ -466,9 +463,9 @@ func (s *Store) Save(
 	appointmentID string,
 	input SaveInput,
 ) (date string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		var timezoneName string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT timezone
 			FROM locations
 			WHERE tenant_id = $1 AND id = $2 AND status = 'active'
@@ -493,7 +490,7 @@ func (s *Store) Save(
 			return err
 		}
 		var duration, before, after int
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT duration_minutes, buffer_before_minutes, buffer_after_minutes
 			FROM service_offerings
 			WHERE tenant_id = $1 AND location_id = $2 AND id = $3 AND active`,
@@ -526,7 +523,7 @@ func (s *Store) Save(
 		resourceName := strings.Join(resourceNames, ", ")
 
 		if appointmentID == "" {
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				INSERT INTO appointments (
 				    tenant_id, location_id, customer_id, vehicle_id, service_id,
 				    resource_id, starts_at, ends_at, source, customer_note
@@ -555,14 +552,14 @@ func (s *Store) Save(
 			return nil
 		}
 
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			DELETE FROM appointment_resource_reservations
 			WHERE tenant_id = $1 AND appointment_id = $2`, tenantID, appointmentID); err != nil {
 			return err
 		}
 
 		var appointmentStatus string
-		err = tx.QueryRowContext(ctx, `
+		err = tx.QueryRow(ctx, `
 			UPDATE appointments
 			SET service_id = $1, resource_id = $2, starts_at = $3, ends_at = $4,
 			    customer_note = NULLIF($5, ''), updated_at = now()
@@ -619,12 +616,12 @@ func selectedResourceIDs(input SaveInput) []string {
 
 func loadResourceRequirements(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	serviceID string,
 ) (requirements []resourceRequirement, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT resource_kind, quantity
 		FROM service_resource_requirements
 		WHERE tenant_id = $1 AND location_id = $2 AND service_id = $3
@@ -632,19 +629,12 @@ func loadResourceRequirements(
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var requirement resourceRequirement
-		if err := rows.Scan(&requirement.Kind, &requirement.Quantity); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		requirements = append(requirements, requirement)
-	}
-	return requirements, errors.Join(rows.Err(), rows.Close())
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[resourceRequirement])
 }
 
 func allocateRequiredResources(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	appointmentID string,
@@ -653,7 +643,7 @@ func allocateRequiredResources(
 	requirements []resourceRequirement,
 ) (resourceIDs []string, names []string, err error) {
 	for _, requirement := range requirements {
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT resource.id::text, resource.name
 			FROM bookable_resources resource
 			WHERE resource.tenant_id = $1
@@ -681,13 +671,15 @@ func allocateRequiredResources(
 		for rows.Next() {
 			var resourceID, name string
 			if err := rows.Scan(&resourceID, &name); err != nil {
-				return nil, nil, errors.Join(err, rows.Close())
+				rows.Close()
+				return nil, nil, err
 			}
 			resourceIDs = append(resourceIDs, resourceID)
 			names = append(names, name)
 			found++
 		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			return nil, nil, err
 		}
 		if found != requirement.Quantity {
@@ -703,7 +695,7 @@ func allocateRequiredResources(
 
 func lockSelectedResources(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	resourceIDs []string,
@@ -711,7 +703,7 @@ func lockSelectedResources(
 	if len(resourceIDs) == 0 {
 		return nil, &FieldError{Field: FieldResource, Message: "Choisissez au moins une ressource."}
 	}
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT name
 		FROM bookable_resources
 		WHERE tenant_id = $1 AND location_id = $2
@@ -721,14 +713,8 @@ func lockSelectedResources(
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		names = append(names, name)
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+	names, err = pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
 		return nil, err
 	}
 	if len(names) != len(resourceIDs) {
@@ -739,7 +725,7 @@ func lockSelectedResources(
 
 func insertAppointmentResources(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	appointmentID string,
@@ -748,7 +734,7 @@ func insertAppointmentResources(
 	endsAt time.Time,
 	status string,
 ) error {
-	_, err := tx.ExecContext(ctx, `
+	_, err := tx.Exec(ctx, `
 		INSERT INTO appointment_resource_reservations (
 		    tenant_id, location_id, appointment_id, resource_id,
 		    starts_at, ends_at, status
@@ -772,10 +758,10 @@ func (s *Store) Cancel(
 	userID string,
 	appointmentID string,
 ) (date string, locationID string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		var startsAt time.Time
 		var timezoneName, status string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT appointment.starts_at, location.timezone,
 			       appointment.location_id::text, appointment.status
 			FROM appointments appointment
@@ -792,7 +778,7 @@ func (s *Store) Cancel(
 			return ErrForbidden
 		}
 		if status != "cancelled" {
-			result, err := tx.ExecContext(ctx, `
+			result, err := tx.Exec(ctx, `
 				UPDATE appointments
 				SET status = 'cancelled', cancelled_at = now(), updated_at = now()
 				WHERE tenant_id = $1 AND id = $2`, tenantID, appointmentID,
@@ -800,11 +786,7 @@ func (s *Store) Cancel(
 			if err != nil {
 				return err
 			}
-			affected, err := result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if affected != 1 {
+			if result.RowsAffected() != 1 {
 				return sql.ErrNoRows
 			}
 		}
@@ -820,16 +802,16 @@ func (s *Store) Cancel(
 
 func loadLocationContext(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	requestedID string,
 ) (organization string, options []Option, selected locationRow, err error) {
-	if err = tx.QueryRowContext(
+	if err = tx.QueryRow(
 		ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID,
 	).Scan(&organization); err != nil {
 		return "", nil, locationRow{}, err
 	}
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, name, timezone
 		FROM locations
 		WHERE tenant_id = $1 AND status = 'active'
@@ -839,7 +821,7 @@ func loadLocationContext(
 	if err != nil {
 		return "", nil, locationRow{}, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer rows.Close()
 	var found bool
 	for rows.Next() {
 		var row locationRow
@@ -868,11 +850,11 @@ func loadLocationContext(
 
 func loadCustomer(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	customerID string,
 ) (customer CustomerRef, err error) {
-	err = tx.QueryRowContext(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id::text,
 		       COALESCE(
 		           NULLIF(btrim(concat_ws(' ', first_name, last_name)), ''),
@@ -887,11 +869,11 @@ func loadCustomer(
 
 func loadVehicleOptions(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	customerID string,
 ) (options []Option, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id::text,
 		       btrim(concat_ws(' ', registration_plate, make, model))
 		FROM vehicles
@@ -901,24 +883,16 @@ func loadVehicleOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	for rows.Next() {
-		var option Option
-		if err := rows.Scan(&option.Value, &option.Label); err != nil {
-			return nil, err
-		}
-		options = append(options, option)
-	}
-	return options, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Option])
 }
 
 func loadServiceOptions(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 ) (options []Option, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, name, duration_minutes
 		FROM service_offerings
 		WHERE tenant_id = $1 AND location_id = $2 AND active
@@ -927,7 +901,7 @@ func loadServiceOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer rows.Close()
 	for rows.Next() {
 		var option Option
 		var duration int
@@ -942,11 +916,11 @@ func loadServiceOptions(
 
 func loadResourceOptions(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 ) (options []Option, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, name
 		FROM bookable_resources
 		WHERE tenant_id = $1 AND location_id = $2 AND active
@@ -955,26 +929,18 @@ func loadResourceOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	for rows.Next() {
-		var option Option
-		if err := rows.Scan(&option.Value, &option.Label); err != nil {
-			return nil, err
-		}
-		options = append(options, option)
-	}
-	return options, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Option])
 }
 
 func requireVehicle(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	customerID string,
 	vehicleID string,
 ) error {
 	var exists bool
-	err := tx.QueryRowContext(ctx, `
+	err := tx.QueryRow(ctx, `
 		SELECT true
 		FROM vehicles
 		WHERE tenant_id = $1 AND id = $2 AND customer_id = $3

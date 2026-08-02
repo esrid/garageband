@@ -2,11 +2,11 @@ package customers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"regexp"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -27,8 +27,8 @@ func (s *Store) Search(
 	userID string,
 	query string,
 ) (page Page, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
-		if err := tx.QueryRowContext(
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
 			ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID,
 		).Scan(&page.Organization); err != nil {
 			return err
@@ -45,7 +45,7 @@ func (s *Store) Search(
 		plate := normalizePlateSearch(trimmed)
 		vin := normalizeVINSearch(trimmed)
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT customer.id, customer.home_location_id,
 			       COALESCE(customer.first_name, ''),
 			       COALESCE(customer.last_name, ''),
@@ -135,15 +135,8 @@ func (s *Store) Search(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
-		for rows.Next() {
-			customer, err := scanSearchCustomer(rows)
-			if err != nil {
-				return err
-			}
-			page.Customers = append(page.Customers, customer)
-		}
-		return rows.Err()
+		page.Customers, err = pgx.CollectRows(rows, scanSearchCustomer)
+		return err
 	})
 	return page, err
 }
@@ -154,14 +147,14 @@ func (s *Store) Profile(
 	userID string,
 	customerID string,
 ) (profile Profile, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
-		if err := tx.QueryRowContext(
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
 			ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID,
 		).Scan(&profile.Organization); err != nil {
 			return err
 		}
 
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT customer.id, customer.home_location_id,
 			       COALESCE(customer.first_name, ''),
 			       COALESCE(customer.last_name, ''),
@@ -201,7 +194,7 @@ func (s *Store) Profile(
 		}
 		profile.CanEdit = !profile.Customer.Shared
 
-		vehicleRows, err := tx.QueryContext(ctx, `
+		vehicleRows, err := tx.Query(ctx, `
 			SELECT id, COALESCE(registration_plate, ''),
 			       COALESCE(make, ''), COALESCE(model, ''),
 			       COALESCE(EXTRACT(YEAR FROM first_registration_on)::INTEGER, 0),
@@ -212,24 +205,12 @@ func (s *Store) Profile(
 		if err != nil {
 			return err
 		}
-		for vehicleRows.Next() {
-			var vehicle ProfileVehicle
-			if err := vehicleRows.Scan(
-				&vehicle.ID, &vehicle.Plate, &vehicle.Make, &vehicle.Model,
-				&vehicle.Year, &vehicle.VIN,
-			); err != nil {
-				if closeErr := vehicleRows.Close(); closeErr != nil {
-					return errors.Join(err, closeErr)
-				}
-				return err
-			}
-			profile.Vehicles = append(profile.Vehicles, vehicle)
-		}
-		if err := errors.Join(vehicleRows.Err(), vehicleRows.Close()); err != nil {
+		profile.Vehicles, err = pgx.CollectRows(vehicleRows, pgx.RowToStructByPos[ProfileVehicle])
+		if err != nil {
 			return err
 		}
 
-		eventRows, err := tx.QueryContext(ctx, `
+		eventRows, err := tx.Query(ctx, `
 			SELECT event_id, event_kind, event_at, title, vehicle_label,
 			       status, location_name, authored_here, amount_cents, currency
 			FROM (
@@ -278,25 +259,12 @@ func (s *Store) Profile(
 		if err != nil {
 			return err
 		}
-		for eventRows.Next() {
-			var event Event
-			if err := eventRows.Scan(
-				&event.ID, &event.Kind, &event.At, &event.Title,
-				&event.VehicleLabel, &event.Status, &event.LocationName,
-				&event.AuthoredHere, &event.AmountCents, &event.Currency,
-			); err != nil {
-				if closeErr := eventRows.Close(); closeErr != nil {
-					return errors.Join(err, closeErr)
-				}
-				return err
-			}
-			profile.Timeline = append(profile.Timeline, event)
-		}
-		if err := errors.Join(eventRows.Err(), eventRows.Close()); err != nil {
+		profile.Timeline, err = pgx.CollectRows(eventRows, pgx.RowToStructByPos[Event])
+		if err != nil {
 			return err
 		}
 
-		memoryRows, err := tx.QueryContext(ctx, `
+		memoryRows, err := tx.Query(ctx, `
 			SELECT key,
 			       CASE jsonb_typeof(value)
 			           WHEN 'string' THEN value #>> '{}'
@@ -309,22 +277,13 @@ func (s *Store) Profile(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, memoryRows.Close()) }()
-		for memoryRows.Next() {
-			var memory Memory
-			if err := memoryRows.Scan(
-				&memory.Key, &memory.Value, &memory.Status, &memory.Confidence,
-			); err != nil {
-				return err
-			}
-			profile.Memories = append(profile.Memories, memory)
-		}
-		return memoryRows.Err()
+		profile.Memories, err = pgx.CollectRows(memoryRows, pgx.RowToStructByPos[Memory])
+		return err
 	})
 	return profile, err
 }
 
-func scanSearchCustomer(row interface{ Scan(...any) error }) (Customer, error) {
+func scanSearchCustomer(row pgx.CollectableRow) (Customer, error) {
 	var customer Customer
 	var vehiclesJSON []byte
 	if err := row.Scan(

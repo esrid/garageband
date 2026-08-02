@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/features/accesscontrol"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
@@ -192,7 +194,7 @@ func findMember(
 func createUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User') RETURNING id`, email,
 	).Scan(&id); err != nil {
@@ -204,14 +206,14 @@ func createUser(t *testing.T, database *db.DB, email string) string {
 func createTenant(t *testing.T, database *db.DB, ownerID string) string {
 	t.Helper()
 	var id string
-	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx *sql.Tx, tenantID string) error {
+	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx pgx.Tx, tenantID string) error {
 		id = tenantID
-		if _, err := tx.ExecContext(t.Context(), `
+		if _, err := tx.Exec(t.Context(), `
 			INSERT INTO tenants (id, slug, name)
 			VALUES ($1, 'access-control', 'Access Garage')`, tenantID); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'owner')`, tenantID, ownerID)
 		return err
@@ -224,7 +226,7 @@ func createTenant(t *testing.T, database *db.DB, ownerID string) string {
 
 func addMembership(t *testing.T, database *db.DB, tenantID, userID, role string) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, $3)`, tenantID, userID, role); err != nil {
 		t.Fatal(err)
@@ -234,7 +236,7 @@ func addMembership(t *testing.T, database *db.DB, tenantID, userID, role string)
 func createLocation(t *testing.T, database *db.DB, tenantID, slug string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO locations (tenant_id, slug, name)
 		VALUES ($1, $2, $2) RETURNING id`, tenantID, slug,
 	).Scan(&id); err != nil {
@@ -246,7 +248,7 @@ func createLocation(t *testing.T, database *db.DB, tenantID, slug string) string
 func createCustomer(t *testing.T, database *db.DB, tenantID, locationID string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO customers (
 			tenant_id, home_location_id, first_name, last_name
 		) VALUES ($1, $2, 'Alice', 'Martin') RETURNING id`,

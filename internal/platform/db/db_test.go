@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
 )
@@ -17,7 +19,7 @@ func TestOpenRequiresDatabaseURL(t *testing.T) {
 
 func TestExecOne(t *testing.T) {
 	d := dbtest.Open(t)
-	if _, err := d.Exec(`CREATE TABLE exec_one_test (id UUID PRIMARY KEY DEFAULT uuidv7())`); err != nil {
+	if _, err := d.Exec(t.Context(), `CREATE TABLE exec_one_test (id UUID PRIMARY KEY DEFAULT uuidv7())`); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.ExecOne(t.Context(), `INSERT INTO exec_one_test DEFAULT VALUES`); err != nil {
@@ -37,9 +39,9 @@ func TestWithinTenant(t *testing.T) {
 	const tenantID = "0198a421-8b51-7f34-a723-4c1b49a4174e"
 
 	var got string
-	err := d.WithinTenant(t.Context(), tenantID, func(tx *sql.Tx) error {
+	err := d.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(
-			`SELECT current_setting('app.current_tenant_id')`,
+			t.Context(), `SELECT current_setting('app.current_tenant_id')`,
 		).Scan(&got)
 	})
 	if err != nil {
@@ -52,7 +54,7 @@ func TestWithinTenant(t *testing.T) {
 
 func TestWithinTenantRequiresID(t *testing.T) {
 	d := dbtest.Open(t)
-	if err := d.WithinTenant(t.Context(), "", func(*sql.Tx) error {
+	if err := d.WithinTenant(t.Context(), "", func(pgx.Tx) error {
 		return nil
 	}); !errors.Is(err, db.ErrTenantRequired) {
 		t.Fatalf("got %v, want ErrTenantRequired", err)
@@ -64,9 +66,9 @@ func TestWithinUser(t *testing.T) {
 	const userID = "0198a421-8b51-7f34-a723-4c1b49a4174e"
 
 	var got string
-	err := d.WithinUser(t.Context(), userID, func(tx *sql.Tx) error {
+	err := d.WithinUser(t.Context(), userID, func(tx pgx.Tx) error {
 		return tx.QueryRow(
-			`SELECT current_setting('app.current_user_id')`,
+			t.Context(), `SELECT current_setting('app.current_user_id')`,
 		).Scan(&got)
 	})
 	if err != nil {
@@ -79,7 +81,7 @@ func TestWithinUser(t *testing.T) {
 
 func TestWithinUserRequiresID(t *testing.T) {
 	d := dbtest.Open(t)
-	if err := d.WithinUser(t.Context(), "", func(*sql.Tx) error {
+	if err := d.WithinUser(t.Context(), "", func(pgx.Tx) error {
 		return nil
 	}); !errors.Is(err, db.ErrUserRequired) {
 		t.Fatalf("got %v, want ErrUserRequired", err)
@@ -92,8 +94,8 @@ func TestWithinTenantUser(t *testing.T) {
 	const userID = "0198a421-8b51-7f34-a723-4c1b49a4174f"
 
 	var gotTenant, gotUser string
-	err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
-		return tx.QueryRow(`
+	err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `
 			SELECT current_setting('app.current_tenant_id'),
 			       current_setting('app.current_user_id')`,
 		).Scan(&gotTenant, &gotUser)
@@ -111,7 +113,7 @@ func TestWithinTenantUser(t *testing.T) {
 
 func TestWithinTenantUserRequiresPrincipal(t *testing.T) {
 	d := dbtest.Open(t)
-	callback := func(*sql.Tx) error { return nil }
+	callback := func(pgx.Tx) error { return nil }
 	if err := d.WithinTenantUser(
 		t.Context(), "", "0198a421-8b51-7f34-a723-4c1b49a4174f", callback,
 	); !errors.Is(err, db.ErrTenantRequired) {
@@ -123,7 +125,7 @@ func TestWithinTenantUserRequiresPrincipal(t *testing.T) {
 		t.Fatalf("missing user: got %v, want ErrUserRequired", err)
 	}
 	if err := d.WithinNewTenantUser(
-		t.Context(), "", func(*sql.Tx, string) error { return nil },
+		t.Context(), "", func(pgx.Tx, string) error { return nil },
 	); !errors.Is(err, db.ErrUserRequired) {
 		t.Fatalf("new tenant missing user: got %v, want ErrUserRequired", err)
 	}

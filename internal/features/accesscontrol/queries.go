@@ -8,38 +8,40 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/db"
 )
 
 var ErrForbidden = errors.New("access control operation is forbidden")
 
 type LocationAssignment struct {
-	ID         string
-	TenantID   string
-	UserID     string
-	LocationID string
-	AssignedBy string
-	AssignedAt time.Time
-	RevokedBy  string
-	RevokedAt  sql.NullTime
+	ID         string       `db:"id"`
+	TenantID   string       `db:"tenant_id"`
+	UserID     string       `db:"user_id"`
+	LocationID string       `db:"location_id"`
+	AssignedBy string       `db:"assigned_by"`
+	AssignedAt time.Time    `db:"assigned_at"`
+	RevokedBy  string       `db:"revoked_by"`
+	RevokedAt  sql.NullTime `db:"revoked_at"`
 }
 
 type CustomerGrant struct {
-	ID                  string
-	TenantID            string
-	CustomerID          string
-	SourceLocationID    string
-	ReceivingLocationID string
-	GrantedBy           string
-	GrantedAt           time.Time
-	RevokedBy           string
-	RevokedAt           sql.NullTime
+	ID                  string       `db:"id"`
+	TenantID            string       `db:"tenant_id"`
+	CustomerID          string       `db:"customer_id"`
+	SourceLocationID    string       `db:"source_location_id"`
+	ReceivingLocationID string       `db:"receiving_location_id"`
+	GrantedBy           string       `db:"granted_by"`
+	GrantedAt           time.Time    `db:"granted_at"`
+	RevokedBy           string       `db:"revoked_by"`
+	RevokedAt           sql.NullTime `db:"revoked_at"`
 }
 
 type TeamLocation struct {
-	ID     string
-	Name   string
-	Active bool
+	ID     string `db:"id"`
+	Name   string `db:"name"`
+	Active bool   `db:"active"`
 }
 
 type TeamMember struct {
@@ -67,8 +69,8 @@ func (s *Store) TeamOverview(
 	tenantID string,
 	actorUserID string,
 ) (overview TeamOverview, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) (returnErr error) {
-		if err := tx.QueryRowContext(ctx, `
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
 			SELECT tenant.name, membership.role
 			FROM tenants tenant
 			JOIN tenant_memberships membership
@@ -80,27 +82,20 @@ func (s *Store) TeamOverview(
 		}
 		overview.CanManage = overview.ActorRole == "owner" || overview.ActorRole == "admin"
 
-		locationRows, err := tx.QueryContext(ctx, `
-			SELECT id, name, status = 'active'
+		locationRows, err := tx.Query(ctx, `
+			SELECT id, name, status = 'active' AS active
 			FROM locations
 			WHERE tenant_id = $1
 			ORDER BY (status = 'active') DESC, name, id`, tenantID)
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, locationRows.Close()) }()
-		for locationRows.Next() {
-			var location TeamLocation
-			if err := locationRows.Scan(&location.ID, &location.Name, &location.Active); err != nil {
-				return err
-			}
-			overview.Locations = append(overview.Locations, location)
-		}
-		if err := locationRows.Err(); err != nil {
+		overview.Locations, err = pgx.CollectRows(locationRows, pgx.RowToStructByName[TeamLocation])
+		if err != nil {
 			return err
 		}
 
-		memberRows, err := tx.QueryContext(ctx, `
+		memberRows, err := tx.Query(ctx, `
 			SELECT membership.user_id, user_account.name, user_account.email,
 			       membership.role,
 			       COALESCE(jsonb_agg(assignment.location_id::text)
@@ -120,7 +115,7 @@ func (s *Store) TeamOverview(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, memberRows.Close()) }()
+		defer memberRows.Close()
 		for memberRows.Next() {
 			var member TeamMember
 			var locationIDsJSON []byte
@@ -148,12 +143,12 @@ func (s *Store) ReplaceLocationAssignments(
 	targetUserID string,
 	desiredLocationIDs []string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
 		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
 			return err
 		}
 		var targetRole string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT role FROM tenant_memberships
 			WHERE tenant_id = $1 AND user_id = $2`, tenantID, targetUserID,
 		).Scan(&targetRole); err != nil {
@@ -169,7 +164,7 @@ func (s *Store) ReplaceLocationAssignments(
 				continue
 			}
 			var exists bool
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				SELECT EXISTS (
 					SELECT 1 FROM locations
 					WHERE tenant_id = $1 AND id = $2
@@ -183,7 +178,7 @@ func (s *Store) ReplaceLocationAssignments(
 			desired[locationID] = struct{}{}
 		}
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT id, location_id
 			FROM user_location_assignments
 			WHERE tenant_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
@@ -195,15 +190,15 @@ func (s *Store) ReplaceLocationAssignments(
 		for rows.Next() {
 			var assignmentID, locationID string
 			if err := rows.Scan(&assignmentID, &locationID); err != nil {
-				if closeErr := rows.Close(); closeErr != nil {
-					return errors.Join(err, closeErr)
-				}
+				rows.Close()
 				return err
 			}
 			current[locationID] = assignmentID
 		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-			return err
+		rowsErr := rows.Err()
+		rows.Close()
+		if rowsErr != nil {
+			return rowsErr
 		}
 
 		for locationID, assignmentID := range current {
@@ -211,7 +206,7 @@ func (s *Store) ReplaceLocationAssignments(
 				continue
 			}
 			var revokedID string
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				UPDATE user_location_assignments
 				SET revoked_by_user_id = $3, revoked_at = now()
 				WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL
@@ -226,7 +221,7 @@ func (s *Store) ReplaceLocationAssignments(
 				continue
 			}
 			var assignmentID string
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				INSERT INTO user_location_assignments (
 					tenant_id, user_id, location_id, assigned_by_user_id
 				) VALUES ($1, $2, $3, $4)
@@ -247,29 +242,42 @@ func (s *Store) AssignLocation(
 	targetUserID string,
 	locationID string,
 ) (assignment LocationAssignment, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
 		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
-			SELECT id, tenant_id, user_id, location_id, assigned_by_user_id,
-			       assigned_at, COALESCE(revoked_by_user_id::text, ''), revoked_at
+		rows, err := tx.Query(ctx, `
+			SELECT id, tenant_id, user_id, location_id,
+			       assigned_by_user_id AS assigned_by,
+			       assigned_at, COALESCE(revoked_by_user_id::text, '') AS revoked_by,
+			       revoked_at
 			FROM user_location_assignments
 			WHERE tenant_id = $1 AND user_id = $2 AND location_id = $3
 			  AND revoked_at IS NULL`, tenantID, targetUserID, locationID)
-		if scanErr := scanAssignment(row, &assignment); scanErr == nil {
+		if err != nil {
+			return err
+		}
+		if a, scanErr := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[LocationAssignment]); scanErr == nil {
+			assignment = a
 			return nil
-		} else if !errors.Is(scanErr, sql.ErrNoRows) {
+		} else if !errors.Is(scanErr, pgx.ErrNoRows) {
 			return scanErr
 		}
-		return scanAssignment(tx.QueryRowContext(ctx, `
+		rows, err = tx.Query(ctx, `
 			INSERT INTO user_location_assignments (
 				tenant_id, user_id, location_id, assigned_by_user_id
 			) VALUES ($1, $2, $3, $4)
-			RETURNING id, tenant_id, user_id, location_id, assigned_by_user_id,
-			          assigned_at, COALESCE(revoked_by_user_id::text, ''), revoked_at`,
+			RETURNING id, tenant_id, user_id, location_id,
+			          assigned_by_user_id AS assigned_by,
+			          assigned_at, COALESCE(revoked_by_user_id::text, '') AS revoked_by,
+			          revoked_at`,
 			tenantID, targetUserID, locationID, actorUserID,
-		), &assignment)
+		)
+		if err != nil {
+			return err
+		}
+		assignment, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[LocationAssignment])
+		return err
 	})
 	return assignment, err
 }
@@ -280,18 +288,25 @@ func (s *Store) RevokeLocationAssignment(
 	actorUserID string,
 	assignmentID string,
 ) (assignment LocationAssignment, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
 		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
 			return err
 		}
-		return scanAssignment(tx.QueryRowContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			UPDATE user_location_assignments
 			SET revoked_by_user_id = $3, revoked_at = now()
 			WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL
-			RETURNING id, tenant_id, user_id, location_id, assigned_by_user_id,
-			          assigned_at, COALESCE(revoked_by_user_id::text, ''), revoked_at`,
+			RETURNING id, tenant_id, user_id, location_id,
+			          assigned_by_user_id AS assigned_by,
+			          assigned_at, COALESCE(revoked_by_user_id::text, '') AS revoked_by,
+			          revoked_at`,
 			tenantID, assignmentID, actorUserID,
-		), &assignment)
+		)
+		if err != nil {
+			return err
+		}
+		assignment, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[LocationAssignment])
+		return err
 	})
 	return assignment, err
 }
@@ -303,24 +318,29 @@ func (s *Store) GrantCustomer(
 	customerID string,
 	receivingLocationID string,
 ) (grant CustomerGrant, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
 		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT id, tenant_id, customer_id, source_location_id,
-			       receiving_location_id, granted_by_user_id, granted_at,
-			       COALESCE(revoked_by_user_id::text, ''), revoked_at
+			       receiving_location_id, granted_by_user_id AS granted_by,
+			       granted_at,
+			       COALESCE(revoked_by_user_id::text, '') AS revoked_by, revoked_at
 			FROM customer_location_grants
 			WHERE tenant_id = $1 AND customer_id = $2
 			  AND receiving_location_id = $3 AND revoked_at IS NULL`,
 			tenantID, customerID, receivingLocationID)
-		if scanErr := scanGrant(row, &grant); scanErr == nil {
+		if err != nil {
+			return err
+		}
+		if g, scanErr := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[CustomerGrant]); scanErr == nil {
+			grant = g
 			return nil
-		} else if !errors.Is(scanErr, sql.ErrNoRows) {
+		} else if !errors.Is(scanErr, pgx.ErrNoRows) {
 			return scanErr
 		}
-		return scanGrant(tx.QueryRowContext(ctx, `
+		rows, err = tx.Query(ctx, `
 			INSERT INTO customer_location_grants (
 				tenant_id, customer_id, source_location_id,
 				receiving_location_id, granted_by_user_id
@@ -330,10 +350,16 @@ func (s *Store) GrantCustomer(
 			FROM customers customer
 			WHERE customer.tenant_id = $1 AND customer.id = $2
 			RETURNING id, tenant_id, customer_id, source_location_id,
-			          receiving_location_id, granted_by_user_id, granted_at,
-			          COALESCE(revoked_by_user_id::text, ''), revoked_at`,
+			          receiving_location_id, granted_by_user_id AS granted_by,
+			          granted_at,
+			          COALESCE(revoked_by_user_id::text, '') AS revoked_by, revoked_at`,
 			tenantID, customerID, receivingLocationID, actorUserID,
-		), &grant)
+		)
+		if err != nil {
+			return err
+		}
+		grant, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[CustomerGrant])
+		return err
 	})
 	return grant, err
 }
@@ -344,31 +370,37 @@ func (s *Store) RevokeCustomerGrant(
 	actorUserID string,
 	grantID string,
 ) (grant CustomerGrant, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
 		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
 			return err
 		}
-		return scanGrant(tx.QueryRowContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			UPDATE customer_location_grants
 			SET revoked_by_user_id = $3, revoked_at = now()
 			WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL
 			RETURNING id, tenant_id, customer_id, source_location_id,
-			          receiving_location_id, granted_by_user_id, granted_at,
-			          COALESCE(revoked_by_user_id::text, ''), revoked_at`,
+			          receiving_location_id, granted_by_user_id AS granted_by,
+			          granted_at,
+			          COALESCE(revoked_by_user_id::text, '') AS revoked_by, revoked_at`,
 			tenantID, grantID, actorUserID,
-		), &grant)
+		)
+		if err != nil {
+			return err
+		}
+		grant, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[CustomerGrant])
+		return err
 	})
 	return grant, err
 }
 
 func requireAdministrator(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	userID string,
 ) error {
 	var allowed bool
-	if err := tx.QueryRowContext(ctx, `
+	if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM tenant_memberships
 			WHERE tenant_id = $1 AND user_id = $2
@@ -381,20 +413,4 @@ func requireAdministrator(
 		return ErrForbidden
 	}
 	return nil
-}
-
-func scanAssignment(row interface{ Scan(...any) error }, assignment *LocationAssignment) error {
-	return row.Scan(
-		&assignment.ID, &assignment.TenantID, &assignment.UserID,
-		&assignment.LocationID, &assignment.AssignedBy, &assignment.AssignedAt,
-		&assignment.RevokedBy, &assignment.RevokedAt,
-	)
-}
-
-func scanGrant(row interface{ Scan(...any) error }, grant *CustomerGrant) error {
-	return row.Scan(
-		&grant.ID, &grant.TenantID, &grant.CustomerID,
-		&grant.SourceLocationID, &grant.ReceivingLocationID,
-		&grant.GrantedBy, &grant.GrantedAt, &grant.RevokedBy, &grant.RevokedAt,
-	)
 }

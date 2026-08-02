@@ -14,6 +14,7 @@ import (
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
 	"github.com/esrid/garageband/internal/platform/llm"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -63,15 +64,15 @@ func TestAssistantPreviewsConfirmsAndAuditsLocationContactChange(t *testing.T) {
 	}
 
 	// Even the fixture/migration role cannot rewrite the immutable evidence.
-	_, err = fixture.fixtures.Exec(`
+	_, err = fixture.fixtures.Exec(t.Context(), `
 		UPDATE assistant_tool_executions SET input = '{"email":"forged@example.com"}'
 		WHERE id = $1`, executionID)
 	assertConstraint(t, err, "assistant_tool_audit_immutable")
-	_, err = fixture.fixtures.Exec(`
+	_, err = fixture.fixtures.Exec(t.Context(), `
 		UPDATE assistant_messages SET content = 'forged' WHERE conversation_id = $1`,
 		conversationID)
 	assertConstraint(t, err, "assistant_message_history_immutable")
-	_, err = fixture.fixtures.Exec(`
+	_, err = fixture.fixtures.Exec(t.Context(), `
 		UPDATE application_tool_receipts SET output = '{"forged":true}'
 		WHERE tenant_id = $1 AND idempotency_key = $2`, fixture.tenantID, executionID)
 	assertConstraint(t, err, "application_tool_receipt_immutable")
@@ -145,7 +146,7 @@ func TestAssistantCanRejectProposalWithoutChangingData(t *testing.T) {
 		t.Fatalf("rejected workspace = %#v", workspace)
 	}
 	var phone sql.NullString
-	if err := fixture.fixtures.QueryRow(`SELECT phone_e164 FROM locations WHERE id = $1`, fixture.locationA).Scan(&phone); err != nil {
+	if err := fixture.fixtures.QueryRow(t.Context(), `SELECT phone_e164 FROM locations WHERE id = $1`, fixture.locationA).Scan(&phone); err != nil {
 		t.Fatal(err)
 	}
 	if phone.Valid {
@@ -167,7 +168,7 @@ func TestAssistantRejectsStalePreviewAndResumesAppliedExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	executionID := workspace.Executions[0].ID
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE locations SET email = 'concurrent@garage.fr',
 		       updated_at = updated_at + interval '1 microsecond'
 		WHERE id = $1`, fixture.locationA); err != nil {
@@ -268,28 +269,28 @@ func TestAssistantReadsOnlyCurrentlyQuotableCatalogPrices(t *testing.T) {
 func TestAssistantSearchesCustomersOnlyInConversationLocation(t *testing.T) {
 	fixture := newAssistantFixture(t)
 	var customerID string
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
 		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
 		fixture.tenantID, fixture.locationA,
 	).Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO vehicles (tenant_id, location_id, customer_id, registration_plate, make, model)
 		VALUES ($1, $2, $3, 'AA-123-AA', 'Renault', 'Clio')`,
 		fixture.tenantID, fixture.locationA, customerID); err != nil {
 		t.Fatal(err)
 	}
 	var otherCustomerID string
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
 		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
 		fixture.tenantID, fixture.locationB,
 	).Scan(&otherCustomerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO vehicles (tenant_id, location_id, customer_id, registration_plate, make, model)
 		VALUES ($1, $2, $3, 'BB-456-BB', 'Peugeot', '208')`,
 		fixture.tenantID, fixture.locationB, otherCustomerID); err != nil {
@@ -338,7 +339,7 @@ func newAssistantFixture(t *testing.T) assistantFixture {
 	ownerID := createAssistantUser(t, fixtures, "assistant-owner@example.com")
 	memberID := createAssistantUser(t, fixtures, "assistant-member@example.com")
 	tenantID := createAssistantTenant(t, fixtures, ownerID)
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, 'member')`, tenantID, memberID); err != nil {
 		t.Fatal(err)
@@ -356,7 +357,7 @@ func newAssistantFixture(t *testing.T) assistantFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 		    tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`, tenantID, memberID, locationA.ID, ownerID); err != nil {
@@ -381,7 +382,7 @@ func newAssistantFixture(t *testing.T) assistantFixture {
 func createAssistantUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User') RETURNING id::text`, email).Scan(&id); err != nil {
 		t.Fatal(err)
@@ -392,14 +393,14 @@ func createAssistantUser(t *testing.T, database *db.DB, email string) string {
 func createAssistantTenant(t *testing.T, database *db.DB, ownerID string) string {
 	t.Helper()
 	var tenantID string
-	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx *sql.Tx, id string) error {
+	err := database.WithinNewTenantUser(t.Context(), ownerID, func(tx pgx.Tx, id string) error {
 		tenantID = id
-		if _, err := tx.ExecContext(t.Context(), `
+		if _, err := tx.Exec(t.Context(), `
 			INSERT INTO tenants (id, slug, name)
 			VALUES ($1::uuid, 'assistant-' || left(replace($1::text, '-', ''), 12), 'Garage Assistant')`, id); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'owner')`, id, ownerID)
 		return err
@@ -413,7 +414,7 @@ func createAssistantTenant(t *testing.T, database *db.DB, ownerID string) string
 func assertLocationEmail(t *testing.T, database *db.DB, locationID string, want string) {
 	t.Helper()
 	var got string
-	if err := database.QueryRow(`SELECT email FROM locations WHERE id = $1`, locationID).Scan(&got); err != nil {
+	if err := database.QueryRow(t.Context(), `SELECT email FROM locations WHERE id = $1`, locationID).Scan(&got); err != nil {
 		t.Fatal(err)
 	}
 	if got != want {

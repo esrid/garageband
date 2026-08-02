@@ -3,9 +3,10 @@ package calls
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -20,13 +21,13 @@ func (s *Store) Inbox(
 	userID string,
 	filter string,
 ) (inbox Inbox, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
-		if err := tx.QueryRowContext(
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
 			ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID,
 		).Scan(&inbox.Organization); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT call.id::text, call.started_at, call.ended_at,
 			       call.direction, call.status,
 			       CASE WHEN call.direction = 'inbound'
@@ -52,17 +53,16 @@ func (s *Store) Inbox(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
-		for rows.Next() {
-			call, err := scanCall(rows)
-			if err != nil {
-				return err
-			}
+		calls, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Call, error) { return scanCall(row) })
+		if err != nil {
+			return err
+		}
+		for _, call := range calls {
 			if filter != FilterNeedsAttention || call.NeedsAttention() {
 				inbox.Calls = append(inbox.Calls, call)
 			}
 		}
-		return rows.Err()
+		return nil
 	})
 	if filter == FilterNeedsAttention {
 		inbox.Filter = filter
@@ -76,13 +76,13 @@ func (s *Store) Transcript(
 	userID string,
 	callID string,
 ) (transcript Transcript, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
-		if err := tx.QueryRowContext(
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
 			ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID,
 		).Scan(&transcript.Organization); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			SELECT call.id::text, call.started_at, call.ended_at,
 			       call.direction, call.status,
 			       CASE WHEN call.direction = 'inbound'
@@ -111,7 +111,7 @@ func (s *Store) Transcript(
 		transcript.Call = call
 		zone := call.StartedAt.Location()
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT speaker, content, occurred_at
 			FROM call_messages
 			WHERE tenant_id = $1 AND call_id = $2
@@ -120,7 +120,7 @@ func (s *Store) Transcript(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+		defer rows.Close()
 		for rows.Next() {
 			var message Message
 			if err := rows.Scan(&message.Speaker, &message.Content, &message.OccurredAt); err != nil {

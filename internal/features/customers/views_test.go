@@ -266,15 +266,6 @@ func TestFormatAmountFollowsFrenchTypography(t *testing.T) {
 	}
 }
 
-func TestFormatDateIsFrenchAndSurvivesAZeroTime(t *testing.T) {
-	if got := formatDate(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)); got != "1 août 2026" {
-		t.Errorf("formatDate() = %q", got)
-	}
-	if got := formatDate(time.Time{}); got != "Date inconnue" {
-		t.Errorf("zero time = %q", got)
-	}
-}
-
 func TestEventLabelsCoverBothKinds(t *testing.T) {
 	repair := Event{Kind: EventRepair, Status: "awaiting_approval"}
 	if got := eventStatusLabel(repair); got != "En attente d'accord" {

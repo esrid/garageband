@@ -2,12 +2,13 @@ package auth_test
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/features/auth"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -230,8 +231,8 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	}
 
 	// PostgreSQL clears active_tenant_id when the backing membership disappears.
-	if err := database.WithinTenant(t.Context(), ownedTenant, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	if err := database.WithinTenant(t.Context(), ownedTenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			DELETE FROM tenant_memberships
 			WHERE tenant_id = $1 AND user_id = $2`, ownedTenant, owner)
 		return err
@@ -258,7 +259,7 @@ func post(handler http.Handler, target string, cookie *http.Cookie) *httptest.Re
 func createTestUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var userID string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User')
 		RETURNING id`, email).Scan(&userID); err != nil {
@@ -270,15 +271,15 @@ func createTestUser(t *testing.T, database *db.DB, email string) string {
 func createWorkspace(t *testing.T, database *db.DB, userID, slug, name string) string {
 	t.Helper()
 	var tenantID string
-	err := database.WithinNewTenant(t.Context(), func(tx *sql.Tx, newTenantID string) error {
+	err := database.WithinNewTenant(t.Context(), func(tx pgx.Tx, newTenantID string) error {
 		tenantID = newTenantID
-		if _, err := tx.ExecContext(t.Context(), `
+		if _, err := tx.Exec(t.Context(), `
 			INSERT INTO tenants (id, slug, name) VALUES ($1, $2, $3)`,
 			newTenantID, slug, name,
 		); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'owner')`, newTenantID, userID)
 		return err

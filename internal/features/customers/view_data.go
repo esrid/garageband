@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/esrid/garageband/internal/ui"
 )
 
 // FieldQuery is the search input name, and therefore the query-string key the
@@ -130,10 +128,6 @@ func vehicleSummary(vehicles []Vehicle) string {
 
 func customerPath(customer Customer) string { return "/customers/" + customer.ID }
 
-func noticeTitle(string) string { return "Action impossible pour le moment" }
-
-func noticeColor(string) string { return "alert-warning" }
-
 // ---------------------------------------------------------------------------
 // Customer profile
 // ---------------------------------------------------------------------------
@@ -208,10 +202,6 @@ type Profile struct {
 	CanEdit bool
 	Notice  Notice
 }
-
-// formatDate delegates to the shared French formatter in internal/ui rather
-// than carrying a second month table here.
-func formatDate(at time.Time) string { return ui.FormatDate(at) }
 
 // formatAmount renders money from integer cents, French style: a comma for the
 // decimal separator and a non-breaking space before the symbol.

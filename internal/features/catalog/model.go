@@ -16,8 +16,6 @@ var (
 	ErrAlreadyRolledBack  = errors.New("catalog publication was already rolled back")
 )
 
-const maxUploadBytes = MaxUploadBytes
-
 type CatalogLocation struct {
 	ID     string
 	Name   string

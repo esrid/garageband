@@ -233,10 +233,10 @@ templ transcriptLine(message Message) {
 // meaning, so no state depends on colour alone.
 templ notice(n Notice) {
 	if !n.Empty() {
-		<div role="alert" class={ "alert items-start text-left", noticeColor(n.Kind) }>
+		<div role="alert" class="alert items-start text-left alert-warning">
 			@warningIcon()
 			<div class="grid gap-1">
-				<span class="font-semibold">{ noticeTitle(n.Kind) }</span>
+				<span class="font-semibold">Action impossible pour le moment</span>
 				<span class="text-sm">{ n.Message }</span>
 			</div>
 		</div>

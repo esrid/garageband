@@ -1,6 +1,6 @@
 // Package db opens and provides the PostgreSQL database used by the app.
-// Verified against https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib
-// 2026-08-01.
+// Verified against https://pkg.go.dev/github.com/jackc/pgx/v5 and
+// https://pkg.go.dev/github.com/jackc/pgx/v5/pgxpool 2026-08-02.
 package db
 
 import (
@@ -10,11 +10,11 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct {
-	*sql.DB
+	*pgxpool.Pool
 }
 
 var (
@@ -27,38 +27,44 @@ func Open(dsn string) (*DB, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return nil, errors.New("DATABASE_URL is required")
 	}
-	config, err := pgx.ParseConfig(dsn)
+	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
 	return OpenConfig(config)
 }
 
-// OpenConfig connects using a parsed pgx configuration. It is primarily useful
-// for tests that set an isolated search_path.
-func OpenConfig(config *pgx.ConnConfig) (*DB, error) {
+// OpenConfig connects using a parsed pgx pool configuration. It is primarily
+// useful for tests that set an isolated search_path or connection hooks.
+func OpenConfig(config *pgxpool.Config) (*DB, error) {
 	if config == nil {
 		return nil, errors.New("PostgreSQL config is required")
 	}
-	sqldb := stdlib.OpenDB(*config)
-	if err := sqldb.Ping(); err != nil {
-		return nil, errors.Join(err, sqldb.Close())
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, err
 	}
-	return &DB{DB: sqldb}, nil
+	if err := pool.Ping(context.Background()); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return &DB{Pool: pool}, nil
+}
+
+// Close releases the pool's connections.
+func (d *DB) Close() error {
+	d.Pool.Close()
+	return nil
 }
 
 // ExecOne runs a write that must affect exactly one row. It returns
 // sql.ErrNoRows when nothing was affected so handlers can map it to a 404.
 func (d *DB) ExecOne(ctx context.Context, query string, args ...any) error {
-	res, err := d.ExecContext(ctx, query, args...)
+	tag, err := d.Exec(ctx, query, args...)
 	if err != nil {
 		return err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
+	if tag.RowsAffected() == 0 {
 		return sql.ErrNoRows
 	}
 	return nil
@@ -70,7 +76,7 @@ func (d *DB) ExecOne(ctx context.Context, query string, args ...any) error {
 func (d *DB) WithinTenant(
 	ctx context.Context,
 	tenantID string,
-	fn func(*sql.Tx) error,
+	fn func(pgx.Tx) error,
 ) (err error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return ErrTenantRequired
@@ -78,18 +84,18 @@ func (d *DB) WithinTenant(
 	if fn == nil {
 		return errors.New("tenant transaction function is required")
 	}
-	tx, err := d.BeginTx(ctx, nil)
+	tx, err := d.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil &&
-			!errors.Is(rollbackErr, sql.ErrTxDone) {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			err = errors.Join(err, rollbackErr)
 		}
 	}()
 
-	if _, err = tx.ExecContext(
+	if _, err = tx.Exec(
 		ctx,
 		`SELECT set_config('app.current_tenant_id', $1, true)`,
 		tenantID,
@@ -99,7 +105,7 @@ func (d *DB) WithinTenant(
 	if err = fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // WithinTenantUser runs fn with both the tenant and authenticated user set as
@@ -109,7 +115,7 @@ func (d *DB) WithinTenantUser(
 	ctx context.Context,
 	tenantID string,
 	userID string,
-	fn func(*sql.Tx) error,
+	fn func(pgx.Tx) error,
 ) (err error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return ErrTenantRequired
@@ -120,18 +126,18 @@ func (d *DB) WithinTenantUser(
 	if fn == nil {
 		return errors.New("tenant transaction function is required")
 	}
-	tx, err := d.BeginTx(ctx, nil)
+	tx, err := d.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil &&
-			!errors.Is(rollbackErr, sql.ErrTxDone) {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			err = errors.Join(err, rollbackErr)
 		}
 	}()
 
-	if _, err = tx.ExecContext(ctx, `
+	if _, err = tx.Exec(ctx, `
 		SELECT set_config('app.current_tenant_id', $1, true),
 		       set_config('app.current_user_id', $2, true)`,
 		tenantID, userID,
@@ -141,7 +147,7 @@ func (d *DB) WithinTenantUser(
 	if err = fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // WithinUser runs fn with a transaction-local user identity. It is used only
@@ -150,7 +156,7 @@ func (d *DB) WithinTenantUser(
 func (d *DB) WithinUser(
 	ctx context.Context,
 	userID string,
-	fn func(*sql.Tx) error,
+	fn func(pgx.Tx) error,
 ) (err error) {
 	if strings.TrimSpace(userID) == "" {
 		return ErrUserRequired
@@ -158,18 +164,18 @@ func (d *DB) WithinUser(
 	if fn == nil {
 		return errors.New("user transaction function is required")
 	}
-	tx, err := d.BeginTx(ctx, nil)
+	tx, err := d.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil &&
-			!errors.Is(rollbackErr, sql.ErrTxDone) {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			err = errors.Join(err, rollbackErr)
 		}
 	}()
 
-	if _, err = tx.ExecContext(
+	if _, err = tx.Exec(
 		ctx,
 		`SELECT set_config('app.current_user_id', $1, true)`,
 		userID,
@@ -179,7 +185,7 @@ func (d *DB) WithinUser(
 	if err = fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // WithinNewTenant obtains a UUIDv7 from PostgreSQL, establishes it as the RLS
@@ -187,7 +193,7 @@ func (d *DB) WithinUser(
 // as the id of the tenant it inserts.
 func (d *DB) WithinNewTenant(
 	ctx context.Context,
-	fn func(tx *sql.Tx, tenantID string) error,
+	fn func(tx pgx.Tx, tenantID string) error,
 ) (err error) {
 	return d.withinNewTenant(ctx, "", fn)
 }
@@ -198,7 +204,7 @@ func (d *DB) WithinNewTenant(
 func (d *DB) WithinNewTenantUser(
 	ctx context.Context,
 	userID string,
-	fn func(tx *sql.Tx, tenantID string) error,
+	fn func(tx pgx.Tx, tenantID string) error,
 ) error {
 	if strings.TrimSpace(userID) == "" {
 		return ErrUserRequired
@@ -209,27 +215,27 @@ func (d *DB) WithinNewTenantUser(
 func (d *DB) withinNewTenant(
 	ctx context.Context,
 	userID string,
-	fn func(tx *sql.Tx, tenantID string) error,
+	fn func(tx pgx.Tx, tenantID string) error,
 ) (err error) {
 	if fn == nil {
 		return errors.New("tenant transaction function is required")
 	}
-	tx, err := d.BeginTx(ctx, nil)
+	tx, err := d.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil &&
-			!errors.Is(rollbackErr, sql.ErrTxDone) {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil &&
+			!errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			err = errors.Join(err, rollbackErr)
 		}
 	}()
 
 	var tenantID string
-	if err = tx.QueryRowContext(ctx, `SELECT uuidv7()::text`).Scan(&tenantID); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT uuidv7()::text`).Scan(&tenantID); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(
+	if _, err = tx.Exec(
 		ctx,
 		`SELECT set_config('app.current_tenant_id', $1, true)`,
 		tenantID,
@@ -237,7 +243,7 @@ func (d *DB) withinNewTenant(
 		return err
 	}
 	if userID != "" {
-		if _, err = tx.ExecContext(
+		if _, err = tx.Exec(
 			ctx,
 			`SELECT set_config('app.current_user_id', $1, true)`,
 			userID,
@@ -248,5 +254,5 @@ func (d *DB) withinNewTenant(
 	if err = fn(tx, tenantID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }

@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -77,8 +79,8 @@ func (s *Store) Workspace(
 	userID string,
 	conversationID string,
 ) (workspace Workspace, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
-		if err := tx.QueryRowContext(ctx, `
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
 			SELECT tenant.name, membership.role
 			FROM tenant_memberships membership
 			JOIN tenants tenant ON tenant.id = membership.tenant_id
@@ -90,7 +92,7 @@ func (s *Store) Workspace(
 			}
 			return err
 		}
-		locationRows, err := tx.QueryContext(ctx, `
+		locationRows, err := tx.Query(ctx, `
 			SELECT id::text, name
 			FROM locations
 			WHERE tenant_id = $1 AND status = 'active'
@@ -98,18 +100,12 @@ func (s *Store) Workspace(
 		if err != nil {
 			return err
 		}
-		for locationRows.Next() {
-			var location LocationRef
-			if err := locationRows.Scan(&location.ID, &location.Name); err != nil {
-				return errors.Join(err, locationRows.Close())
-			}
-			workspace.Locations = append(workspace.Locations, location)
-		}
-		if err := errors.Join(locationRows.Err(), locationRows.Close()); err != nil {
+		workspace.Locations, err = pgx.CollectRows(locationRows, pgx.RowToStructByPos[LocationRef])
+		if err != nil {
 			return err
 		}
 
-		conversationRows, err := tx.QueryContext(ctx, `
+		conversationRows, err := tx.Query(ctx, `
 			SELECT conversation.id::text, conversation.location_id::text,
 			       location.name, conversation.title, conversation.status,
 			       conversation.updated_at
@@ -124,20 +120,18 @@ func (s *Store) Workspace(
 		if err != nil {
 			return err
 		}
-		for conversationRows.Next() {
+		workspace.Conversations, err = pgx.CollectRows(conversationRows, func(row pgx.CollectableRow) (Conversation, error) {
 			var conversation Conversation
-			if err := scanConversation(conversationRows, &conversation); err != nil {
-				return errors.Join(err, conversationRows.Close())
-			}
-			workspace.Conversations = append(workspace.Conversations, conversation)
-		}
-		if err := errors.Join(conversationRows.Err(), conversationRows.Close()); err != nil {
+			err := scanConversation(row, &conversation)
+			return conversation, err
+		})
+		if err != nil {
 			return err
 		}
 		if conversationID == "" {
 			return nil
 		}
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT conversation.id::text, conversation.location_id::text,
 			       location.name, conversation.title, conversation.status,
 			       conversation.updated_at
@@ -172,10 +166,10 @@ func (s *Store) AppendUserMessage(
 	locationID string,
 	content string,
 ) (conversation Conversation, messages []Message, userSequence int, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if conversationID == "" {
 			title := conversationTitle(content)
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				INSERT INTO assistant_conversations (
 				    tenant_id, location_id, created_by_user_id, title
 				)
@@ -192,7 +186,7 @@ func (s *Store) AppendUserMessage(
 				return err
 			}
 		} else {
-			if err := tx.QueryRowContext(ctx, `
+			if err := tx.QueryRow(ctx, `
 				SELECT id::text, location_id::text, title, status, updated_at
 				FROM assistant_conversations
 				WHERE tenant_id = $1 AND id = $2 AND created_by_user_id = $3
@@ -214,7 +208,7 @@ func (s *Store) AppendUserMessage(
 		); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			UPDATE assistant_conversations SET updated_at = now()
 			WHERE tenant_id = $1 AND id = $2`, tenantID, conversation.ID); err != nil {
 			return err
@@ -232,7 +226,7 @@ func (s *Store) AppendAssistantMessage(
 	conversationID string,
 	content string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		locationID, err := lockConversation(ctx, tx, tenantID, userID, conversationID)
 		if err != nil {
 			return err
@@ -240,7 +234,7 @@ func (s *Store) AppendAssistantMessage(
 		if _, err := appendMessage(ctx, tx, tenantID, locationID, conversationID, "assistant", content); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
+		_, err = tx.Exec(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
 		return err
 	})
 }
@@ -264,13 +258,13 @@ func (s *Store) ProposeTool(
 		return "", err
 	}
 	idempotencyKey := fmt.Sprintf("message-%d:%s", userSequence, callID)
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		locationID, err := lockConversation(ctx, tx, tenantID, userID, conversationID)
 		if err != nil {
 			return err
 		}
 		inserted := true
-		err = tx.QueryRowContext(ctx, `
+		err = tx.QueryRow(ctx, `
 			INSERT INTO assistant_tool_executions (
 			    tenant_id, location_id, conversation_id, requested_by_user_id,
 			    idempotency_key, tool_name, consequence, input, preview,
@@ -283,7 +277,7 @@ func (s *Store) ProposeTool(
 		).Scan(&executionID)
 		if errors.Is(err, sql.ErrNoRows) {
 			inserted = false
-			err = tx.QueryRowContext(ctx, `
+			err = tx.QueryRow(ctx, `
 				SELECT id::text FROM assistant_tool_executions
 				WHERE tenant_id = $1 AND conversation_id = $2
 				  AND idempotency_key = $3`, tenantID, conversationID, idempotencyKey,
@@ -297,7 +291,7 @@ func (s *Store) ProposeTool(
 				return err
 			}
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
+		_, err = tx.Exec(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
 		return err
 	})
 	return executionID, err
@@ -318,12 +312,12 @@ func (s *Store) StartReadTool(
 		return execution, err
 	}
 	idempotencyKey := fmt.Sprintf("message-%d:%s", userSequence, callID)
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		locationID, err := lockConversation(ctx, tx, tenantID, userID, conversationID)
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRowContext(ctx, `
+		err = tx.QueryRow(ctx, `
 			INSERT INTO assistant_tool_executions (
 			    tenant_id, location_id, conversation_id, requested_by_user_id,
 			    idempotency_key, tool_name, consequence, status, input, preview
@@ -333,7 +327,7 @@ func (s *Store) StartReadTool(
 			idempotencyKey, definition.Name, preview.Input, previewJSON,
 		).Scan(&execution.ID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return tx.QueryRowContext(ctx, `
+			return tx.QueryRow(ctx, `
 				SELECT id::text, conversation_id::text, location_id::text, tool_name,
 				       consequence, status, input, preview->>'summary',
 				       COALESCE(output, '{}'::jsonb), COALESCE(error_message, ''),
@@ -371,11 +365,11 @@ func (s *Store) BeginExecution(
 	conversationID string,
 	executionID string,
 ) (execution ToolExecution, shouldExecute bool, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if _, err := lockConversation(ctx, tx, tenantID, userID, conversationID); err != nil {
 			return err
 		}
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT id::text, conversation_id::text, location_id::text, tool_name,
 			       consequence, status, input, preview->>'summary',
 			       COALESCE(output, '{}'::jsonb), COALESCE(error_message, ''),
@@ -395,7 +389,7 @@ func (s *Store) BeginExecution(
 		}
 		switch execution.Status {
 		case "proposed":
-			if _, err := tx.ExecContext(ctx, `
+			if _, err := tx.Exec(ctx, `
 				UPDATE assistant_tool_executions
 				SET status = 'running', confirmed_at = now()
 				WHERE tenant_id = $1 AND id = $2`, tenantID, executionID); err != nil {
@@ -431,7 +425,7 @@ func (s *Store) FinishExecution(
 	if err != nil {
 		return err
 	}
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		locationID, err := lockConversation(ctx, tx, tenantID, userID, execution.ConversationID)
 		if err != nil {
 			return err
@@ -444,7 +438,7 @@ func (s *Store) FinishExecution(
 			message = "L’action n’a pas été effectuée : " + safeToolError(executionErr)
 			errorCode, errorMessage = toolErrorDetails(executionErr)
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE assistant_tool_executions SET
 			    status = $4, output = $5,
 			    affected_records = CASE WHEN $4 = 'failed' THEN affected_records ELSE $6 END,
@@ -456,17 +450,13 @@ func (s *Store) FinishExecution(
 		if err != nil {
 			return err
 		}
-		affectedRows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affectedRows != 1 {
+		if result.RowsAffected() != 1 {
 			return ErrExecutionClosed
 		}
 		if _, err := appendMessage(ctx, tx, tenantID, locationID, execution.ConversationID, "assistant", message); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, execution.ConversationID)
+		_, err = tx.Exec(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, execution.ConversationID)
 		return err
 	})
 }
@@ -478,12 +468,12 @@ func (s *Store) RejectExecution(
 	conversationID string,
 	executionID string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		locationID, err := lockConversation(ctx, tx, tenantID, userID, conversationID)
 		if err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE assistant_tool_executions
 			SET status = 'rejected', completed_at = now()
 			WHERE tenant_id = $1 AND conversation_id = $2 AND id = $3
@@ -491,17 +481,13 @@ func (s *Store) RejectExecution(
 		if err != nil {
 			return err
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
+		if result.RowsAffected() != 1 {
 			return ErrExecutionClosed
 		}
 		if _, err := appendMessage(ctx, tx, tenantID, locationID, conversationID, "assistant", "L’action proposée a été abandonnée. Aucune donnée n’a été modifiée."); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
+		_, err = tx.Exec(ctx, `UPDATE assistant_conversations SET updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenantID, conversationID)
 		return err
 	})
 }
@@ -513,9 +499,9 @@ func scanConversation(scanner interface{ Scan(...any) error }, conversation *Con
 	)
 }
 
-func lockConversation(ctx context.Context, tx *sql.Tx, tenantID, userID, conversationID string) (string, error) {
+func lockConversation(ctx context.Context, tx pgx.Tx, tenantID, userID, conversationID string) (string, error) {
 	var locationID string
-	err := tx.QueryRowContext(ctx, `
+	err := tx.QueryRow(ctx, `
 		SELECT location_id::text
 		FROM assistant_conversations
 		WHERE tenant_id = $1 AND id = $2 AND created_by_user_id = $3
@@ -526,7 +512,7 @@ func lockConversation(ctx context.Context, tx *sql.Tx, tenantID, userID, convers
 
 func appendMessage(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	conversationID string,
@@ -534,7 +520,7 @@ func appendMessage(
 	content string,
 ) (int, error) {
 	var sequence int
-	err := tx.QueryRowContext(ctx, `
+	err := tx.QueryRow(ctx, `
 		INSERT INTO assistant_messages (
 		    tenant_id, location_id, conversation_id, sequence, role, content
 		)
@@ -545,8 +531,8 @@ func appendMessage(
 	return sequence, err
 }
 
-func loadMessages(ctx context.Context, tx *sql.Tx, tenantID, conversationID string) ([]Message, error) {
-	rows, err := tx.QueryContext(ctx, `
+func loadMessages(ctx context.Context, tx pgx.Tx, tenantID, conversationID string) ([]Message, error) {
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, sequence, role, content, created_at
 		FROM assistant_messages
 		WHERE tenant_id = $1 AND conversation_id = $2
@@ -554,19 +540,11 @@ func loadMessages(ctx context.Context, tx *sql.Tx, tenantID, conversationID stri
 	if err != nil {
 		return nil, err
 	}
-	var messages []Message
-	for rows.Next() {
-		var message Message
-		if err := rows.Scan(&message.ID, &message.Sequence, &message.Role, &message.Content, &message.CreatedAt); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		messages = append(messages, message)
-	}
-	return messages, errors.Join(rows.Err(), rows.Close())
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Message])
 }
 
-func loadExecutions(ctx context.Context, tx *sql.Tx, tenantID, conversationID string) ([]ToolExecution, error) {
-	rows, err := tx.QueryContext(ctx, `
+func loadExecutions(ctx context.Context, tx pgx.Tx, tenantID, conversationID string) ([]ToolExecution, error) {
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, conversation_id::text, location_id::text, tool_name,
 		       consequence, status, input, preview->>'summary',
 		       COALESCE(output, '{}'::jsonb), COALESCE(error_message, ''),
@@ -577,21 +555,7 @@ func loadExecutions(ctx context.Context, tx *sql.Tx, tenantID, conversationID st
 	if err != nil {
 		return nil, err
 	}
-	var executions []ToolExecution
-	for rows.Next() {
-		var execution ToolExecution
-		if err := rows.Scan(
-			&execution.ID, &execution.ConversationID, &execution.LocationID,
-			&execution.ToolName, &execution.Consequence, &execution.Status,
-			&execution.Input, &execution.PreviewSummary, &execution.Output,
-			&execution.ErrorMessage, &execution.ProposedAt,
-			&execution.ConfirmedAt, &execution.CompletedAt,
-		); err != nil {
-			return nil, errors.Join(err, rows.Close())
-		}
-		executions = append(executions, execution)
-	}
-	return executions, errors.Join(rows.Err(), rows.Close())
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[ToolExecution])
 }
 
 func conversationTitle(content string) string {

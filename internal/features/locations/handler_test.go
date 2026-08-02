@@ -123,7 +123,7 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	var serviceID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO service_offerings (
 		    tenant_id, location_id, code, name, duration_minutes
 		) VALUES ($1, $2, 'revision', 'Révision', 60)
@@ -131,7 +131,7 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	var catalogItemID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO catalog_items (
 		    tenant_id, kind, reference, name, price_kind, amount_cents,
 		    tax_basis, vat_basis_points, duration_minutes, location_scope,
@@ -189,7 +189,7 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 		t.Fatalf("configured schedule = %d %q", response.Code, response.Body.String())
 	}
 	var linkedServiceID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT id::text FROM service_offerings
 		WHERE tenant_id = $1 AND location_id = $2 AND catalog_item_id = $3`,
 		tenantID, location.ID, catalogItemID,

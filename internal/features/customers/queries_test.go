@@ -180,7 +180,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 	insertAssignment(t, fixtures, fixture.tenantID, fixture.homeStaffID, fixture.homeLocationID, fixture.ownerID)
 	insertAssignment(t, fixtures, fixture.tenantID, fixture.receivingStaffID, fixture.receivingLocation, fixture.ownerID)
 
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO customers (
 			tenant_id, home_location_id, first_name, last_name
 		) VALUES ($1, $2, 'Alice', 'Martin') RETURNING id`,
@@ -192,7 +192,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 		{kind: "phone", value: "06 12 34 56 78", normalized: "+33612345678"},
 		{kind: "email", value: "alice@example.fr", normalized: "alice@example.fr"},
 	} {
-		if _, err := fixtures.Exec(`
+		if _, err := fixtures.Exec(t.Context(), `
 			INSERT INTO customer_contacts (
 				tenant_id, customer_id, kind, value, normalized_value, is_primary
 			) VALUES ($1, $2, $3, $4, $5, TRUE)`,
@@ -202,7 +202,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 			t.Fatal(err)
 		}
 	}
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO vehicles (
 			tenant_id, location_id, customer_id, registration_plate, vin,
 			make, model, first_registration_on
@@ -214,7 +214,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 		t.Fatal(err)
 	}
 	var serviceID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		INSERT INTO service_offerings (
 			tenant_id, location_id, code, name, duration_minutes
 		) VALUES ($1, $2, 'annual-service', 'Révision annuelle', 60)
@@ -222,7 +222,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 	).Scan(&serviceID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO appointments (
 			tenant_id, location_id, customer_id, vehicle_id, service_id,
 			status, starts_at, ends_at
@@ -235,7 +235,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO repair_orders (
 			tenant_id, location_id, customer_id, vehicle_id, status,
 			work_performed, subtotal_cents, tax_cents, total_cents,
@@ -249,7 +249,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixtures.Exec(`
+	if _, err := fixtures.Exec(t.Context(), `
 		INSERT INTO customer_memories (
 			tenant_id, location_id, customer_id, key, value, confidence
 		) VALUES (
@@ -265,7 +265,7 @@ func newCustomerFixture(t *testing.T) customerFixture {
 func (fixture customerFixture) grant(t *testing.T) string {
 	t.Helper()
 	var grantID string
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		INSERT INTO customer_location_grants (
 			tenant_id, customer_id, source_location_id,
 			receiving_location_id, granted_by_user_id
@@ -280,7 +280,7 @@ func (fixture customerFixture) grant(t *testing.T) string {
 
 func (fixture customerFixture) revoke(t *testing.T, grantID string) {
 	t.Helper()
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE customer_location_grants
 		SET revoked_by_user_id = $3, revoked_at = now()
 		WHERE tenant_id = $1 AND id = $2`,
@@ -293,7 +293,7 @@ func (fixture customerFixture) revoke(t *testing.T, grantID string) {
 func (fixture customerFixture) insertReceivingAppointment(t *testing.T) string {
 	t.Helper()
 	var appointmentID string
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		INSERT INTO appointments (
 			tenant_id, location_id, customer_id, vehicle_id,
 			status, starts_at, ends_at, created_at
@@ -327,7 +327,7 @@ func request(handler http.Handler, target string) *httptest.ResponseRecorder {
 func insertUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User') RETURNING id`, email,
 	).Scan(&id); err != nil {
@@ -339,7 +339,7 @@ func insertUser(t *testing.T, database *db.DB, email string) string {
 func insertTenant(t *testing.T, database *db.DB, slug, name string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO tenants (slug, name) VALUES ($1, $2) RETURNING id`, slug, name,
 	).Scan(&id); err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ func insertTenant(t *testing.T, database *db.DB, slug, name string) string {
 
 func insertMembership(t *testing.T, database *db.DB, tenantID, userID, role string) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, $3)`, tenantID, userID, role,
 	); err != nil {
@@ -360,7 +360,7 @@ func insertMembership(t *testing.T, database *db.DB, tenantID, userID, role stri
 func insertLocation(t *testing.T, database *db.DB, tenantID, slug, name string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO locations (tenant_id, slug, name)
 		VALUES ($1, $2, $3) RETURNING id`, tenantID, slug, name,
 	).Scan(&id); err != nil {
@@ -375,7 +375,7 @@ func insertAssignment(
 	tenantID, userID, locationID, actorID string,
 ) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 			tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`, tenantID, userID, locationID, actorID,

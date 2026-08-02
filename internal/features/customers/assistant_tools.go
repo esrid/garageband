@@ -3,12 +3,13 @@ package customers
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 )
@@ -81,8 +82,8 @@ func (s *Store) searchAtLocation(ctx context.Context, scope assistanttools.Scope
 		ids = append(ids, customer.ID)
 	}
 	allowed := make(map[string]bool)
-	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, `
+	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
 			SELECT customer.id::text
 			FROM customers customer
 			WHERE customer.tenant_id = $1 AND customer.id = ANY($2::uuid[])
@@ -96,14 +97,14 @@ func (s *Store) searchAtLocation(ctx context.Context, scope assistanttools.Scope
 		if err != nil {
 			return err
 		}
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				return errors.Join(err, rows.Close())
-			}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
 			allowed[id] = true
 		}
-		return errors.Join(rows.Err(), rows.Close())
+		return nil
 	})
 	if err != nil {
 		return nil, err

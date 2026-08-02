@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/esrid/garageband/internal/platform/db"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 type Store struct{ db *db.DB }
@@ -25,7 +27,7 @@ func (s *Store) List(
 	userID string,
 	filter CatalogFilter,
 ) (overview CatalogOverview, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, &overview.Organization)
 		if err != nil {
 			return err
@@ -36,7 +38,7 @@ func (s *Store) List(
 			return err
 		}
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT kind, count(*)
 			FROM catalog_items
 			WHERE tenant_id = $1 AND archived_at IS NULL
@@ -48,15 +50,17 @@ func (s *Store) List(
 			var kind string
 			var count int
 			if err := rows.Scan(&kind, &count); err != nil {
-				return errors.Join(err, rows.Close())
+				rows.Close()
+				return err
 			}
 			overview.Counts[kind] = count
 		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			return err
 		}
 
-		itemRows, err := tx.QueryContext(ctx, catalogItemSelect+`
+		itemRows, err := tx.Query(ctx, catalogItemSelect+`
 			WHERE item.tenant_id = $1
 			  AND item.archived_at IS NULL
 			  AND ($2 = '' OR item.kind = $2)
@@ -80,7 +84,7 @@ func (s *Store) Item(
 	userID string,
 	itemID string,
 ) (item CatalogItemRecord, organization string, canManage bool, locations []CatalogLocation, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, &organization)
 		if err != nil {
 			return err
@@ -89,7 +93,7 @@ func (s *Store) Item(
 		if locations, err = loadCatalogLocations(ctx, tx, tenantID); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, catalogItemSelect+`
+		rows, err := tx.Query(ctx, catalogItemSelect+`
 			WHERE item.tenant_id = $1 AND item.id = $2 AND item.archived_at IS NULL`, tenantID, itemID)
 		if err != nil {
 			return err
@@ -118,12 +122,12 @@ func (s *Store) Quotable(
 	query string,
 	at time.Time,
 ) (items []CatalogItemRecord, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if _, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, nil); err != nil {
 			return err
 		}
 		var accessible bool
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (
 			    SELECT 1 FROM locations
 			    WHERE tenant_id = $1 AND id = $2 AND status = 'active'
@@ -137,7 +141,7 @@ func (s *Store) Quotable(
 		if day.IsZero() {
 			day = time.Now().UTC()
 		}
-		rows, err := tx.QueryContext(ctx, catalogItemSelect+`
+		rows, err := tx.Query(ctx, catalogItemSelect+`
 			WHERE item.tenant_id = $1 AND item.archived_at IS NULL
 			  AND (item.effective_from IS NULL OR item.effective_from <= $3::date)
 			  AND (item.effective_to IS NULL OR item.effective_to >= $3::date)
@@ -169,7 +173,7 @@ func (s *Store) NewItemContext(
 	tenantID string,
 	userID string,
 ) (organization string, canManage bool, locations []CatalogLocation, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, &organization)
 		if err != nil {
 			return err
@@ -187,7 +191,7 @@ func (s *Store) Create(
 	userID string,
 	input ItemInput,
 ) (item CatalogItemRecord, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
@@ -219,7 +223,7 @@ func (s *Store) Update(
 	itemID string,
 	input ItemInput,
 ) (item CatalogItemRecord, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
@@ -227,7 +231,7 @@ func (s *Store) Update(
 		if err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE catalog_items SET
 			    kind = $3, reference = NULLIF($4, ''), name = $5,
 			    description = NULLIF($6, ''), price_kind = $7,
@@ -244,11 +248,7 @@ func (s *Store) Update(
 		if err != nil {
 			return mapCatalogWriteError(err)
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
+		if result.RowsAffected() != 1 {
 			return sql.ErrNoRows
 		}
 		if err := replaceCatalogItemLocations(ctx, tx, tenantID, itemID, locations); err != nil {
@@ -265,22 +265,18 @@ func (s *Store) Update(
 }
 
 func (s *Store) Archive(ctx context.Context, tenantID, userID, itemID string) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE catalog_items
 			SET archived_at = now(), archived_by_user_id = $2, updated_by_user_id = $2
 			WHERE tenant_id = $1 AND id = $3 AND archived_at IS NULL`, tenantID, userID, itemID)
 		if err != nil {
 			return err
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
+		if result.RowsAffected() != 1 {
 			return sql.ErrNoRows
 		}
 		return nil
@@ -302,7 +298,7 @@ func (s *Store) Upload(
 	var parsed []parsedRow
 	var rejection string
 	content := input.Content
-	if size > maxUploadBytes || len(content) > maxUploadBytes {
+	if size > MaxUploadBytes || len(content) > MaxUploadBytes {
 		rejection, content = "too_large", nil
 	} else {
 		format, parsed, rejection = parseUpload(input.Filename, input.Content)
@@ -311,7 +307,7 @@ func (s *Store) Upload(
 		input.MediaType = "application/octet-stream"
 	}
 
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
@@ -324,7 +320,7 @@ func (s *Store) Upload(
 			status, rejected = "rejected", rejection
 		}
 		var id string
-		err := tx.QueryRowContext(ctx, `
+		err := tx.QueryRow(ctx, `
 			INSERT INTO catalog_imports (
 			    tenant_id, location_id, uploaded_by_user_id,
 			    source_filename, source_format, source_media_type,
@@ -336,7 +332,7 @@ func (s *Store) Upload(
 			strings.TrimSpace(input.Filename), format, input.MediaType,
 			size, checksum[:], content, status, rejected).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
-			if loadErr := tx.QueryRowContext(ctx, `
+			if loadErr := tx.QueryRow(ctx, `
 				SELECT id::text FROM catalog_imports
 				WHERE tenant_id = $1 AND location_id = $2 AND source_sha256 = $3`,
 				tenantID, input.LocationID, checksum[:]).Scan(&id); loadErr != nil {
@@ -356,7 +352,7 @@ func (s *Store) Upload(
 			if err := classifyAndInsertRows(ctx, tx, tenantID, input.LocationID, id, parsed); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `
+			if _, err := tx.Exec(ctx, `
 				UPDATE catalog_imports SET status = 'ready'
 				WHERE tenant_id = $1 AND id = $2 AND status = 'analyzing'`, tenantID, id); err != nil {
 				return err
@@ -373,13 +369,13 @@ func (s *Store) Upload(
 }
 
 func (s *Store) Imports(ctx context.Context, tenantID, userID string) (overview ImportsOverview, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, &overview.Organization)
 		if err != nil {
 			return err
 		}
 		overview.CanManage = role == "owner" || role == "admin"
-		rows, err := tx.QueryContext(ctx, importSelect+`
+		rows, err := tx.Query(ctx, importSelect+`
 			WHERE catalog_import.tenant_id = $1
 			GROUP BY catalog_import.id, location.name, uploader.name, uploader.email
 			ORDER BY catalog_import.created_at DESC, catalog_import.id DESC`, tenantID)
@@ -393,7 +389,7 @@ func (s *Store) Imports(ctx context.Context, tenantID, userID string) (overview 
 }
 
 func (s *Store) Import(ctx context.Context, tenantID, userID, importID string) (preview ImportPreview, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, &preview.Organization)
 		if err != nil {
 			return err
@@ -409,7 +405,7 @@ func (s *Store) Import(ctx context.Context, tenantID, userID, importID string) (
 }
 
 func (s *Store) Plan(ctx context.Context, tenantID, userID, importID, mode string) (plan PublishPlan, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if _, err := loadCatalogPrincipal(ctx, tx, tenantID, userID, nil); err != nil {
 			return err
 		}
@@ -426,7 +422,7 @@ func (s *Store) Publish(
 	importID string,
 	mode string,
 ) (publication PublicationRecord, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
@@ -434,13 +430,13 @@ func (s *Store) Publish(
 		// max(version) so concurrent publications serialize instead of racing a
 		// uniqueness constraint after they have both modified catalog rows.
 		var lockedTenantID string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT id::text FROM tenants WHERE id = $1 FOR UPDATE`, tenantID,
 		).Scan(&lockedTenantID); err != nil {
 			return err
 		}
 		var locationID, status string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT location_id::text, status FROM catalog_imports
 			WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, importID).Scan(&locationID, &status); err != nil {
 			return err
@@ -466,7 +462,7 @@ func (s *Store) Publish(
 		}
 
 		if mode == "replace" {
-			if _, err := tx.ExecContext(ctx, `
+			if _, err := tx.Exec(ctx, `
 				UPDATE catalog_items item
 				SET archived_at = now(), archived_by_user_id = $3, updated_by_user_id = $3
 				WHERE item.tenant_id = $1 AND item.archived_at IS NULL
@@ -530,7 +526,7 @@ func (s *Store) Publish(
 		if mode != "merge" && mode != "replace" {
 			return errors.New("invalid publication mode")
 		}
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			INSERT INTO catalog_publications (
 			    tenant_id, import_id, version, mode, published_by_user_id,
 			    before_state, after_state
@@ -544,7 +540,7 @@ func (s *Store) Publish(
 			return err
 		}
 		publication.ImportID, publication.Mode = importID, mode
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			UPDATE catalog_imports
 			SET status = 'published', publication_mode = $3,
 			    published_at = $4, published_by_user_id = $5
@@ -558,22 +554,18 @@ func (s *Store) Publish(
 }
 
 func (s *Store) Cancel(ctx context.Context, tenantID, userID, importID string) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE catalog_imports
 			SET status = 'cancelled', cancelled_at = now(), cancelled_by_user_id = $3
 			WHERE tenant_id = $1 AND id = $2 AND status = 'ready'`, tenantID, importID, userID)
 		if err != nil {
 			return err
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
+		if result.RowsAffected() != 1 {
 			return ErrImportNotReady
 		}
 		return nil
@@ -581,14 +573,14 @@ func (s *Store) Cancel(ctx context.Context, tenantID, userID, importID string) e
 }
 
 func (s *Store) Rollback(ctx context.Context, tenantID, userID, publicationID string) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireCatalogManager(ctx, tx); err != nil {
 			return err
 		}
 		var beforeJSON, afterJSON []byte
 		var rolledBackAt sql.NullTime
 		var version int
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT version, before_state, after_state, rolled_back_at
 			FROM catalog_publications
 			WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, publicationID,
@@ -599,7 +591,7 @@ func (s *Store) Rollback(ctx context.Context, tenantID, userID, publicationID st
 			return ErrAlreadyRolledBack
 		}
 		var later int
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT count(*) FROM catalog_publications
 			WHERE tenant_id = $1 AND version > $2 AND rolled_back_at IS NULL`, tenantID, version).Scan(&later); err != nil {
 			return err
@@ -640,7 +632,7 @@ func (s *Store) Rollback(ctx context.Context, tenantID, userID, publicationID st
 		for _, item := range after {
 			previous, existed := beforeByID[item.ID]
 			if !existed {
-				if _, err := tx.ExecContext(ctx, `
+				if _, err := tx.Exec(ctx, `
 					UPDATE catalog_items SET archived_at = now(), archived_by_user_id = $2, updated_by_user_id = $2
 					WHERE tenant_id = $1 AND id = $3`, tenantID, userID, item.ID); err != nil {
 					return err
@@ -651,18 +643,14 @@ func (s *Store) Rollback(ctx context.Context, tenantID, userID, publicationID st
 				return mapCatalogWriteError(err)
 			}
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE catalog_publications
 			SET rolled_back_at = now(), rolled_back_by_user_id = $3
 			WHERE tenant_id = $1 AND id = $2 AND rolled_back_at IS NULL`, tenantID, publicationID, userID)
 		if err != nil {
 			return err
 		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
+		if result.RowsAffected() != 1 {
 			return ErrAlreadyRolledBack
 		}
 		return nil
@@ -702,8 +690,8 @@ const importSelect = `
 	JOIN users uploader ON uploader.id = catalog_import.uploaded_by_user_id
 	LEFT JOIN catalog_import_rows row ON row.tenant_id = catalog_import.tenant_id AND row.import_id = catalog_import.id`
 
-func scanCatalogItems(rows *sql.Rows) (items []CatalogItemRecord, err error) {
-	defer func() { err = errors.Join(err, rows.Close()) }()
+func scanCatalogItems(rows pgx.Rows) (items []CatalogItemRecord, err error) {
+	defer rows.Close()
 	for rows.Next() {
 		var item CatalogItemRecord
 		var amount, maximum sql.NullInt64
@@ -737,12 +725,12 @@ func scanCatalogItems(rows *sql.Rows) (items []CatalogItemRecord, err error) {
 	return items, rows.Err()
 }
 
-func loadCatalogItemsByID(ctx context.Context, tx *sql.Tx, tenantID string, ids []string) ([]CatalogItemRecord, error) {
+func loadCatalogItemsByID(ctx context.Context, tx pgx.Tx, tenantID string, ids []string) ([]CatalogItemRecord, error) {
 	ids = uniqueStrings(ids)
 	if len(ids) == 0 {
 		return []CatalogItemRecord{}, nil
 	}
-	rows, err := tx.QueryContext(ctx, catalogItemSelect+`
+	rows, err := tx.Query(ctx, catalogItemSelect+`
 		WHERE item.tenant_id = $1 AND item.id = ANY($2::uuid[])
 		ORDER BY item.id`, tenantID, ids)
 	if err != nil {
@@ -751,13 +739,13 @@ func loadCatalogItemsByID(ctx context.Context, tx *sql.Tx, tenantID string, ids 
 	return scanCatalogItems(rows)
 }
 
-func insertCatalogItem(ctx context.Context, tx *sql.Tx, tenantID, userID, importID string, input ItemInput) (string, error) {
+func insertCatalogItem(ctx context.Context, tx pgx.Tx, tenantID, userID, importID string, input ItemInput) (string, error) {
 	var source any
 	if importID != "" {
 		source = importID
 	}
 	var id string
-	err := tx.QueryRowContext(ctx, `
+	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog_items (
 		    tenant_id, kind, reference, name, description, price_kind,
 		    amount_cents, max_amount_cents, tax_basis, vat_basis_points,
@@ -775,8 +763,8 @@ func insertCatalogItem(ctx context.Context, tx *sql.Tx, tenantID, userID, import
 	return id, err
 }
 
-func updateImportedItem(ctx context.Context, tx *sql.Tx, tenantID, userID, importID, itemID string, input ItemInput) (string, error) {
-	result, err := tx.ExecContext(ctx, `
+func updateImportedItem(ctx context.Context, tx pgx.Tx, tenantID, userID, importID, itemID string, input ItemInput) (string, error) {
+	result, err := tx.Exec(ctx, `
 		UPDATE catalog_items SET
 		    kind = $4, reference = NULLIF($5, ''), name = $6,
 		    description = NULLIF($7, ''), price_kind = $8,
@@ -793,22 +781,18 @@ func updateImportedItem(ctx context.Context, tx *sql.Tx, tenantID, userID, impor
 	if err != nil {
 		return "", err
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return "", err
-	}
-	if affected != 1 {
+	if result.RowsAffected() != 1 {
 		return "", ErrPublicationChanged
 	}
 	return itemID, nil
 }
 
-func replaceCatalogItemLocations(ctx context.Context, tx *sql.Tx, tenantID, itemID string, locationIDs []string) error {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM catalog_item_locations WHERE tenant_id = $1 AND catalog_item_id = $2`, tenantID, itemID); err != nil {
+func replaceCatalogItemLocations(ctx context.Context, tx pgx.Tx, tenantID, itemID string, locationIDs []string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM catalog_item_locations WHERE tenant_id = $1 AND catalog_item_id = $2`, tenantID, itemID); err != nil {
 		return err
 	}
 	for _, locationID := range locationIDs {
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO catalog_item_locations (tenant_id, catalog_item_id, location_id)
 			VALUES ($1, $2, $3)`, tenantID, itemID, locationID); err != nil {
 			return err
@@ -817,7 +801,7 @@ func replaceCatalogItemLocations(ctx context.Context, tx *sql.Tx, tenantID, item
 	return nil
 }
 
-func validateCatalogLocations(ctx context.Context, tx *sql.Tx, tenantID, scope string, requested []string) ([]string, error) {
+func validateCatalogLocations(ctx context.Context, tx pgx.Tx, tenantID, scope string, requested []string) ([]string, error) {
 	requested = uniqueStrings(requested)
 	if scope == "all" {
 		if len(requested) != 0 {
@@ -829,7 +813,7 @@ func validateCatalogLocations(ctx context.Context, tx *sql.Tx, tenantID, scope s
 		return nil, ErrInvalidLocation
 	}
 	var count int
-	if err := tx.QueryRowContext(ctx, `
+	if err := tx.QueryRow(ctx, `
 		SELECT count(*) FROM locations
 		WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND status = 'active'`, tenantID, requested).Scan(&count); err != nil {
 		return nil, err
@@ -840,9 +824,9 @@ func validateCatalogLocations(ctx context.Context, tx *sql.Tx, tenantID, scope s
 	return requested, nil
 }
 
-func loadCatalogPrincipal(ctx context.Context, tx *sql.Tx, tenantID, userID string, organization *string) (string, error) {
+func loadCatalogPrincipal(ctx context.Context, tx pgx.Tx, tenantID, userID string, organization *string) (string, error) {
 	var role, name string
-	if err := tx.QueryRowContext(ctx, `
+	if err := tx.QueryRow(ctx, `
 		SELECT membership.role, tenant.name
 		FROM tenant_memberships membership
 		JOIN tenants tenant ON tenant.id = membership.tenant_id
@@ -858,9 +842,9 @@ func loadCatalogPrincipal(ctx context.Context, tx *sql.Tx, tenantID, userID stri
 	return role, nil
 }
 
-func requireCatalogManager(ctx context.Context, tx *sql.Tx) error {
+func requireCatalogManager(ctx context.Context, tx pgx.Tx) error {
 	var allowed bool
-	if err := tx.QueryRowContext(ctx, `SELECT app_current_user_manages_tenant()`).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT app_current_user_manages_tenant()`).Scan(&allowed); err != nil {
 		return err
 	}
 	if !allowed {
@@ -869,8 +853,8 @@ func requireCatalogManager(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func loadCatalogLocations(ctx context.Context, tx *sql.Tx, tenantID string) ([]CatalogLocation, error) {
-	rows, err := tx.QueryContext(ctx, `
+func loadCatalogLocations(ctx context.Context, tx pgx.Tx, tenantID string) ([]CatalogLocation, error) {
+	rows, err := tx.Query(ctx, `
 		SELECT id::text, name, status = 'active'
 		FROM locations WHERE tenant_id = $1
 		ORDER BY status <> 'active', name, id`, tenantID)
@@ -889,7 +873,7 @@ func loadCatalogLocations(ctx context.Context, tx *sql.Tx, tenantID string) ([]C
 	return locations, rows.Err()
 }
 
-func classifyAndInsertRows(ctx context.Context, tx *sql.Tx, tenantID, locationID, importID string, parsed []parsedRow) error {
+func classifyAndInsertRows(ctx context.Context, tx pgx.Tx, tenantID, locationID, importID string, parsed []parsedRow) error {
 	seen := make(map[string]struct{})
 	for _, row := range parsed {
 		classification, issue := "valid", row.Issue
@@ -921,7 +905,7 @@ func classifyAndInsertRows(ctx context.Context, tx *sql.Tx, tenantID, locationID
 			return err
 		}
 		values := row.Values
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO catalog_import_rows (
 			    tenant_id, import_id, row_number, classification, raw_data,
 			    kind, reference, name, description, price_kind,
@@ -941,8 +925,8 @@ func classifyAndInsertRows(ctx context.Context, tx *sql.Tx, tenantID, locationID
 	return nil
 }
 
-func findImportCollision(ctx context.Context, tx *sql.Tx, tenantID, locationID string, input ItemInput) (id, name string, safe bool, err error) {
-	err = tx.QueryRowContext(ctx, `
+func findImportCollision(ctx context.Context, tx pgx.Tx, tenantID, locationID string, input ItemInput) (id, name string, safe bool, err error) {
+	err = tx.QueryRow(ctx, `
 		SELECT item.id::text, item.name,
 		       item.location_scope = 'selected'
 		       AND (SELECT count(*) FROM catalog_item_locations il
@@ -963,8 +947,8 @@ func findImportCollision(ctx context.Context, tx *sql.Tx, tenantID, locationID s
 	return
 }
 
-func loadImport(ctx context.Context, tx *sql.Tx, tenantID, importID string) (ImportRecord, error) {
-	rows, err := tx.QueryContext(ctx, importSelect+`
+func loadImport(ctx context.Context, tx pgx.Tx, tenantID, importID string) (ImportRecord, error) {
+	rows, err := tx.Query(ctx, importSelect+`
 		WHERE catalog_import.tenant_id = $1 AND catalog_import.id = $2
 		GROUP BY catalog_import.id, location.name, uploader.name, uploader.email`, tenantID, importID)
 	if err != nil {
@@ -980,8 +964,8 @@ func loadImport(ctx context.Context, tx *sql.Tx, tenantID, importID string) (Imp
 	return records[0], nil
 }
 
-func scanImports(rows *sql.Rows) (records []ImportRecord, err error) {
-	defer func() { err = errors.Join(err, rows.Close()) }()
+func scanImports(rows pgx.Rows) (records []ImportRecord, err error) {
+	defer rows.Close()
 	for rows.Next() {
 		var record ImportRecord
 		var published sql.NullTime
@@ -999,8 +983,8 @@ func scanImports(rows *sql.Rows) (records []ImportRecord, err error) {
 	return records, rows.Err()
 }
 
-func loadImportRows(ctx context.Context, tx *sql.Tx, tenantID, importID string) (records []ImportRowRecord, err error) {
-	rows, err := tx.QueryContext(ctx, `
+func loadImportRows(ctx context.Context, tx pgx.Tx, tenantID, importID string) (records []ImportRowRecord, err error) {
+	rows, err := tx.Query(ctx, `
 		SELECT row.row_number, row.classification, row.raw_data,
 		       COALESCE(row.kind, ''), COALESCE(row.reference, ''), COALESCE(row.name, ''),
 		       COALESCE(row.description, ''), COALESCE(row.price_kind, ''),
@@ -1015,7 +999,7 @@ func loadImportRows(ctx context.Context, tx *sql.Tx, tenantID, importID string) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
+	defer rows.Close()
 	for rows.Next() {
 		var record ImportRowRecord
 		var raw []byte
@@ -1040,19 +1024,19 @@ func loadImportRows(ctx context.Context, tx *sql.Tx, tenantID, importID string) 
 	return records, rows.Err()
 }
 
-func calculatePublishPlan(ctx context.Context, tx *sql.Tx, tenantID, importID, mode string) (PublishPlan, error) {
+func calculatePublishPlan(ctx context.Context, tx pgx.Tx, tenantID, importID, mode string) (PublishPlan, error) {
 	if mode != "merge" && mode != "replace" {
 		return PublishPlan{}, errors.New("invalid publication mode")
 	}
 	var plan PublishPlan
 	var locationID, status string
-	if err := tx.QueryRowContext(ctx, `SELECT location_id::text, status FROM catalog_imports WHERE tenant_id = $1 AND id = $2`, tenantID, importID).Scan(&locationID, &status); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT location_id::text, status FROM catalog_imports WHERE tenant_id = $1 AND id = $2`, tenantID, importID).Scan(&locationID, &status); err != nil {
 		return plan, err
 	}
 	if status != "ready" {
 		return plan, ErrImportNotReady
 	}
-	if err := tx.QueryRowContext(ctx, `
+	if err := tx.QueryRow(ctx, `
 		SELECT count(*) FILTER (WHERE classification = 'valid'),
 		       count(*) FILTER (WHERE classification = 'ambiguous'),
 		       count(*) FILTER (WHERE classification = 'rejected')
@@ -1061,7 +1045,7 @@ func calculatePublishPlan(ctx context.Context, tx *sql.Tx, tenantID, importID, m
 		return plan, err
 	}
 	if mode == "replace" {
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT count(*) FROM catalog_items item
 			WHERE item.tenant_id = $1 AND item.archived_at IS NULL
 			  AND item.location_scope = 'selected'
@@ -1078,7 +1062,7 @@ func calculatePublishPlan(ctx context.Context, tx *sql.Tx, tenantID, importID, m
 	return plan, nil
 }
 
-func affectedExistingItemIDs(ctx context.Context, tx *sql.Tx, tenantID, importID, locationID, mode string) ([]string, error) {
+func affectedExistingItemIDs(ctx context.Context, tx pgx.Tx, tenantID, importID, locationID, mode string) ([]string, error) {
 	query := `
 		SELECT DISTINCT matching_item_id::text FROM catalog_import_rows
 		WHERE tenant_id = $1 AND import_id = $2 AND classification = 'ambiguous'`
@@ -1090,7 +1074,7 @@ func affectedExistingItemIDs(ctx context.Context, tx *sql.Tx, tenantID, importID
 			  AND EXISTS (SELECT 1 FROM catalog_item_locations il WHERE il.tenant_id = item.tenant_id AND il.catalog_item_id = item.id AND il.location_id = $3)`
 		args = append(args, locationID)
 	}
-	rows, err := tx.QueryContext(ctx, query, args...)
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1106,12 +1090,12 @@ func affectedExistingItemIDs(ctx context.Context, tx *sql.Tx, tenantID, importID
 	return uniqueStrings(ids), rows.Err()
 }
 
-func restoreCatalogItem(ctx context.Context, tx *sql.Tx, tenantID, userID string, item CatalogItemRecord) error {
+func restoreCatalogItem(ctx context.Context, tx pgx.Tx, tenantID, userID string, item CatalogItemRecord) error {
 	var archivedBy any
 	if item.ArchivedAt != nil {
 		archivedBy = userID
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.Exec(ctx, `
 		UPDATE catalog_items SET
 		    kind = $3, reference = NULLIF($4, ''), name = $5, description = NULLIF($6, ''),
 		    price_kind = $7, amount_cents = $8, max_amount_cents = $9,

@@ -205,8 +205,8 @@ func (h *handler) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := Upload{Organization: organization, Locations: activeViewLocations(locations), FieldErrors: make(map[string]string)}
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+(1<<20))
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes+(1<<20))
+	if err := r.ParseMultipartForm(MaxUploadBytes); err != nil {
 		page.FieldErrors[FieldFile] = "Le fichier est trop volumineux ou illisible."
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Le fichier n’a pas pu être reçu."}
 		h.render(w, r, UploadForm(page), http.StatusRequestEntityTooLarge)
@@ -230,7 +230,7 @@ func (h *handler) upload(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, UploadForm(page), http.StatusUnprocessableEntity)
 		return
 	}
-	content, readErr := io.ReadAll(io.LimitReader(file, maxUploadBytes+1))
+	content, readErr := io.ReadAll(io.LimitReader(file, MaxUploadBytes+1))
 	closeErr := file.Close()
 	if err := errors.Join(readErr, closeErr); err != nil {
 		h.fail(w, "read catalog upload", err)

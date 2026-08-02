@@ -2,7 +2,6 @@ package onboarding_test
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/esrid/garageband/internal/features/onboarding"
 	"github.com/esrid/garageband/internal/platform/businesslookup"
@@ -69,7 +70,7 @@ func TestOnboardingCreatesGarageAtomicallyAndIsIdempotent(t *testing.T) {
 	}
 
 	var tenantID string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		SELECT tenant_id
 		FROM onboarding_drafts
 		WHERE id = $1 AND user_id = $2 AND status = 'completed'`,
@@ -109,7 +110,7 @@ func TestOnboardingDraftCannotBeConfirmedByAnotherUser(t *testing.T) {
 		t.Fatalf("status = %d, want 404; body = %q", response.Code, response.Body.String())
 	}
 	var status string
-	if err := database.QueryRow(`SELECT status FROM onboarding_drafts WHERE id = $1`, draftID).Scan(&status); err != nil {
+	if err := database.QueryRow(t.Context(), `SELECT status FROM onboarding_drafts WHERE id = $1`, draftID).Scan(&status); err != nil {
 		t.Fatal(err)
 	}
 	if status != "ready" {
@@ -179,7 +180,7 @@ func hiddenDraftID(t *testing.T, body string) string {
 func createUser(t *testing.T, database *db.DB, email string) string {
 	t.Helper()
 	var userID string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User')
 		RETURNING id`, email,
@@ -191,7 +192,7 @@ func createUser(t *testing.T, database *db.DB, email string) string {
 
 func assertGarageRows(t *testing.T, database *db.DB, tenantID, userID string) {
 	t.Helper()
-	err := database.WithinTenant(context.Background(), tenantID, func(tx *sql.Tx) error {
+	err := database.WithinTenant(context.Background(), tenantID, func(tx pgx.Tx) error {
 		checks := []struct {
 			query string
 			args  []any
@@ -203,7 +204,7 @@ func assertGarageRows(t *testing.T, database *db.DB, tenantID, userID string) {
 		}
 		for _, check := range checks {
 			var count int
-			if err := tx.QueryRow(check.query, check.args...).Scan(&count); err != nil {
+			if err := tx.QueryRow(context.Background(), check.query, check.args...).Scan(&count); err != nil {
 				return err
 			}
 			if count != 1 {

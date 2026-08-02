@@ -119,7 +119,7 @@ func newCallsFixture(t *testing.T) callsFixture {
 		VALUES ($1, $2, 'Alice', 'Martin') RETURNING id::text`,
 		fixture.tenantID, locationID)
 	var agentID string
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT id::text FROM agents
 		WHERE tenant_id = $1 AND location_id = $2`,
 		fixture.tenantID, locationID,
@@ -169,7 +169,7 @@ func newCallsFixture(t *testing.T) callsFixture {
 func insertReturningID(t *testing.T, database *db.DB, query string, args ...any) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(query, args...).Scan(&id); err != nil {
+	if err := database.QueryRow(t.Context(), query, args...).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -177,7 +177,7 @@ func insertReturningID(t *testing.T, database *db.DB, query string, args ...any)
 
 func mustExec(t *testing.T, database *db.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := database.Exec(query, args...); err != nil {
+	if _, err := database.Exec(t.Context(), query, args...); err != nil {
 		t.Fatal(err)
 	}
 }

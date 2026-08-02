@@ -2,7 +2,6 @@ package agenda_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -10,10 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/esrid/garageband/internal/features/agenda"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/dbtest"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type agendaFixture struct {
@@ -102,7 +103,7 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	var reservationCount int
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		SELECT count(*) FROM appointment_resource_reservations
 		WHERE tenant_id = $1`, fixture.tenantID).Scan(&reservationCount); err != nil {
 		t.Fatal(err)
@@ -110,19 +111,19 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 	if reservationCount != 2 {
 		t.Fatalf("reservations = %d, want 2", reservationCount)
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO service_resource_requirements (
 		    tenant_id, location_id, service_id, resource_kind, quantity
 		) VALUES ($1, $2, $3, 'equipment', 2)`,
 		fixture.tenantID, fixture.locationID, fixture.serviceID); err == nil {
 		t.Fatal("requirement invalidating a future appointment unexpectedly accepted")
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE bookable_resources SET active = false
 		WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, fixture.secondResourceID); err == nil {
 		t.Fatal("future reserved resource unexpectedly deactivated")
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE appointment_resource_reservations
 		SET ends_at = ends_at + interval '15 minutes'
 		WHERE tenant_id = $1 AND resource_id = $2`,
@@ -185,8 +186,8 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 		    ($1, $2, $3, 'bay', 1),
 		    ($1, $2, $3, 'equipment', 1)`,
 		fixture.tenantID, fixture.locationID, fixture.serviceID)
-	err := fixture.runtime.WithinTenantUser(t.Context(), fixture.tenantID, fixture.userID, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `
+	err := fixture.runtime.WithinTenantUser(t.Context(), fixture.tenantID, fixture.userID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO appointments (
 			    tenant_id, location_id, customer_id, vehicle_id, service_id,
 			    resource_id, starts_at, ends_at, source
@@ -232,7 +233,7 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 		t.Fatalf("automatic booking = %d body %q", response.Code, response.Body.String())
 	}
 	var reservations int
-	if err := fixture.fixtures.QueryRow(`
+	if err := fixture.fixtures.QueryRow(t.Context(), `
 		SELECT count(*)
 		FROM appointment_resource_reservations reservation
 		JOIN bookable_resources resource
@@ -349,25 +350,25 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 	if !errors.As(err, &fieldError) || !strings.Contains(fieldError.Message, "horaires") {
 		t.Fatalf("closed weekday = %#v err %v", fieldError, err)
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO location_closures (
 		    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
 		) VALUES ($1, $2, '2026-08-12 12:30:00+00', '2026-08-12 13:00:00+00', 'Chevauchement', $3)`,
 		fixture.tenantID, fixture.locationID, fixture.userID); err == nil {
 		t.Fatal("closure overlapping an active appointment unexpectedly accepted")
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		DELETE FROM location_opening_hours
 		WHERE tenant_id = $1 AND location_id = $2 AND weekday = 3 AND opens_at = '08:00'`,
 		fixture.tenantID, fixture.locationID); err == nil {
 		t.Fatal("opening window containing an active appointment unexpectedly deleted")
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		UPDATE locations SET timezone = 'Europe/Paris'
 		WHERE tenant_id = $1 AND id = $2`, fixture.tenantID, fixture.locationID); err == nil {
 		t.Fatal("timezone with scheduling history unexpectedly changed")
 	}
-	if _, err := fixture.fixtures.Exec(`
+	if _, err := fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
 		VALUES ($1, $2, 3, '13:00', '15:00')`, fixture.tenantID, fixture.locationID); err == nil {
 		t.Fatal("overlapping opening hours unexpectedly accepted")
@@ -401,7 +402,7 @@ func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
 		t.Fatalf("availability HTTP = %d %q", response.Code, response.Body.String())
 	}
 	var appointments int
-	if err := fixture.fixtures.QueryRow(`SELECT count(*) FROM appointments WHERE tenant_id = $1`, fixture.tenantID).Scan(&appointments); err != nil {
+	if err := fixture.fixtures.QueryRow(t.Context(), `SELECT count(*) FROM appointments WHERE tenant_id = $1`, fixture.tenantID).Scan(&appointments); err != nil {
 		t.Fatal(err)
 	}
 	if appointments != 0 {
@@ -470,7 +471,7 @@ func newAgendaFixture(t *testing.T) agendaFixture {
 func insertReturningID(t *testing.T, database *db.DB, query string, args ...any) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(query, args...).Scan(&id); err != nil {
+	if err := database.QueryRow(t.Context(), query, args...).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -478,7 +479,7 @@ func insertReturningID(t *testing.T, database *db.DB, query string, args ...any)
 
 func mustExec(t *testing.T, database *db.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := database.Exec(query, args...); err != nil {
+	if _, err := database.Exec(t.Context(), query, args...); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -109,7 +109,7 @@ func TestAgentWritesRequireAdminAndDatabaseRejectsWrongProviderKind(t *testing.T
 	}
 
 	stt := fixture.connection(t, "speech_to_text", "speech", "wrong-kind")
-	_, err = fixture.fixtures.Exec(`
+	_, err = fixture.fixtures.Exec(t.Context(), `
 		UPDATE agents SET llm_connection_id = $1
 		WHERE tenant_id = $2 AND id = $3`, stt, fixture.tenantID, fixture.agentID)
 	var pgError *pgconn.PgError
@@ -117,7 +117,7 @@ func TestAgentWritesRequireAdminAndDatabaseRejectsWrongProviderKind(t *testing.T
 		t.Fatalf("wrong provider kind update = %v", err)
 	}
 
-	_, err = fixture.fixtures.Exec(`
+	_, err = fixture.fixtures.Exec(t.Context(), `
 		INSERT INTO agents (tenant_id, location_id, name)
 		VALUES ($1, $2, 'Duplicate')`, fixture.tenantID, fixture.locationID)
 	if !errors.As(err, &pgError) || pgError.Code != "23505" {
@@ -168,7 +168,7 @@ func newAgentsFixture(t *testing.T) agentsFixture {
 		INSERT INTO locations (tenant_id, slug, name, timezone)
 		VALUES ($1, 'central', 'Atelier Central', 'Europe/Paris')
 		RETURNING id::text`, fixture.tenantID)
-	if err := fixtures.QueryRow(`
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT id::text FROM agents
 		WHERE tenant_id = $1 AND location_id = $2`,
 		fixture.tenantID, fixture.locationID,
@@ -213,7 +213,7 @@ func (fixture agentsFixture) addNumber(t *testing.T) {
 func insertReturningID(t *testing.T, database *db.DB, query string, args ...any) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(query, args...).Scan(&id); err != nil {
+	if err := database.QueryRow(t.Context(), query, args...).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -221,7 +221,7 @@ func insertReturningID(t *testing.T, database *db.DB, query string, args ...any)
 
 func mustExec(t *testing.T, database *db.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := database.Exec(query, args...); err != nil {
+	if _, err := database.Exec(t.Context(), query, args...); err != nil {
 		t.Fatal(err)
 	}
 }

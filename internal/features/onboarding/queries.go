@@ -7,6 +7,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -54,7 +56,7 @@ func (s *Store) CreateDraft(
 		return Draft{}, err
 	}
 	draft := Draft{Profile: profile, ExpiresAt: time.Now().UTC().Add(draftTTL)}
-	err = s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRow(ctx, `
 		INSERT INTO onboarding_drafts
 			(user_id, source_kind, source_value, provider, profile, expires_at)
 		VALUES ($1, 'siret', $2, $3, $4, $5)
@@ -76,12 +78,12 @@ func (s *Store) FinalizeDraft(
 	if !validSIRET(input.SIRET) || len(input.CountryCode) != 2 {
 		return "", ErrInvalidGarage
 	}
-	err = s.db.WithinNewTenantUser(ctx, userID, func(tx *sql.Tx, newTenantID string) error {
+	err = s.db.WithinNewTenantUser(ctx, userID, func(tx pgx.Tx, newTenantID string) error {
 		var sourceKind, sourceValue, provider, status string
 		var profile []byte
 		var existingTenantID sql.NullString
 		var expiresAt time.Time
-		err := tx.QueryRowContext(ctx, `
+		err := tx.QueryRow(ctx, `
 			SELECT source_kind, source_value, provider, status, profile,
 			       tenant_id, expires_at
 			FROM onboarding_drafts
@@ -110,20 +112,20 @@ func (s *Store) FinalizeDraft(
 		if input.WebsiteURL != "" {
 			website = input.WebsiteURL
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO tenants (id, slug, name, legal_name, siren, website_url)
 			VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)`,
 			tenantID, input.Slug, input.Name, input.LegalName, input.SIRET[:9], website,
 		); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'owner')`, tenantID, userID,
 		); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO locations (
 				tenant_id, slug, name, siret, address_line1, address_line2,
 				postal_code, city, country_code
@@ -134,7 +136,7 @@ func (s *Store) FinalizeDraft(
 		); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO business_enrichment_runs (
 				tenant_id, source_kind, source_value, provider, status, result,
 				started_at, completed_at
@@ -143,7 +145,7 @@ func (s *Store) FinalizeDraft(
 		); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE onboarding_drafts
 			SET status = 'completed', tenant_id = $1, profile = '{}'::jsonb,
 			    updated_at = now()
@@ -153,11 +155,7 @@ func (s *Store) FinalizeDraft(
 		if err != nil {
 			return err
 		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows != 1 {
+		if result.RowsAffected() != 1 {
 			return sql.ErrNoRows
 		}
 		return nil

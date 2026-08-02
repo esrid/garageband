@@ -6,6 +6,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/esrid/garageband/internal/platform/db"
 )
 
@@ -162,7 +165,7 @@ func (s *Store) Schedule(
 	userID string,
 	locationID string,
 ) (schedule Schedule, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		organization, role, err := membershipContext(ctx, tx, tenantID, userID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -172,7 +175,7 @@ func (s *Store) Schedule(
 		}
 		schedule.Organization = organization
 		schedule.CanManage = role == "owner" || role == "admin"
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			SELECT id, tenant_id, name,
 			       COALESCE(siret, ''), COALESCE(phone_e164, ''),
 			       COALESCE(email, ''), COALESCE(website_url, ''),
@@ -184,7 +187,7 @@ func (s *Store) Schedule(
 		if schedule.Location, err = scanLocation(row); err != nil {
 			return err
 		}
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT availability_schedule_enabled
 			FROM locations WHERE tenant_id = $1 AND id = $2`,
 			tenantID, locationID,
@@ -192,7 +195,7 @@ func (s *Store) Schedule(
 			return err
 		}
 
-		hourRows, err := tx.QueryContext(ctx, `
+		hourRows, err := tx.Query(ctx, `
 			SELECT weekday, to_char(opens_at, 'HH24:MI'), to_char(closes_at, 'HH24:MI')
 			FROM location_opening_hours
 			WHERE tenant_id = $1 AND location_id = $2
@@ -200,14 +203,8 @@ func (s *Store) Schedule(
 		if err != nil {
 			return err
 		}
-		for hourRows.Next() {
-			var opening OpeningHour
-			if err := hourRows.Scan(&opening.Weekday, &opening.OpensAt, &opening.ClosesAt); err != nil {
-				return errors.Join(err, hourRows.Close())
-			}
-			schedule.OpeningHours = append(schedule.OpeningHours, opening)
-		}
-		if err := errors.Join(hourRows.Err(), hourRows.Close()); err != nil {
+		schedule.OpeningHours, err = pgx.CollectRows(hourRows, pgx.RowToStructByPos[OpeningHour])
+		if err != nil {
 			return err
 		}
 
@@ -215,7 +212,7 @@ func (s *Store) Schedule(
 		if err != nil {
 			return err
 		}
-		closureRows, err := tx.QueryContext(ctx, `
+		closureRows, err := tx.Query(ctx, `
 			SELECT id::text, starts_at, ends_at, COALESCE(reason, '')
 			FROM location_closures
 			WHERE tenant_id = $1 AND location_id = $2 AND ends_at >= now()
@@ -227,17 +224,19 @@ func (s *Store) Schedule(
 		for closureRows.Next() {
 			var closure Closure
 			if err := closureRows.Scan(&closure.ID, &closure.StartsAt, &closure.EndsAt, &closure.Reason); err != nil {
-				return errors.Join(err, closureRows.Close())
+				closureRows.Close()
+				return err
 			}
 			closure.StartsAt = closure.StartsAt.In(zone)
 			closure.EndsAt = closure.EndsAt.In(zone)
 			schedule.Closures = append(schedule.Closures, closure)
 		}
-		if err := errors.Join(closureRows.Err(), closureRows.Close()); err != nil {
+		closureRows.Close()
+		if err := closureRows.Err(); err != nil {
 			return err
 		}
 
-		resourceRows, err := tx.QueryContext(ctx, `
+		resourceRows, err := tx.Query(ctx, `
 			SELECT id::text, kind, name, active
 			FROM bookable_resources
 			WHERE tenant_id = $1 AND location_id = $2
@@ -245,18 +244,12 @@ func (s *Store) Schedule(
 		if err != nil {
 			return err
 		}
-		for resourceRows.Next() {
-			var resource WorkshopResource
-			if err := resourceRows.Scan(&resource.ID, &resource.Kind, &resource.Name, &resource.Active); err != nil {
-				return errors.Join(err, resourceRows.Close())
-			}
-			schedule.Resources = append(schedule.Resources, resource)
-		}
-		if err := errors.Join(resourceRows.Err(), resourceRows.Close()); err != nil {
+		schedule.Resources, err = pgx.CollectRows(resourceRows, pgx.RowToStructByPos[WorkshopResource])
+		if err != nil {
 			return err
 		}
 
-		serviceRows, err := tx.QueryContext(ctx, `
+		serviceRows, err := tx.Query(ctx, `
 			SELECT service.id::text, service.name, service.duration_minutes,
 			       service.active, COALESCE(service.catalog_item_id::text, ''),
 			       service.catalog_link_enabled, COALESCE(item.reference, ''),
@@ -303,7 +296,8 @@ func (s *Store) Schedule(
 				&service.Price.TaxBasis, &service.Price.VATBasisPoints,
 				&service.CatalogAvailable, &kind, &quantity,
 			); err != nil {
-				return errors.Join(err, serviceRows.Close())
+				serviceRows.Close()
+				return err
 			}
 			index, exists := serviceIndexes[service.ID]
 			if !exists {
@@ -315,14 +309,15 @@ func (s *Store) Schedule(
 				schedule.Services[index].Requirements = append(schedule.Services[index].Requirements, ServiceRequirement{Kind: kind.String, Quantity: int(quantity.Int64)})
 			}
 		}
-		if err := errors.Join(serviceRows.Err(), serviceRows.Close()); err != nil {
+		serviceRows.Close()
+		if err := serviceRows.Err(); err != nil {
 			return err
 		}
 
 		if !schedule.CanManage {
 			return nil
 		}
-		catalogRows, err := tx.QueryContext(ctx, `
+		catalogRows, err := tx.Query(ctx, `
 			SELECT item.id::text, item.name, COALESCE(item.reference, ''),
 			       item.duration_minutes, item.price_kind,
 			       COALESCE(item.amount_cents, 0), COALESCE(item.max_amount_cents, 0),
@@ -359,11 +354,13 @@ func (s *Store) Schedule(
 				&item.Price.Kind, &item.Price.AmountCents, &item.Price.MaxAmountCents,
 				&item.Price.TaxBasis, &item.Price.VATBasisPoints,
 			); err != nil {
-				return errors.Join(err, catalogRows.Close())
+				catalogRows.Close()
+				return err
 			}
 			schedule.CatalogItems = append(schedule.CatalogItems, item)
 		}
-		return errors.Join(catalogRows.Err(), catalogRows.Close())
+		catalogRows.Close()
+		return catalogRows.Err()
 	})
 	return schedule, err
 }
@@ -375,11 +372,11 @@ func (s *Store) LinkCatalogService(
 	locationID string,
 	catalogItemID string,
 ) (id string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		err := tx.QueryRowContext(ctx, `
+		err := tx.QueryRow(ctx, `
 			INSERT INTO service_offerings (
 			    tenant_id, location_id, code, name, description,
 			    duration_minutes, price_cents, currency, active,
@@ -426,11 +423,11 @@ func (s *Store) SetCatalogServiceEnabled(
 	serviceID string,
 	enabled bool,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE service_offerings service
 			SET catalog_link_enabled = $4
 			WHERE service.tenant_id = $1 AND service.location_id = $2
@@ -473,11 +470,11 @@ func (s *Store) AddResource(
 	locationID string,
 	input ResourceInput,
 ) (id string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		return tx.QueryRowContext(ctx, `
+		return tx.QueryRow(ctx, `
 			INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
 			SELECT $1, location.id, $3, btrim($4)
 			FROM locations location
@@ -495,11 +492,11 @@ func (s *Store) SetResourceActive(
 	resourceID string,
 	active bool,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE bookable_resources SET active = $4, updated_at = now()
 			WHERE tenant_id = $1 AND location_id = $2 AND id = $3`,
 			tenantID, locationID, resourceID, active)
@@ -517,11 +514,11 @@ func (s *Store) UpsertRequirement(
 	locationID string,
 	input RequirementInput,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			INSERT INTO service_resource_requirements (
 			    tenant_id, location_id, service_id, resource_kind, quantity
 			)
@@ -546,11 +543,11 @@ func (s *Store) DeleteRequirement(
 	locationID string,
 	input RequirementInput,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			DELETE FROM service_resource_requirements
 			WHERE tenant_id = $1 AND location_id = $2
 			  AND service_id = $3 AND resource_kind = $4`,
@@ -569,12 +566,12 @@ func (s *Store) AddOpeningHour(
 	locationID string,
 	input OpeningHourInput,
 ) (err error) {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
 		var locationExists bool
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (SELECT 1 FROM locations WHERE tenant_id = $1 AND id = $2)`,
 			tenantID, locationID,
 		).Scan(&locationExists); err != nil {
@@ -583,7 +580,7 @@ func (s *Store) AddOpeningHour(
 		if !locationExists {
 			return sql.ErrNoRows
 		}
-		_, err := tx.ExecContext(ctx, `
+		_, err := tx.Exec(ctx, `
 			INSERT INTO location_opening_hours (
 			    tenant_id, location_id, weekday, opens_at, closes_at
 			) VALUES ($1, $2, $3, $4::time, $5::time)`,
@@ -599,11 +596,11 @@ func (s *Store) DeleteOpeningHour(
 	locationID string,
 	input OpeningHourInput,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			DELETE FROM location_opening_hours
 			WHERE tenant_id = $1 AND location_id = $2 AND weekday = $3
 			  AND opens_at = $4::time AND closes_at = $5::time`,
@@ -622,12 +619,12 @@ func (s *Store) AddClosure(
 	locationID string,
 	input ClosureInput,
 ) (id string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
 		var timezoneName string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT timezone FROM locations WHERE tenant_id = $1 AND id = $2`,
 			tenantID, locationID,
 		).Scan(&timezoneName); err != nil {
@@ -651,7 +648,7 @@ func (s *Store) AddClosure(
 		if !endsAt.After(startsAt) {
 			return &ScheduleFieldError{Field: FieldClosureEndTime, Message: "La fin doit être après le début."}
 		}
-		return tx.QueryRowContext(ctx, `
+		return tx.QueryRow(ctx, `
 			INSERT INTO location_closures (
 			    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
 			) VALUES ($1, $2, $3, $4, NULLIF(btrim($5), ''), $6)
@@ -669,11 +666,11 @@ func (s *Store) DeleteClosure(
 	locationID string,
 	closureID string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			DELETE FROM location_closures
 			WHERE tenant_id = $1 AND location_id = $2 AND id = $3`,
 			tenantID, locationID, closureID)
@@ -684,12 +681,8 @@ func (s *Store) DeleteClosure(
 	})
 }
 
-func exactlyOne(result sql.Result) error {
-	count, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if count != 1 {
+func exactlyOne(result pgconn.CommandTag) error {
+	if result.RowsAffected() != 1 {
 		return sql.ErrNoRows
 	}
 	return nil
@@ -700,7 +693,7 @@ func (s *Store) Overview(
 	tenantID string,
 	userID string,
 ) (overview Overview, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) (returnErr error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		organization, role, err := membershipContext(ctx, tx, tenantID, userID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -712,7 +705,7 @@ func (s *Store) Overview(
 		overview.MembershipRole = role
 		overview.CanManage = role == "owner" || role == "admin"
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT id, tenant_id, name,
 			       COALESCE(siret, ''), COALESCE(phone_e164, ''),
 			       COALESCE(email, ''), COALESCE(website_url, ''),
@@ -725,15 +718,8 @@ func (s *Store) Overview(
 		if err != nil {
 			return err
 		}
-		defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
-		for rows.Next() {
-			location, err := scanLocation(rows)
-			if err != nil {
-				return err
-			}
-			overview.Locations = append(overview.Locations, location)
-		}
-		return rows.Err()
+		overview.Locations, err = pgx.CollectRows(rows, pgx.RowToStructByPos[Location])
+		return err
 	})
 	return overview, err
 }
@@ -744,7 +730,7 @@ func (s *Store) Get(
 	userID string,
 	locationID string,
 ) (location Location, canManage bool, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		_, role, err := membershipContext(ctx, tx, tenantID, userID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -753,7 +739,7 @@ func (s *Store) Get(
 			return err
 		}
 		canManage = role == "owner" || role == "admin"
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			SELECT id, tenant_id, name,
 			       COALESCE(siret, ''), COALESCE(phone_e164, ''),
 			       COALESCE(email, ''), COALESCE(website_url, ''),
@@ -774,11 +760,11 @@ func (s *Store) Create(
 	userID string,
 	input Input,
 ) (location Location, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			WITH generated AS (SELECT uuidv7() AS id)
 			INSERT INTO locations (
 				id, tenant_id, slug, name, siret, phone_e164, email,
@@ -817,11 +803,11 @@ func (s *Store) Update(
 	locationID string,
 	input Input,
 ) (location Location, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			UPDATE locations
 			SET name = btrim($3),
 			    siret = NULLIF(btrim($4), ''),
@@ -860,11 +846,11 @@ func (s *Store) SetStatus(
 	locationID string,
 	status string,
 ) (location Location, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, tenantID, userID); err != nil {
 			return err
 		}
-		row := tx.QueryRowContext(ctx, `
+		row := tx.QueryRow(ctx, `
 			UPDATE locations
 			SET status = $3
 			WHERE tenant_id = $1 AND id = $2
@@ -885,11 +871,11 @@ func (s *Store) SetStatus(
 
 func membershipContext(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	userID string,
 ) (organization string, role string, err error) {
-	err = tx.QueryRowContext(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT tenant.name, membership.role
 		FROM tenant_memberships membership
 		JOIN tenants tenant ON tenant.id = membership.tenant_id
@@ -899,7 +885,7 @@ func membershipContext(
 	return organization, role, err
 }
 
-func requireManager(ctx context.Context, tx *sql.Tx, tenantID, userID string) error {
+func requireManager(ctx context.Context, tx pgx.Tx, tenantID, userID string) error {
 	_, role, err := membershipContext(ctx, tx, tenantID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

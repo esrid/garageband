@@ -1,10 +1,13 @@
 package db_test
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/esrid/garageband/internal/platform/dbtest"
 )
@@ -25,11 +28,11 @@ func TestTenantRLSIsolation(t *testing.T) {
 	assertVisibleLocations := func(tenantID, userID string, want int) {
 		t.Helper()
 		var got int
-		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 				return err
 			}
-			return tx.QueryRowContext(
+			return tx.QueryRow(
 				t.Context(),
 				`SELECT COUNT(*) FROM locations`,
 			).Scan(&got)
@@ -44,11 +47,11 @@ func TestTenantRLSIsolation(t *testing.T) {
 	assertVisibleLocations(tenantA, userA, 1)
 	assertVisibleLocations(tenantB, userB, 1)
 
-	err := d.WithinTenantUser(t.Context(), tenantA, userA, func(tx *sql.Tx) error {
+	err := d.WithinTenantUser(t.Context(), tenantA, userA, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO locations (tenant_id, slug, name)
 			VALUES ($1, 'wrong-tenant', 'Wrong tenant')`, tenantB)
 		return err
@@ -62,12 +65,12 @@ func TestRuntimeRoleCanCreateTenantOnlyInsideNewTenantScope(t *testing.T) {
 	d := dbtest.Open(t)
 	role := dbtest.RuntimeRole(t, d)
 
-	err := d.WithinNewTenant(t.Context(), func(tx *sql.Tx, tenantID string) error {
+	err := d.WithinNewTenant(t.Context(), func(tx pgx.Tx, tenantID string) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
 		var insertedID string
-		if err := tx.QueryRowContext(t.Context(), `
+		if err := tx.QueryRow(t.Context(), `
 			INSERT INTO tenants (id, slug, name)
 			VALUES ($1, 'onboarded', 'Onboarded garage')
 			RETURNING id`, tenantID).Scan(&insertedID); err != nil {
@@ -94,16 +97,16 @@ func TestUserScopedWorkspaceDiscoveryIsRLSIsolated(t *testing.T) {
 	insertMembership(t, d, tenantA, userA)
 	insertMembership(t, d, tenantB, userB)
 
-	err := d.WithinUser(t.Context(), userA, func(tx *sql.Tx) error {
+	err := d.WithinUser(t.Context(), userA, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
 
 		var tenants, memberships int
-		if err := tx.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tenants`).Scan(&tenants); err != nil {
+		if err := tx.QueryRow(t.Context(), `SELECT COUNT(*) FROM tenants`).Scan(&tenants); err != nil {
 			return err
 		}
-		if err := tx.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tenant_memberships`).Scan(&memberships); err != nil {
+		if err := tx.QueryRow(t.Context(), `SELECT COUNT(*) FROM tenant_memberships`).Scan(&memberships); err != nil {
 			return err
 		}
 		if tenants != 1 || memberships != 1 {
@@ -114,7 +117,7 @@ func TestUserScopedWorkspaceDiscoveryIsRLSIsolated(t *testing.T) {
 			)
 		}
 
-		result, err := tx.ExecContext(
+		result, err := tx.Exec(
 			t.Context(),
 			`UPDATE tenants SET name = 'forbidden' WHERE id = $1`,
 			tenantB,
@@ -122,11 +125,7 @@ func TestUserScopedWorkspaceDiscoveryIsRLSIsolated(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		updated, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if updated != 0 {
+		if updated := result.RowsAffected(); updated != 0 {
 			t.Fatalf("user-scoped context updated %d tenant rows, want 0", updated)
 		}
 		return nil
@@ -147,11 +146,11 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 	insertMembershipRole(t, d, tenantID, memberID, "member")
 
 	var locationID string
-	err := d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+	err := d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
-		return tx.QueryRowContext(t.Context(), `
+		return tx.QueryRow(t.Context(), `
 			INSERT INTO locations (tenant_id, slug, name, timezone)
 			VALUES ($1, 'owner-site', 'Owner site', 'Europe/Paris')
 			RETURNING id`, tenantID).Scan(&locationID)
@@ -159,7 +158,7 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(`
+	if _, err := d.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 			tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`,
@@ -168,12 +167,12 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = d.WithinTenantUser(t.Context(), tenantID, memberID, func(tx *sql.Tx) error {
+	err = d.WithinTenantUser(t.Context(), tenantID, memberID, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
 		var visible int
-		if err := tx.QueryRowContext(
+		if err := tx.QueryRow(
 			t.Context(), `SELECT COUNT(*) FROM locations`,
 		).Scan(&visible); err != nil {
 			return err
@@ -181,7 +180,7 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 		if visible != 1 {
 			t.Fatalf("member sees %d locations, want 1", visible)
 		}
-		_, err := tx.ExecContext(t.Context(), `
+		_, err := tx.Exec(t.Context(), `
 			INSERT INTO locations (tenant_id, slug, name)
 			VALUES ($1, 'member-site', 'Member site')`, tenantID)
 		return err
@@ -190,12 +189,12 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 		t.Fatal("member unexpectedly created a location")
 	}
 
-	err = d.WithinTenantUser(t.Context(), tenantID, outsiderID, func(tx *sql.Tx) error {
+	err = d.WithinTenantUser(t.Context(), tenantID, outsiderID, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
 		var visible int
-		if err := tx.QueryRowContext(
+		if err := tx.QueryRow(
 			t.Context(), `SELECT COUNT(*) FROM locations`,
 		).Scan(&visible); err != nil {
 			return err
@@ -209,21 +208,17 @@ func TestLocationManagementRLSUsesMembershipRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx *sql.Tx) error {
+	err = d.WithinTenantUser(t.Context(), tenantID, ownerID, func(tx pgx.Tx) error {
 		if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(
+		result, err := tx.Exec(
 			t.Context(), `DELETE FROM locations WHERE id = $1`, locationID,
 		)
 		if err != nil {
 			return err
 		}
-		deleted, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if deleted != 0 {
+		if deleted := result.RowsAffected(); deleted != 0 {
 			t.Fatalf("owner hard-deleted %d locations, want 0", deleted)
 		}
 		return nil
@@ -249,7 +244,7 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	insertLocationAssignment(t, d, tenantID, receivingStaffID, receivingLocationID, ownerID)
 
 	var customerID, vehicleID string
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO customers (
 			tenant_id, home_location_id, first_name, last_name
 		) VALUES ($1, $2, 'Alice', 'Martin') RETURNING id`,
@@ -257,7 +252,7 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	).Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO vehicles (
 			tenant_id, location_id, customer_id,
 			registration_country, registration_plate
@@ -270,11 +265,11 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	visibleCustomers := func(userID string) int {
 		t.Helper()
 		var count int
-		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			return tx.QueryRowContext(
+			return tx.QueryRow(
 				t.Context(), `SELECT COUNT(*) FROM customers WHERE id = $1`, customerID,
 			).Scan(&count)
 		})
@@ -289,7 +284,7 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 
 	grantedAt := time.Now().UTC().Add(-time.Hour)
 	var grantID string
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO customer_location_grants (
 			tenant_id, customer_id, source_location_id,
 			receiving_location_id, granted_by_user_id, granted_at
@@ -302,14 +297,14 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	if got := visibleCustomers(receivingStaffID); got != 1 {
 		t.Fatalf("receiving site sees %d customers during sharing, want 1", got)
 	}
-	if _, err := d.Exec(`
+	if _, err := d.Exec(t.Context(), `
 		UPDATE customer_location_grants
 		SET granted_at = granted_at - interval '1 day'
 		WHERE id = $1`, grantID,
 	); err == nil {
 		t.Fatal("grant audit timestamp was mutable")
 	}
-	if _, err := d.Exec(`
+	if _, err := d.Exec(t.Context(), `
 		UPDATE customers SET home_location_id = $2 WHERE id = $1`,
 		customerID, receivingLocationID,
 	); err == nil {
@@ -319,24 +314,20 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	var appointmentID, memoryID string
 	appointmentCreatedAt := grantedAt.Add(30 * time.Minute)
 	err := d.WithinTenantUser(
-		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+		t.Context(), tenantID, receivingStaffID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			result, err := tx.ExecContext(t.Context(), `
+			result, err := tx.Exec(t.Context(), `
 				UPDATE customers SET first_name = 'Forbidden'
 				WHERE id = $1`, customerID)
 			if err != nil {
 				return err
 			}
-			updated, err := result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if updated != 0 {
+			if updated := result.RowsAffected(); updated != 0 {
 				t.Fatalf("receiving site updated %d canonical customers, want 0", updated)
 			}
-			return tx.QueryRowContext(t.Context(), `
+			return tx.QueryRow(t.Context(), `
 				INSERT INTO appointments (
 					tenant_id, location_id, customer_id, vehicle_id,
 					status, starts_at, ends_at, source, created_at,
@@ -354,11 +345,11 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = d.WithinTenantUser(
-		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+		t.Context(), tenantID, receivingStaffID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			return tx.QueryRowContext(t.Context(), `
+			return tx.QueryRow(t.Context(), `
 				INSERT INTO customer_memories (
 					tenant_id, location_id, customer_id, key, value,
 					customer_snapshot, created_at
@@ -373,7 +364,7 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := d.Exec(`
+	if _, err := d.Exec(t.Context(), `
 		UPDATE customer_location_grants
 		SET revoked_by_user_id = $3, revoked_at = now()
 		WHERE tenant_id = $1 AND id = $2`, tenantID, grantID, ownerID,
@@ -388,17 +379,17 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 		t.Helper()
 		var count int
 		var customerSnapshot, vehicleSnapshot []byte
-		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			err := tx.QueryRowContext(t.Context(), `
+			err := tx.QueryRow(t.Context(), `
 				SELECT COUNT(*) FROM appointments WHERE id = $1`, appointmentID,
 			).Scan(&count)
 			if err != nil || count == 0 {
 				return err
 			}
-			return tx.QueryRowContext(t.Context(), `
+			return tx.QueryRow(t.Context(), `
 				SELECT customer_snapshot, vehicle_snapshot
 				FROM appointments WHERE id = $1`, appointmentID,
 			).Scan(&customerSnapshot, &vehicleSnapshot)
@@ -425,11 +416,11 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	assertMemory := func(userID string) {
 		t.Helper()
 		var snapshot []byte
-		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx *sql.Tx) error {
+		err := d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			return tx.QueryRowContext(t.Context(), `
+			return tx.QueryRow(t.Context(), `
 				SELECT customer_snapshot
 				FROM customer_memories WHERE id = $1`, memoryID,
 			).Scan(&snapshot)
@@ -443,11 +434,11 @@ func TestCustomerShareRLSLifecycleAndHistoricalVisibility(t *testing.T) {
 	assertMemory(homeStaffID)
 
 	err = d.WithinTenantUser(
-		t.Context(), tenantID, receivingStaffID, func(tx *sql.Tx) error {
+		t.Context(), tenantID, receivingStaffID, func(tx pgx.Tx) error {
 			if err := dbtest.SetLocalRole(t.Context(), tx, runtimeRole); err != nil {
 				return err
 			}
-			_, err := tx.ExecContext(t.Context(), `
+			_, err := tx.Exec(t.Context(), `
 				INSERT INTO appointments (
 					tenant_id, location_id, customer_id, vehicle_id,
 					status, starts_at, ends_at, source
@@ -479,7 +470,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	locationID := insertLocation(t, d, tenantID, "history-shop")
 
 	var customerID, resourceID string
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO customers (
 			tenant_id, home_location_id, first_name, last_name
 		)
@@ -487,7 +478,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 		RETURNING id`, tenantID, locationID).Scan(&customerID); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
 		VALUES ($1, $2, 'bay', 'Bay 1')
 		RETURNING id`, tenantID, locationID).Scan(&resourceID); err != nil {
@@ -497,7 +488,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	vehicles := make([]string, 0, 2)
 	for _, plate := range []string{"AA-123-AA", "BB-456-BB"} {
 		var vehicleID string
-		if err := d.QueryRow(`
+		if err := d.QueryRow(t.Context(), `
 			INSERT INTO vehicles (
 				tenant_id, location_id, customer_id,
 				registration_country, registration_plate
@@ -513,7 +504,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	start := time.Date(2026, time.August, 3, 9, 0, 0, 0, time.UTC)
 	end := start.Add(time.Hour)
 	var appointmentID string
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		INSERT INTO appointments (
 			tenant_id, location_id, customer_id, vehicle_id, resource_id,
 			status, starts_at, ends_at, source
@@ -525,7 +516,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := d.Exec(`
+	if _, err := d.Exec(t.Context(), `
 		INSERT INTO appointments (
 			tenant_id, location_id, customer_id, vehicle_id, resource_id,
 			status, starts_at, ends_at, source
@@ -539,7 +530,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 
 	for i, vehicleID := range vehicles {
 		var repairOrderID string
-		if err := d.QueryRow(`
+		if err := d.QueryRow(t.Context(), `
 			INSERT INTO repair_orders (
 				tenant_id, location_id, customer_id, vehicle_id,
 				appointment_id, status, subtotal_cents, tax_cents,
@@ -555,7 +546,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 		).Scan(&repairOrderID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := d.Exec(`
+		if _, err := d.Exec(t.Context(), `
 			INSERT INTO repair_order_items (
 				tenant_id, repair_order_id, kind, description, quantity,
 				unit_price_cents, tax_rate, line_subtotal_cents,
@@ -570,7 +561,7 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	}
 
 	var repairs int
-	if err := d.QueryRow(`
+	if err := d.QueryRow(t.Context(), `
 		SELECT COUNT(*) FROM repair_orders
 		WHERE tenant_id = $1 AND customer_id = $2`,
 		tenantID, customerID,
@@ -583,11 +574,11 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 }
 
 func insertTenant(t *testing.T, database interface {
-	QueryRow(query string, args ...any) *sql.Row
+	QueryRow(ctx context.Context, query string, args ...any) pgx.Row
 }, slug string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(
+	if err := database.QueryRow(t.Context(),
 		`INSERT INTO tenants (slug, name) VALUES ($1, $2) RETURNING id`,
 		slug, slug,
 	).Scan(&id); err != nil {
@@ -597,11 +588,11 @@ func insertTenant(t *testing.T, database interface {
 }
 
 func insertLocation(t *testing.T, database interface {
-	QueryRow(query string, args ...any) *sql.Row
+	QueryRow(ctx context.Context, query string, args ...any) pgx.Row
 }, tenantID, slug string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO locations (tenant_id, slug, name)
 		VALUES ($1, $2, $3)
 		RETURNING id`, tenantID, slug, slug,
@@ -612,11 +603,11 @@ func insertLocation(t *testing.T, database interface {
 }
 
 func insertUser(t *testing.T, database interface {
-	QueryRow(query string, args ...any) *sql.Row
+	QueryRow(ctx context.Context, query string, args ...any) pgx.Row
 }, email string) string {
 	t.Helper()
 	var id string
-	if err := database.QueryRow(`
+	if err := database.QueryRow(t.Context(), `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', $1, $1, 'Test User')
 		RETURNING id`, email).Scan(&id); err != nil {
@@ -626,16 +617,16 @@ func insertUser(t *testing.T, database interface {
 }
 
 func insertMembership(t *testing.T, database interface {
-	Exec(query string, args ...any) (sql.Result, error)
+	Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error)
 }, tenantID, userID string) {
 	insertMembershipRole(t, database, tenantID, userID, "owner")
 }
 
 func insertMembershipRole(t *testing.T, database interface {
-	Exec(query string, args ...any) (sql.Result, error)
+	Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error)
 }, tenantID, userID, role string) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO tenant_memberships (tenant_id, user_id, role)
 		VALUES ($1, $2, $3)`, tenantID, userID, role); err != nil {
 		t.Fatal(err)
@@ -645,7 +636,7 @@ func insertMembershipRole(t *testing.T, database interface {
 func insertLocationAssignment(
 	t *testing.T,
 	database interface {
-		Exec(query string, args ...any) (sql.Result, error)
+		Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error)
 	},
 	tenantID string,
 	userID string,
@@ -653,7 +644,7 @@ func insertLocationAssignment(
 	assignedBy string,
 ) {
 	t.Helper()
-	if _, err := database.Exec(`
+	if _, err := database.Exec(t.Context(), `
 		INSERT INTO user_location_assignments (
 			tenant_id, user_id, location_id, assigned_by_user_id
 		) VALUES ($1, $2, $3, $4)`,

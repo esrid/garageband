@@ -6,6 +6,9 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/esrid/garageband/internal/platform/db"
 )
 
@@ -49,14 +52,14 @@ func (s *Store) List(
 	tenantID string,
 	userID string,
 ) (page Index, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadOrganizationRole(ctx, tx, tenantID, userID, &page.Organization)
 		if err != nil {
 			return err
 		}
 		page.CanManage = role == "owner" || role == "admin"
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.Query(ctx, `
 			SELECT agent.id::text, agent.name, location.id::text,
 			       location.name, agent.status,
 			       agent.llm_connection_id::text,
@@ -80,11 +83,13 @@ func (s *Store) List(
 				&record.LocationName, &record.Status,
 				&record.LLM, &record.STT, &record.TTS,
 			); err != nil {
-				return errors.Join(err, rows.Close())
+				rows.Close()
+				return err
 			}
 			records = append(records, record)
 		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			return err
 		}
 
@@ -110,7 +115,7 @@ func (s *Store) Form(
 	userID string,
 	agentID string,
 ) (page FormPage, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		role, err := loadOrganizationRole(ctx, tx, tenantID, userID, &page.Organization)
 		if err != nil {
 			return err
@@ -120,7 +125,7 @@ func (s *Store) Form(
 		page.FieldErrors = make(map[string]string)
 		var llm, stt, tts sql.NullString
 		var locationID string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT agent.name, agent.greeting, agent.system_prompt,
 			       agent.fallback_message, agent.locale, agent.status,
 			       location.id::text, location.name,
@@ -174,12 +179,12 @@ func (s *Store) Save(
 	agentID string,
 	input Input,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx); err != nil {
 			return err
 		}
 		var locationID string
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT location_id::text FROM agents
 			WHERE tenant_id = $1 AND id = $2 AND status <> 'archived'`,
 			tenantID, agentID,
@@ -210,7 +215,7 @@ func (s *Store) Save(
 				return err
 			}
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE agents
 			SET name = $1, greeting = $2, system_prompt = $3,
 			    fallback_message = $4, locale = $5,
@@ -235,12 +240,12 @@ func (s *Store) Activate(
 	userID string,
 	agentID string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx); err != nil {
 			return err
 		}
 		var ready bool
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRow(ctx, `
 			SELECT
 			    llm.status = 'active'
 			    AND stt.status = 'active'
@@ -271,7 +276,7 @@ func (s *Store) Activate(
 		if !ready {
 			return ErrNotReady
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE agents SET status = 'active', updated_at = now()
 			WHERE tenant_id = $1 AND id = $2 AND status <> 'archived'`,
 			tenantID, agentID,
@@ -289,11 +294,11 @@ func (s *Store) Pause(
 	userID string,
 	agentID string,
 ) error {
-	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx *sql.Tx) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx); err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `
+		result, err := tx.Exec(ctx, `
 			UPDATE agents SET status = 'paused', updated_at = now()
 			WHERE tenant_id = $1 AND id = $2 AND status <> 'archived'`,
 			tenantID, agentID,
@@ -307,12 +312,12 @@ func (s *Store) Pause(
 
 func loadOrganizationRole(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	userID string,
 	organization *string,
 ) (role string, err error) {
-	err = tx.QueryRowContext(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT tenant.name, membership.role
 		FROM tenants tenant
 		JOIN tenant_memberships membership ON membership.tenant_id = tenant.id
@@ -324,7 +329,7 @@ func loadOrganizationRole(
 
 func missingConnections(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	record agentRow,
 ) ([]string, error) {
@@ -354,14 +359,14 @@ func missingConnections(
 
 func requireConnection(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	kind string,
 	connectionID string,
 ) error {
 	var exists bool
-	return tx.QueryRowContext(ctx, `
+	return tx.QueryRow(ctx, `
 		SELECT true FROM provider_connections
 		WHERE tenant_id = $1 AND location_id = $2 AND kind = $3 AND id = $4
 		  AND status = 'active'`, tenantID, locationID, kind, connectionID,
@@ -370,12 +375,12 @@ func requireConnection(
 
 func connectionOptions(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	locationID string,
 	kind string,
 ) (options []Option, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id::text,
 		       provider || COALESCE(' · ' || NULLIF(external_account_id, ''), '')
 		FROM provider_connections
@@ -386,24 +391,16 @@ func connectionOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	for rows.Next() {
-		var option Option
-		if err := rows.Scan(&option.Value, &option.Label); err != nil {
-			return nil, err
-		}
-		options = append(options, option)
-	}
-	return options, rows.Err()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Option])
 }
 
 func agentNumbers(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx pgx.Tx,
 	tenantID string,
 	agentID string,
 ) (numbers []string, err error) {
-	rows, err := tx.QueryContext(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT phone_e164 FROM phone_numbers
 		WHERE tenant_id = $1 AND agent_id = $2 AND status = 'active'
 		ORDER BY phone_e164`, tenantID, agentID,
@@ -411,20 +408,19 @@ func agentNumbers(
 	if err != nil {
 		return nil, err
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	for rows.Next() {
-		var number string
-		if err := rows.Scan(&number); err != nil {
-			return nil, err
-		}
-		numbers = append(numbers, formatPhone(number))
+	numbers, err = pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
 	}
-	return numbers, rows.Err()
+	for i, number := range numbers {
+		numbers[i] = formatPhone(number)
+	}
+	return numbers, nil
 }
 
-func requireManager(ctx context.Context, tx *sql.Tx) error {
+func requireManager(ctx context.Context, tx pgx.Tx) error {
 	var allowed bool
-	if err := tx.QueryRowContext(
+	if err := tx.QueryRow(
 		ctx, `SELECT app_current_user_manages_tenant()`,
 	).Scan(&allowed); err != nil {
 		return err
@@ -435,12 +431,8 @@ func requireManager(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func requireOne(result sql.Result) error {
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
+func requireOne(result pgconn.CommandTag) error {
+	if result.RowsAffected() != 1 {
 		return sql.ErrNoRows
 	}
 	return nil

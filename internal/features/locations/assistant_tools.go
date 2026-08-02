@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 )
 
@@ -70,11 +72,11 @@ func (s *Store) Preview(
 		return assistanttools.Preview{}, err
 	}
 	var current locationContactState
-	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, scope.TenantID, scope.UserID); err != nil {
 			return mapAssistantToolAccess(err)
 		}
-		return tx.QueryRowContext(ctx, `
+		return tx.QueryRow(ctx, `
 			SELECT name, COALESCE(email, ''), COALESCE(phone_e164, ''),
 			       COALESCE(website_url, ''), updated_at
 			FROM locations
@@ -114,12 +116,12 @@ func (s *Store) Execute(
 	}
 	patch := prepared.locationContactPatch
 	var updated locationContactState
-	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx *sql.Tx) error {
+	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx pgx.Tx) error {
 		if err := requireManager(ctx, tx, scope.TenantID, scope.UserID); err != nil {
 			return mapAssistantToolAccess(err)
 		}
 		var receiptOutput []byte
-		err := tx.QueryRowContext(ctx, `
+		err := tx.QueryRow(ctx, `
 			SELECT output
 			FROM application_tool_receipts
 			WHERE tenant_id = $1 AND location_id = $2 AND idempotency_key = $3
@@ -135,7 +137,7 @@ func (s *Store) Execute(
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		err = tx.QueryRowContext(ctx, `
+		err = tx.QueryRow(ctx, `
 			UPDATE locations SET
 			    email = CASE WHEN $3 THEN NULLIF($4, '') ELSE email END,
 			    phone_e164 = CASE WHEN $5 THEN NULLIF($6, '') ELSE phone_e164 END,
@@ -166,7 +168,7 @@ func (s *Store) Execute(
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `
+		_, err = tx.Exec(ctx, `
 			INSERT INTO application_tool_receipts (
 			    tenant_id, location_id, idempotency_key, tool_name, output, affected_records
 			) VALUES ($1, $2, $3, $4, $5, $6)`,
