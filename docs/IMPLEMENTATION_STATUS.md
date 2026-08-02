@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 42 commits.
+  `origin/main` by 43 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -52,7 +52,17 @@ the code and migrations remain the implementation source of truth.
     appointment — reusing Store.Save/Store.Cancel's own database exclusion
     constraints and WHERE-clause guards for conflict detection and staleness,
     with idempotency receipts recorded in the same transaction as the write
-    so a retried confirmation never double-books or double-cancels.
+    so a retried confirmation never double-books or double-cancels;
+  - preview and, after confirmation, correct a customer's name/company name/
+    email/phone or a vehicle's plate/make/model/VIN. Authorization is pure
+    RLS (only the customer's home location can write; a location holding
+    only a read grant gets an explicit forbidden message instead of a
+    confusing failed write), optimistic concurrency reuses the same
+    updated_at WHERE-clause guard as appointments, contact corrections
+    supersede (soft-delete + insert) rather than overwrite so contact
+    history stays intact, and constraint violations (duplicate contact,
+    duplicate plate, bad format) are decoded via db.PgError instead of
+    hand-rolled validation.
 - Provider-neutral ports exist for telephony, speech, LLMs, calendars, vehicle
   lookup, secrets, and business lookup. No permanent provider choice has been
   imposed.
@@ -64,8 +74,11 @@ absent.
 
 ## Recommended next slices
 
-1. Add confirmed customer/contact/vehicle corrections and a human review flow
-   for AI-proposed customer memories.
+1. Add a human review flow for AI-proposed customer memories: a
+   `propose_customer_memory` tool using the same synchronous chat
+   preview/confirm pattern as every other write tool (no new page, no new
+   `customer_memories.status` value — only a confirmed memory is written,
+   as `active`).
 2. Add customer-profile controls for owners/admins to grant and revoke an
    individual dossier share and inspect its immutable history.
 3. Connect Google Calendar through the existing provider boundary, including
