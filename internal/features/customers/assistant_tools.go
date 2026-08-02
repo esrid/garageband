@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	ToolSearchCustomers = "search_customers"
-	ToolCorrectCustomer = "correct_customer"
-	ToolCorrectVehicle  = "correct_vehicle"
+	ToolSearchCustomers       = "search_customers"
+	ToolCorrectCustomer       = "correct_customer"
+	ToolCorrectVehicle        = "correct_vehicle"
+	ToolProposeCustomerMemory = "propose_customer_memory"
 )
 
 // Correction field names, matching the JSON keys the tools accept.
@@ -36,6 +37,8 @@ const (
 	FieldMake        = "make"
 	FieldModel       = "model"
 	FieldVIN         = "vin"
+	FieldMemoryKey   = "key"
+	FieldMemoryValue = "value"
 )
 
 var searchCustomersSchema = json.RawMessage(`{
@@ -74,8 +77,27 @@ var correctVehicleSchema = json.RawMessage(`{
   "minProperties": 2
 }`)
 
+var proposeCustomerMemorySchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "customer_id": {"type": "string", "description": "Customer id the memory is about"},
+    "key": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,99}$", "description": "Memory key, e.g. preferred_contact_time"},
+    "value": {"type": "string", "minLength": 1, "maxLength": 2000, "description": "The fact to remember, as plain text"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Optional confidence from 0 to 1"}
+  },
+  "required": ["customer_id", "key", "value"],
+  "additionalProperties": false
+}`)
+
 type searchCustomersInput struct {
 	Query string `json:"query"`
+}
+
+type proposeCustomerMemoryInput struct {
+	CustomerID string   `json:"customer_id"`
+	Key        string   `json:"key"`
+	Value      string   `json:"value"`
+	Confidence *float64 `json:"confidence,omitempty"`
 }
 
 type customerCorrectionPatch struct {
@@ -180,6 +202,13 @@ func (s *Store) Definitions() []assistanttools.Definition {
 			Consequence:          assistanttools.ConsequenceWrite,
 			ConfirmationRequired: true,
 		},
+		{
+			Name:                 ToolProposeCustomerMemory,
+			Description:          "Propose remembering a fact about a customer (preference, note, detail) for future calls.",
+			InputSchema:          proposeCustomerMemorySchema,
+			Consequence:          assistanttools.ConsequenceWrite,
+			ConfirmationRequired: true,
+		},
 	}
 }
 
@@ -251,6 +280,30 @@ func (s *Store) Preview(
 			Summary: correctVehicleSummary(current, parsed.vehicleCorrectionPatch), Input: canonical,
 			AffectedRecords: []assistanttools.AffectedRecord{{Kind: "vehicle", ID: parsed.VehicleID}},
 		}, nil
+	case ToolProposeCustomerMemory:
+		parsed, err := parseProposeCustomerMemoryInput(input)
+		if err != nil {
+			return assistanttools.Preview{}, err
+		}
+		// Any location that can already see the customer's dossier may record
+		// a memory for it (customer_memory_insert only checks the memory's own
+		// location, not the customer's home location) — unlike corrections,
+		// there is no CanCorrect gate here.
+		target, err := s.loadCustomerCorrectionState(ctx, scope, parsed.CustomerID)
+		if err != nil {
+			return assistanttools.Preview{}, mapCustomerWriteError(err)
+		}
+		canonical, err := json.Marshal(parsed)
+		if err != nil {
+			return assistanttools.Preview{}, err
+		}
+		return assistanttools.Preview{
+			Summary: "Mémoriser pour « " + target.label() + " » — " + parsed.Key + " : " + parsed.Value + ".",
+			Input:   canonical,
+			AffectedRecords: []assistanttools.AffectedRecord{
+				{Kind: "customer", ID: parsed.CustomerID},
+			},
+		}, nil
 	default:
 		return assistanttools.Preview{}, assistanttools.ErrUnknownTool
 	}
@@ -308,6 +361,20 @@ func (s *Store) Execute(
 		}
 		return assistanttools.Result{
 			Summary: "Fiche véhicule mise à jour.", Output: output, AffectedRecords: affected,
+		}, nil
+	case ToolProposeCustomerMemory:
+		var prepared proposeCustomerMemoryInput
+		if err := strictUnmarshal(input, &prepared); err != nil {
+			return assistanttools.Result{}, correctionInputError(FieldMemoryKey, err)
+		}
+		output, affected, err := s.withReceipt(ctx, scope, ToolProposeCustomerMemory, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
+			return applyProposeCustomerMemory(ctx, tx, scope.TenantID, scope.LocationID, prepared)
+		})
+		if err != nil {
+			return assistanttools.Result{}, err
+		}
+		return assistanttools.Result{
+			Summary: "Information mémorisée.", Output: output, AffectedRecords: affected,
 		}, nil
 	default:
 		return assistanttools.Result{}, assistanttools.ErrUnknownTool
@@ -540,6 +607,71 @@ func (s *Store) applyVehicleCorrection(
 	return output, []assistanttools.AffectedRecord{{Kind: "vehicle", ID: final.ID}}, nil
 }
 
+type customerMemoryOutput struct {
+	ID         string  `json:"id"`
+	Key        string  `json:"key"`
+	Value      string  `json:"value"`
+	Status     string  `json:"status"`
+	Confidence float64 `json:"confidence"`
+}
+
+// applyProposeCustomerMemory upserts on (tenant, customer, location, key): a
+// later call with the same key from the same location replaces the earlier
+// fact rather than accumulating stale duplicates. No new status is
+// introduced — a confirmed memory is written directly as active, same as the
+// customer_memories rows any other path in this codebase writes.
+func applyProposeCustomerMemory(
+	ctx context.Context, tx pgx.Tx, tenantID, locationID string, input proposeCustomerMemoryInput,
+) (json.RawMessage, []assistanttools.AffectedRecord, error) {
+	value, err := json.Marshal(input.Value)
+	if err != nil {
+		return nil, nil, err
+	}
+	var final customerMemoryOutput
+	err = tx.QueryRow(ctx, `
+		INSERT INTO customer_memories (tenant_id, customer_id, location_id, key, value, confidence)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT ON CONSTRAINT customer_memories_location_key_unique
+		DO UPDATE SET value = EXCLUDED.value, confidence = EXCLUDED.confidence, updated_at = now()
+		RETURNING id,
+		          CASE jsonb_typeof(value) WHEN 'string' THEN value #>> '{}' ELSE value::TEXT END,
+		          status, COALESCE(confidence::DOUBLE PRECISION, 0)`,
+		tenantID, input.CustomerID, locationID, input.Key, value, input.Confidence,
+	).Scan(&final.ID, &final.Value, &final.Status, &final.Confidence)
+	if err != nil {
+		return nil, nil, mapCustomerWriteError(err)
+	}
+	final.Key = input.Key
+	output, err := json.Marshal(final)
+	if err != nil {
+		return nil, nil, err
+	}
+	return output, []assistanttools.AffectedRecord{
+		{Kind: "customer", ID: input.CustomerID},
+		{Kind: "customer_memory", ID: final.ID},
+	}, nil
+}
+
+func parseProposeCustomerMemoryInput(input json.RawMessage) (proposeCustomerMemoryInput, error) {
+	var parsed proposeCustomerMemoryInput
+	if err := strictUnmarshal(input, &parsed); err != nil {
+		return parsed, correctionInputError(FieldMemoryKey, err)
+	}
+	parsed.CustomerID = strings.TrimSpace(parsed.CustomerID)
+	parsed.Key = strings.TrimSpace(parsed.Key)
+	parsed.Value = strings.TrimSpace(parsed.Value)
+	if parsed.CustomerID == "" {
+		return parsed, correctionInputError(FieldCustomerID, nil)
+	}
+	if parsed.Key == "" {
+		return parsed, correctionInputError(FieldMemoryKey, nil)
+	}
+	if parsed.Value == "" {
+		return parsed, correctionInputError(FieldMemoryValue, nil)
+	}
+	return parsed, nil
+}
+
 func correctCustomerSummary(current customerCorrectionState, patch customerCorrectionPatch) string {
 	changes := make([]string, 0, 5)
 	if patch.FirstName != nil {
@@ -763,6 +895,14 @@ func mapCustomerWriteError(err error) error {
 			return &assistanttools.ToolError{Code: "conflict", Message: "Cette valeur est déjà utilisée."}
 		case "23514":
 			return &assistanttools.ToolError{Code: "invalid_arguments", Message: "Les informations proposées ne respectent pas le format attendu."}
+		case "42501":
+			// RLS rejected the write itself (e.g. access was revoked, or the
+			// customer was deleted, between preview and confirm) rather than
+			// a WHERE-clause guard finding zero rows.
+			return &assistanttools.ToolError{
+				Code:    "conflict",
+				Message: "Cette fiche a changé depuis l’aperçu, ou n’est plus accessible depuis ce site. Préparez une nouvelle demande.",
+			}
 		}
 	}
 	if errors.Is(err, sql.ErrNoRows) {

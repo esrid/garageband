@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-03
 
 This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 43 commits.
+  `origin/main` by 44 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -62,7 +62,17 @@ the code and migrations remain the implementation source of truth.
     supersede (soft-delete + insert) rather than overwrite so contact
     history stays intact, and constraint violations (duplicate contact,
     duplicate plate, bad format) are decoded via db.PgError instead of
-    hand-rolled validation.
+    hand-rolled validation;
+  - preview and, after confirmation, record a fact about a customer
+    (`propose_customer_memory`) using the same synchronous chat
+    preview/confirm pattern as every other write tool — no new page and no
+    new `customer_memories.status` value; a confirmed memory is written
+    directly as `active`. Any location that can already see the customer's
+    dossier may record a memory for it (RLS only checks the memory's own
+    location, not the customer's home location, unlike corrections), and a
+    later proposal with the same key from the same location supersedes the
+    earlier value in place (upsert on the table's own unique constraint)
+    instead of accumulating duplicates.
 - Provider-neutral ports exist for telephony, speech, LLMs, calendars, vehicle
   lookup, secrets, and business lookup. No permanent provider choice has been
   imposed.
@@ -74,27 +84,22 @@ absent.
 
 ## Recommended next slices
 
-1. Add a human review flow for AI-proposed customer memories: a
-   `propose_customer_memory` tool using the same synchronous chat
-   preview/confirm pattern as every other write tool (no new page, no new
-   `customer_memories.status` value — only a confirmed memory is written,
-   as `active`).
-2. Add customer-profile controls for owners/admins to grant and revoke an
+1. Add customer-profile controls for owners/admins to grant and revoke an
    individual dossier share and inspect its immutable history.
-3. Connect Google Calendar through the existing provider boundary, including
+2. Connect Google Calendar through the existing provider boundary, including
    idempotent event synchronization, reconciliation, and an explicit conflict
    ownership policy.
-4. Build one end-to-end inbound telephone tracer bullet with webhook
+3. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
    catalog, and scheduling tools.
-5. Add the WhatsApp channel after the channel-neutral conversation/runtime
+4. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
    of the core domain.
-6. Select and integrate a French registration-plate/VIN data provider behind
+5. Select and integrate a French registration-plate/VIN data provider behind
    the existing vehicle lookup port, with confirmation and lookup audit.
-7. Give the assistant a way to name a bookable resource for services that
+6. Give the assistant a way to name a bookable resource for services that
    need manual resource selection (today booking/rescheduling/availability
    only work for auto-allocated services — see `agenda.mapAssistantToolFieldError`).
 
