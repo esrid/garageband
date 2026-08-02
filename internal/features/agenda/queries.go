@@ -462,7 +462,27 @@ func (s *Store) Save(
 	appointmentID string,
 	input SaveInput,
 ) (date string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) (err error) {
+		_, date, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
+		return err
+	})
+	return date, err
+}
+
+// saveAppointment is Save's tx-scoped body, factored out so the assistant
+// tools can run it inside a transaction that also checks and records an
+// idempotency receipt — the same database conflict/constraint checks apply
+// either way, only the caller's transaction boundary differs. It also
+// returns the appointment id (freshly created, or the one passed in), which
+// Save itself has never needed but a tool audit trail does.
+func saveAppointment(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	appointmentID string,
+	input SaveInput,
+) (id string, date string, err error) {
+	err = func() error {
 		var timezoneName string
 		if err := tx.QueryRow(ctx, `
 			SELECT timezone
@@ -588,8 +608,8 @@ func (s *Store) Save(
 			return err
 		}
 		return nil
-	})
-	return date, err
+	}()
+	return appointmentID, date, err
 }
 
 func selectedResourceIDs(input SaveInput) []string {
@@ -757,7 +777,24 @@ func (s *Store) Cancel(
 	userID string,
 	appointmentID string,
 ) (date string, locationID string, err error) {
-	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) (err error) {
+		date, locationID, err = cancelAppointment(ctx, tx, tenantID, appointmentID)
+		return err
+	})
+	return date, locationID, err
+}
+
+// cancelAppointment is Cancel's tx-scoped body, factored out for the same
+// reason as saveAppointment: the assistant tool needs the same
+// database-enforced checks inside a transaction that also guards an
+// idempotency receipt. Cancelling twice is already a safe no-op here.
+func cancelAppointment(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	appointmentID string,
+) (date string, locationID string, err error) {
+	err = func() error {
 		var startsAt time.Time
 		var timezoneName, status string
 		if err := tx.QueryRow(ctx, `
@@ -795,7 +832,7 @@ func (s *Store) Cancel(
 		}
 		date = startsAt.In(zone).Format(DateLayout)
 		return nil
-	})
+	}()
 	return date, locationID, err
 }
 

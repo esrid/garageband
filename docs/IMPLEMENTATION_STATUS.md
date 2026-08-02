@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 41 commits.
+  `origin/main` by 42 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -47,7 +47,12 @@ the code and migrations remain the implementation source of truth.
     guessing a resource id);
   - preview a location contact change and apply it only after explicit human
     confirmation, with authorization, optimistic concurrency, and idempotent
-    recovery.
+    recovery;
+  - preview and, after confirmation, book, reschedule, or cancel an
+    appointment — reusing Store.Save/Store.Cancel's own database exclusion
+    constraints and WHERE-clause guards for conflict detection and staleness,
+    with idempotency receipts recorded in the same transaction as the write
+    so a retried confirmation never double-books or double-cancels.
 - Provider-neutral ports exist for telephony, speech, LLMs, calendars, vehicle
   lookup, secrets, and business lookup. No permanent provider choice has been
   imposed.
@@ -59,29 +64,26 @@ absent.
 
 ## Recommended next slices
 
-1. Add confirmed appointment creation, rescheduling, and cancellation through
-   the same authorization, preview, concurrency, audit, and idempotency
-   contracts used by the existing consequential assistant action.
-2. Add confirmed customer/contact/vehicle corrections and a human review flow
+1. Add confirmed customer/contact/vehicle corrections and a human review flow
    for AI-proposed customer memories.
-3. Add customer-profile controls for owners/admins to grant and revoke an
+2. Add customer-profile controls for owners/admins to grant and revoke an
    individual dossier share and inspect its immutable history.
-4. Connect Google Calendar through the existing provider boundary, including
+3. Connect Google Calendar through the existing provider boundary, including
    idempotent event synchronization, reconciliation, and an explicit conflict
    ownership policy.
-5. Build one end-to-end inbound telephone tracer bullet with webhook
+4. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
    catalog, and scheduling tools.
-6. Add the WhatsApp channel after the channel-neutral conversation/runtime
+5. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
    of the core domain.
-7. Select and integrate a French registration-plate/VIN data provider behind
+6. Select and integrate a French registration-plate/VIN data provider behind
    the existing vehicle lookup port, with confirmation and lookup audit.
-8. Give the assistant a way to name a bookable resource for services that
-   need manual resource selection (today it can only check availability for
-   auto-allocated services — see `agenda.mapAvailabilityError`).
+7. Give the assistant a way to name a bookable resource for services that
+   need manual resource selection (today booking/rescheduling/availability
+   only work for auto-allocated services — see `agenda.mapAssistantToolFieldError`).
 
 ## Still planned, not yet implemented
 
