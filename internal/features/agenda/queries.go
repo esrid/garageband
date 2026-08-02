@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/ui"
@@ -962,13 +961,13 @@ func parseDay(value string, zone *time.Location) time.Time {
 }
 
 func isExclusionViolation(err error) bool {
-	var pgError *pgconn.PgError
-	return errors.As(err, &pgError) && pgError.Code == "23P01"
+	pgError, ok := db.PgError(err)
+	return ok && pgError.Code == "23P01"
 }
 
 func workingTimeFieldError(err error) *FieldError {
-	var pgError *pgconn.PgError
-	if !errors.As(err, &pgError) || pgError.Code != "23514" {
+	pgError, ok := db.PgError(err)
+	if !ok || pgError.Code != "23514" {
 		return nil
 	}
 	switch pgError.ConstraintName {

@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 var (
@@ -570,8 +570,8 @@ func (h *handler) scheduleCapacityWriteError(
 	page.ResourceValues = resource
 	page.RequirementValues = requirement
 	page.FieldErrors = map[string]string{}
-	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.ConstraintName == "service_requirements_preserve_appointments" {
+	postgresError, ok := db.PgError(err)
+	if ok && postgresError.ConstraintName == "service_requirements_preserve_appointments" {
 		page.FieldErrors[conflictField] = "Des rendez-vous à venir n’immobilisent pas encore cette capacité."
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Modifiez d’abord les rendez-vous concernés."}
 		h.renderSchedule(w, r, page, http.StatusConflict)
@@ -610,17 +610,17 @@ func (h *handler) scheduleWriteError(
 	page.FieldErrors = map[string]string{}
 	status := http.StatusInternalServerError
 	var fieldError *ScheduleFieldError
-	var postgresError *pgconn.PgError
+	postgresError, pgOK := db.PgError(err)
 	switch {
 	case errors.As(err, &fieldError):
 		page.FieldErrors[fieldError.Field] = fieldError.Message
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Corrigez les champs indiqués avant de continuer."}
 		status = http.StatusUnprocessableEntity
-	case errors.As(err, &postgresError) && postgresError.Code == "23P01":
+	case pgOK && postgresError.Code == "23P01":
 		page.FieldErrors[conflictField] = "Cette période chevauche une période déjà enregistrée."
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Les périodes d’un même type ne peuvent pas se chevaucher."}
 		status = http.StatusConflict
-	case errors.As(err, &postgresError) && postgresError.ConstraintName == "closures_avoid_appointments":
+	case pgOK && postgresError.ConstraintName == "closures_avoid_appointments":
 		page.FieldErrors[conflictField] = "Un rendez-vous actif existe pendant cette fermeture."
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Déplacez ou annulez le rendez-vous avant de fermer l’atelier."}
 		status = http.StatusConflict
@@ -632,15 +632,15 @@ func (h *handler) scheduleWriteError(
 }
 
 func (h *handler) scheduleStoreError(w http.ResponseWriter, r *http.Request, err error) {
-	var postgresError *pgconn.PgError
+	postgresError, pgOK := db.PgError(err)
 	switch {
 	case errors.Is(err, ErrForbidden):
 		http.Error(w, "Vous n’avez pas les droits nécessaires pour modifier ce planning.", http.StatusForbidden)
 	case errors.Is(err, sql.ErrNoRows):
 		http.NotFound(w, r)
-	case errors.As(err, &postgresError) && postgresError.ConstraintName == "opening_hours_preserve_appointments":
+	case pgOK && postgresError.ConstraintName == "opening_hours_preserve_appointments":
 		http.Error(w, "Déplacez ou annulez les rendez-vous concernés avant de retirer cette plage.", http.StatusConflict)
-	case errors.As(err, &postgresError) && postgresError.ConstraintName == "bookable_resources_preserve_appointments":
+	case pgOK && postgresError.ConstraintName == "bookable_resources_preserve_appointments":
 		http.Error(w, "Cette ressource a des rendez-vous à venir et ne peut pas être désactivée.", http.StatusConflict)
 	default:
 		slog.Error("write location schedule", "err", err)
@@ -841,8 +841,8 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, page FormPa
 		http.NotFound(w, r)
 		return
 	}
-	var postgresError *pgconn.PgError
-	if errors.As(err, &postgresError) && postgresError.ConstraintName == "locations_siret_unique" {
+	postgresError, ok := db.PgError(err)
+	if ok && postgresError.ConstraintName == "locations_siret_unique" {
 		page.FieldErrors = map[string]string{
 			FieldSIRET: "Ce SIRET est déjà utilisé par un autre site.",
 		}
@@ -852,7 +852,7 @@ func (h *handler) writeError(w http.ResponseWriter, r *http.Request, page FormPa
 		h.renderForm(w, r, page, http.StatusConflict)
 		return
 	}
-	if errors.As(err, &postgresError) && postgresError.ConstraintName == "locations_timezone_preserves_schedule" {
+	if ok && postgresError.ConstraintName == "locations_timezone_preserves_schedule" {
 		page.FieldErrors = map[string]string{
 			FieldTimezone: "Ce fuseau ne peut plus changer après la création d’un rendez-vous ou d’une fermeture.",
 		}

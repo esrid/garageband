@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/esrid/garageband/internal/platform/db"
 )
@@ -1114,17 +1113,15 @@ func restoreCatalogItem(ctx context.Context, tx pgx.Tx, tenantID, userID string,
 }
 
 func mapCatalogWriteError(err error) error {
-	var pgError *pgconn.PgError
-	if errors.As(err, &pgError) {
-		if pgError.Code == "23505" && pgError.ConstraintName == "catalog_items_active_reference_unique" {
-			return ErrDuplicateReference
-		}
-		if pgError.Code == "23505" {
-			return ErrDuplicateReference
-		}
-		if pgError.Code == "23514" || pgError.Code == "23503" {
-			return fmt.Errorf("catalog data violates database validation: %w", err)
-		}
+	pgError, ok := db.PgError(err)
+	if !ok {
+		return err
+	}
+	if pgError.Code == "23505" {
+		return ErrDuplicateReference
+	}
+	if pgError.Code == "23514" || pgError.Code == "23503" {
+		return fmt.Errorf("catalog data violates database validation: %w", err)
 	}
 	return err
 }

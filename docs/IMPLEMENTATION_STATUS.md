@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 39 commits.
+  `origin/main` by 41 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -40,6 +40,11 @@ the code and migrations remain the implementation source of truth.
   - read currently effective catalog prices;
   - find customers and vehicles by name, contact, plate, or VIN without leaking
     records from another location accessible to the same employee;
+  - check appointment availability for a service and date, and list a day's
+    appointments at the scoped location, reusing the agenda's own timezone,
+    opening-hours, resource, and conflict rules (services needing manual
+    resource selection return an explicit scope-boundary message instead of
+    guessing a resource id);
   - preview a location contact change and apply it only after explicit human
     confirmation, with authorization, optimistic concurrency, and idempotent
     recovery.
@@ -54,29 +59,29 @@ absent.
 
 ## Recommended next slices
 
-1. Add read-only availability and appointment lookup tools to the operations
-   assistant by reusing the agenda's timezone, opening-hours, resource, and
-   conflict rules.
-2. Add confirmed appointment creation, rescheduling, and cancellation through
+1. Add confirmed appointment creation, rescheduling, and cancellation through
    the same authorization, preview, concurrency, audit, and idempotency
    contracts used by the existing consequential assistant action.
-3. Add confirmed customer/contact/vehicle corrections and a human review flow
+2. Add confirmed customer/contact/vehicle corrections and a human review flow
    for AI-proposed customer memories.
-4. Add customer-profile controls for owners/admins to grant and revoke an
+3. Add customer-profile controls for owners/admins to grant and revoke an
    individual dossier share and inspect its immutable history.
-5. Connect Google Calendar through the existing provider boundary, including
+4. Connect Google Calendar through the existing provider boundary, including
    idempotent event synchronization, reconciliation, and an explicit conflict
    ownership policy.
-6. Build one end-to-end inbound telephone tracer bullet with webhook
+5. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
    catalog, and scheduling tools.
-7. Add the WhatsApp channel after the channel-neutral conversation/runtime
+6. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
    of the core domain.
-8. Select and integrate a French registration-plate/VIN data provider behind
+7. Select and integrate a French registration-plate/VIN data provider behind
    the existing vehicle lookup port, with confirmation and lookup audit.
+8. Give the assistant a way to name a bookable resource for services that
+   need manual resource selection (today it can only check availability for
+   auto-allocated services — see `agenda.mapAvailabilityError`).
 
 ## Still planned, not yet implemented
 

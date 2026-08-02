@@ -10,11 +10,21 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct {
 	*pgxpool.Pool
+}
+
+// PgError extracts the underlying *pgconn.PgError from err, if any, so
+// features can switch on a constraint's Code/ConstraintName instead of
+// hand-rolling validation Go-side. PostgreSQL constraints are the source of
+// truth; this only decodes what it already rejected.
+func PgError(err error) (*pgconn.PgError, bool) {
+	var pgErr *pgconn.PgError
+	return pgErr, errors.As(err, &pgErr)
 }
 
 var (
