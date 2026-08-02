@@ -245,6 +245,33 @@ func TestProfileMemoriesAreShownWithTheirStanding(t *testing.T) {
 	}
 }
 
+func TestProfileHidesSharingAndOffboardFromNonManagers(t *testing.T) {
+	page := render(t, Show(profileFixture()))
+	mustNotContain(t, page, "Partage entre sites", "Zone sensible", "Ce client est parti")
+}
+
+func TestProfileShowsSharingAndOffboardToManagers(t *testing.T) {
+	profile := profileFixture()
+	profile.CanManage = true
+	profile.ShareOptions = []LocationOption{{ID: "l2", Name: "Atelier Vaise"}}
+	granted := time.Date(2026, 2, 1, 10, 0, 0, 0, time.UTC)
+	revoked := time.Date(2026, 2, 15, 10, 0, 0, 0, time.UTC)
+	profile.Grants = []Grant{
+		{ID: "g1", ReceivingLocationName: "Atelier Vaise", GrantedByName: "Sam Owner", GrantedAt: granted},
+		{ID: "g2", ReceivingLocationName: "Atelier Croix-Rousse", GrantedByName: "Sam Owner", GrantedAt: granted, RevokedByName: "Sam Owner", RevokedAt: &revoked},
+	}
+	page := render(t, Show(profile))
+	mustContain(t, page,
+		"Partage entre sites", "Atelier Vaise", "Actif", "Révoqué",
+		"/customers/c1/shares/g1/revoke", "/customers/c1/shares",
+		"Zone sensible", "Ce client est parti", "/customers/c1/offboard",
+	)
+	// A revoked grant has no revoke button; an active one does.
+	if strings.Contains(page, "/customers/c1/shares/g2/revoke") {
+		t.Error("revoke button shown for an already-revoked grant")
+	}
+}
+
 func TestFormatAmountFollowsFrenchTypography(t *testing.T) {
 	// The separators are non-breaking spaces on purpose: French typography puts
 	// one before the currency symbol and between thousands, and neither may wrap.

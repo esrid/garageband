@@ -2,7 +2,9 @@ package customers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -12,6 +14,10 @@ import (
 )
 
 const searchLimit = 50
+
+// ErrForbidden means the actor is not an owner/admin and therefore may not
+// manage sharing or offboard a customer, regardless of location access.
+var ErrForbidden = errors.New("customer management is forbidden")
 
 var nonPhoneCharacters = regexp.MustCompile(`[^0-9+]`)
 var nonPlateCharacters = regexp.MustCompile(`[-[:space:]]`)
@@ -278,9 +284,153 @@ func (s *Store) Profile(
 			return err
 		}
 		profile.Memories, err = pgx.CollectRows(memoryRows, pgx.RowToStructByPos[Memory])
+		if err != nil {
+			return err
+		}
+
+		if err := tx.QueryRow(
+			ctx, `SELECT app_current_user_manages_tenant()`,
+		).Scan(&profile.CanManage); err != nil {
+			return err
+		}
+		if !profile.CanManage {
+			return nil
+		}
+
+		grantRows, err := tx.Query(ctx, `
+			SELECT grant_row.id, location.name,
+			       COALESCE(granter.name, granter.email),
+			       grant_row.granted_at,
+			       COALESCE(revoker.name, revoker.email, ''),
+			       grant_row.revoked_at
+			FROM customer_location_grants grant_row
+			JOIN locations location
+			  ON location.tenant_id = grant_row.tenant_id
+			 AND location.id = grant_row.receiving_location_id
+			JOIN users granter ON granter.id = grant_row.granted_by_user_id
+			LEFT JOIN users revoker ON revoker.id = grant_row.revoked_by_user_id
+			WHERE grant_row.tenant_id = $1 AND grant_row.customer_id = $2
+			ORDER BY grant_row.granted_at DESC, grant_row.id DESC`, tenantID, customerID)
+		if err != nil {
+			return err
+		}
+		profile.Grants, err = pgx.CollectRows(grantRows, pgx.RowToStructByPos[Grant])
+		if err != nil {
+			return err
+		}
+
+		optionRows, err := tx.Query(ctx, `
+			SELECT location.id, location.name
+			FROM locations location
+			WHERE location.tenant_id = $1 AND location.status = 'active'
+			  AND location.id <> $3
+			  AND NOT EXISTS (
+			      SELECT 1 FROM customer_location_grants grant_row
+			      WHERE grant_row.tenant_id = location.tenant_id
+			        AND grant_row.customer_id = $2
+			        AND grant_row.receiving_location_id = location.id
+			        AND grant_row.revoked_at IS NULL
+			  )
+			ORDER BY location.name, location.id`,
+			tenantID, customerID, profile.Customer.HomeLocationID)
+		if err != nil {
+			return err
+		}
+		profile.ShareOptions, err = pgx.CollectRows(optionRows, pgx.RowToStructByPos[LocationOption])
 		return err
 	})
 	return profile, err
+}
+
+// requireCustomerManager gates sharing and offboarding to owners/admins,
+// asking PostgreSQL's own app_current_user_manages_tenant() rather than
+// re-deriving the role in Go — the same trick catalog.requireCatalogManager
+// uses for the same reason: one source of truth for "who manages this
+// tenant."
+func requireCustomerManager(ctx context.Context, tx pgx.Tx) error {
+	var allowed bool
+	if err := tx.QueryRow(ctx, `SELECT app_current_user_manages_tenant()`).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrForbidden
+	}
+	return nil
+}
+
+// Grant shares customer's dossier with receivingLocationID. The row's own
+// source_location_id must be the customer's current home location (a
+// database foreign key, not a Go check), so this reads it from customers
+// rather than trusting a caller-supplied value.
+func (s *Store) Grant(
+	ctx context.Context, tenantID, userID, customerID, receivingLocationID string,
+) (grantID string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := requireCustomerManager(ctx, tx); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `
+			INSERT INTO customer_location_grants (
+			    tenant_id, customer_id, source_location_id, receiving_location_id, granted_by_user_id
+			)
+			SELECT $1, customer.id, customer.home_location_id, $3, $4
+			FROM customers customer
+			WHERE customer.tenant_id = $1 AND customer.id = $2 AND customer.deleted_at IS NULL
+			RETURNING id`,
+			tenantID, customerID, receivingLocationID, userID,
+		).Scan(&grantID)
+	})
+	return grantID, err
+}
+
+// Revoke ends one grant. The row itself is never deleted — revoked_at is the
+// audit trail the profile screen shows.
+func (s *Store) Revoke(ctx context.Context, tenantID, userID, grantID string) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := requireCustomerManager(ctx, tx); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+			UPDATE customer_location_grants
+			SET revoked_by_user_id = $3, revoked_at = now()
+			WHERE tenant_id = $1 AND id = $2 AND revoked_at IS NULL`,
+			tenantID, grantID, userID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
+}
+
+// Offboard soft-deletes a customer who has left and their active contacts.
+// The active-contact unique index only applies WHERE deleted_at IS NULL, so
+// the freed phone/email becomes assignable to a new customer on its own —
+// no separate release step. Vehicles, timeline, and memories are untouched:
+// this is a customer no longer served, not a GDPR erasure.
+func (s *Store) Offboard(ctx context.Context, tenantID, userID, customerID string) error {
+	return s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := requireCustomerManager(ctx, tx); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `
+			UPDATE customers SET deleted_at = now(), updated_at = now()
+			WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`,
+			tenantID, customerID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return sql.ErrNoRows
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE customer_contacts SET deleted_at = now()
+			WHERE tenant_id = $1 AND customer_id = $2 AND deleted_at IS NULL`,
+			tenantID, customerID)
+		return err
+	})
 }
 
 func scanSearchCustomer(row pgx.CollectableRow) (Customer, error) {

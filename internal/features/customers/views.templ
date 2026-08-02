@@ -123,7 +123,14 @@ templ customerCard(customer Customer) {
 // notice reports a server-side outcome. An icon and a heading carry the
 // meaning, so no state depends on colour alone.
 templ notice(n Notice) {
-	if !n.Empty() {
+	if !n.Empty() && n.Kind == NoticeSuccess {
+		<div role="status" class="alert items-start text-left alert-success">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+			</svg>
+			<span class="text-sm">{ n.Message }</span>
+		</div>
+	} else if !n.Empty() {
 		<div role="alert" class="alert items-start text-left alert-warning">
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
 				<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
@@ -267,6 +274,70 @@ templ Show(page Profile) {
 							</li>
 						}
 					</ul>
+				</section>
+			}
+			if page.CanManage {
+				<section class="grid gap-3" aria-labelledby="sharing-heading">
+					<h2 id="sharing-heading" class="text-base font-semibold">Partage entre sites</h2>
+					if len(page.Grants) == 0 {
+						<p class="text-sm opacity-60">Ce dossier n'a jamais été partagé.</p>
+					} else {
+						<ul class="grid gap-2">
+							for _, grant := range page.Grants {
+								<li class="card card-border border-base-300 bg-base-100">
+									<div class="card-body gap-1 p-4">
+										<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+											<p class="text-sm font-medium">{ grant.ReceivingLocationName }</p>
+											if grant.Active() {
+												<span class="badge badge-sm badge-success shrink-0">Actif</span>
+											} else {
+												<span class="badge badge-sm shrink-0">Révoqué</span>
+											}
+										</div>
+										<p class="text-xs opacity-60">
+											Partagé par { grant.GrantedByName } le { ui.FormatDate(grant.GrantedAt) }
+										</p>
+										if !grant.Active() {
+											<p class="text-xs opacity-60">
+												Révoqué par { grant.RevokedByName } le { ui.FormatDate(*grant.RevokedAt) }
+											</p>
+										} else {
+											<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/shares/" + grant.ID + "/revoke") }>
+												<button type="submit" class="btn btn-sm btn-outline">Révoquer</button>
+											</form>
+										}
+									</div>
+								</li>
+							}
+						</ul>
+					}
+					if len(page.ShareOptions) > 0 {
+						<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/shares") } class="flex flex-wrap items-end gap-2" data-pending-form>
+							<div class="grid gap-1">
+								<label class="text-sm" for={ FieldReceivingLocation }>Partager avec</label>
+								<select id={ FieldReceivingLocation } name={ FieldReceivingLocation } class="select min-h-11">
+									for _, option := range page.ShareOptions {
+										<option value={ option.ID }>{ option.Name }</option>
+									}
+								</select>
+							</div>
+							<button type="submit" class="btn btn-sm min-h-11" data-pending-label="Partage…">Partager</button>
+						</form>
+					}
+				</section>
+				<section class="grid gap-2" aria-labelledby="offboard-heading">
+					<h2 id="offboard-heading" class="text-base font-semibold">Zone sensible</h2>
+					<div class="card card-border border-error/30 bg-base-100">
+						<div class="card-body gap-2 p-4">
+							<p class="text-sm opacity-80">
+								Ce client est parti : son dossier reste consultable pour l'historique,
+								mais son téléphone et son e-mail se libèrent pour un nouveau client.
+							</p>
+							<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/offboard") } class="self-start">
+								<button type="submit" class="btn btn-sm btn-error btn-outline">Ce client est parti</button>
+							</form>
+						</div>
+					</div>
 				</section>
 			}
 		</div>

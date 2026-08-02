@@ -10,6 +10,9 @@ anything, never rank results, and never decide who may see whom.
 |---|---|---|
 | `GET` | `/customers` | `Index(Page)`; reads the query from `?q=` |
 | `GET` | `/customers/{id}` | `Show(Profile)` — the profile, linked from each result |
+| `POST` | `/customers/{id}/shares` | Grant a share to another site; owner/admin only |
+| `POST` | `/customers/{id}/shares/{grantID}/revoke` | Revoke one share; owner/admin only |
+| `POST` | `/customers/{id}/offboard` | Soft-delete the customer and their active contacts; owner/admin only |
 
 Both sit behind `auth.RequireTenant`. **Nothing links to `/customers` yet**: the
 shell has no entry, because a link to a route that 404s is worse than no link.
@@ -75,9 +78,19 @@ customers.Profile{
     Timeline:     events,         // repairs and appointments, newest first
     Memories:     memories,       // what the agent retained
     CanEdit:      actorCanAccess(customer.HomeLocationID),
+    CanManage:    actorManagesTenant, // gates sharing + offboard, not CanEdit's rule
+    Grants:       grants,             // full share history, active and revoked
+    ShareOptions: shareOptions,       // active sites not already sharing this dossier
     Notice:       customers.Notice{},
 }
 ```
+
+`CanManage` answers a different question than `CanEdit`: it is
+`app_current_user_manages_tenant()` (owner/admin), not home-location
+ownership. A staff member assigned to the home location can edit the
+dossier but still cannot grant a share or offboard the customer; an
+owner/admin at any site can. `Grants` and `ShareOptions` are only worth
+fetching when `CanManage` is true — the store skips both queries otherwise.
 
 The view does **not** sort: hand `Timeline` over already ordered, newest first,
 merging `repair_orders` and `appointments` into one list. Use `opened_at` for a
@@ -104,13 +117,34 @@ unscored memory will read as a worthless one.
 
 ## Notices
 
-`NoticeError` is the only kind this screen uses: the search failed. The handler
-writes the sentence, the view supplies the heading and the styling.
+Two kinds: `NoticeError` (search failed, or a write was rejected) and
+`NoticeSuccess` (a share was granted or revoked, or the customer was
+offboarded). The handler writes the sentence and picks the kind from a
+`?notice=` redirect code (`shared`, `revoked`, `offboarded`,
+`grant_duplicate`, `grant_same_location`, `error`); the view supplies the
+heading, icon, and styling for each kind.
+
+## Sharing and offboarding
+
+Both live on the profile screen behind `CanManage`, not as separate screens.
+Granting writes `source_location_id` as the customer's *current*
+`home_location_id` — a database foreign key enforces this, not a Go check —
+so a stale caller-supplied source location can never be inserted. Revoking
+never deletes the row: `revoked_at`/`revoked_by_user_id` are set once and the
+row stays as history, same as everywhere else in this schema. Offboarding
+soft-deletes the customer and their active contacts
+(`customers.deleted_at`, `customer_contacts.deleted_at`); the active-contact
+unique index is partial (`WHERE deleted_at IS NULL`), so a freed phone or
+email becomes assignable to a new customer with no separate release step.
+After offboarding, the handler redirects to `/customers`, not back to the
+profile — the profile query filters `deleted_at IS NULL`, so the dossier
+would 404 right after the action that just succeeded.
 
 ## Not covered here
 
-Creating a customer, editing one, merging duplicates, reviewing or correcting
-the agent's memories, and granting or revoking a share are separate screens. There is
+Creating a customer, editing one, merging duplicates, and reviewing or
+correcting the agent's memories are separate screens (the last two live in
+the operations assistant's confirm-in-chat flow, not here). There is
 deliberately no "new customer" action here: most records are created by the
 telephone agent, and a button pointing at a form that does not exist would be
 a dead link.

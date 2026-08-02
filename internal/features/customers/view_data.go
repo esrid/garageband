@@ -15,10 +15,15 @@ import (
 // handler reads. Single source of truth for both sides.
 const FieldQuery = "q"
 
+// FieldReceivingLocation is the "share with" select input name on the
+// sharing form.
+const FieldReceivingLocation = "receiving_location_id"
+
 // Notice kinds. The view derives the heading from the kind, so French copy
 // stays in the view layer instead of leaking into handlers.
 const (
-	NoticeError = "error"
+	NoticeError   = "error"
+	NoticeSuccess = "success"
 )
 
 // Notice is a single server-side outcome shown at the top of the screen.
@@ -189,6 +194,27 @@ type Memory struct {
 	Confidence float64 // 0 when the provider gave none
 }
 
+// LocationOption is one site a dossier could be shared with next: an active
+// location, not already the home site, without an existing active grant.
+type LocationOption struct {
+	ID   string
+	Name string
+}
+
+// Grant is one row of a customer's cross-location sharing history, active or
+// revoked. Nothing is ever deleted, so this list is the whole audit trail.
+type Grant struct {
+	ID                    string
+	ReceivingLocationName string
+	GrantedByName         string
+	GrantedAt             time.Time
+	RevokedByName         string
+	RevokedAt             *time.Time
+}
+
+// Active says whether the grant still gives the receiving location access.
+func (g Grant) Active() bool { return g.RevokedAt == nil }
+
 // Profile backs the customer profile screen.
 type Profile struct {
 	Organization string
@@ -200,7 +226,13 @@ type Profile struct {
 	// actor may read everything and author work for an assigned location, but
 	// cannot change common identity or another workshop's records.
 	CanEdit bool
-	Notice  Notice
+	// CanManage is true for owners/admins only. It gates the sharing section
+	// and the offboard action, which check app_current_user_manages_tenant()
+	// rather than home-location ownership like CanEdit does.
+	CanManage    bool
+	Grants       []Grant
+	ShareOptions []LocationOption
+	Notice       Notice
 }
 
 // formatAmount renders money from integer cents, French style: a comma for the

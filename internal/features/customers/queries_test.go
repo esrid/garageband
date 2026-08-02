@@ -163,6 +163,152 @@ func TestCustomerHTTPRoutesAndValidation(t *testing.T) {
 	}
 }
 
+func TestCustomerGrantRevokeAndOffboardLifecycle(t *testing.T) {
+	fixture := newCustomerFixture(t)
+
+	if _, err := fixture.store.Grant(
+		t.Context(), fixture.tenantID, fixture.homeStaffID, fixture.customerID, fixture.receivingLocation,
+	); !errors.Is(err, customers.ErrForbidden) {
+		t.Fatalf("member grant = %v, want ErrForbidden", err)
+	}
+
+	grantID, err := fixture.store.Grant(
+		t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID, fixture.receivingLocation,
+	)
+	if err != nil || grantID == "" {
+		t.Fatalf("grant = %q, %v", grantID, err)
+	}
+
+	profile, err := fixture.store.Profile(t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.CanManage || len(profile.Grants) != 1 || !profile.Grants[0].Active() {
+		t.Fatalf("profile after grant = %#v", profile)
+	}
+	for _, option := range profile.ShareOptions {
+		if option.ID == fixture.receivingLocation {
+			t.Fatalf("already-granted location still offered: %#v", profile.ShareOptions)
+		}
+	}
+
+	// A staff member without the manage role sees no sharing data at all.
+	staffProfile, err := fixture.store.Profile(t.Context(), fixture.tenantID, fixture.homeStaffID, fixture.customerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staffProfile.CanManage || staffProfile.Grants != nil {
+		t.Fatalf("staff profile = %#v, want CanManage false and no grants", staffProfile)
+	}
+
+	// The database, not Go, rejects a duplicate active grant and a self-share.
+	if _, err := fixture.store.Grant(
+		t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID, fixture.receivingLocation,
+	); err == nil {
+		t.Fatal("duplicate grant succeeded")
+	}
+	if _, err := fixture.store.Grant(
+		t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID, fixture.homeLocationID,
+	); err == nil {
+		t.Fatal("self-share succeeded")
+	}
+
+	if err := fixture.store.Revoke(t.Context(), fixture.tenantID, fixture.homeStaffID, grantID); !errors.Is(err, customers.ErrForbidden) {
+		t.Fatalf("member revoke = %v, want ErrForbidden", err)
+	}
+	if err := fixture.store.Revoke(t.Context(), fixture.tenantID, fixture.ownerID, grantID); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.store.Revoke(t.Context(), fixture.tenantID, fixture.ownerID, grantID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("re-revoke = %v, want sql.ErrNoRows", err)
+	}
+
+	profile, err = fixture.store.Profile(t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profile.Grants) != 1 || profile.Grants[0].Active() || profile.Grants[0].RevokedByName == "" {
+		t.Fatalf("profile after revoke = %#v", profile.Grants)
+	}
+
+	if err := fixture.store.Offboard(t.Context(), fixture.tenantID, fixture.homeStaffID, fixture.customerID); !errors.Is(err, customers.ErrForbidden) {
+		t.Fatalf("member offboard = %v, want ErrForbidden", err)
+	}
+	if err := fixture.store.Offboard(t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.store.Profile(t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("profile after offboard = %v, want sql.ErrNoRows", err)
+	}
+
+	// The freed phone number is now assignable to a brand-new customer: the
+	// active-contact unique index only applies WHERE deleted_at IS NULL.
+	var newCustomerID string
+	if err := fixture.fixtures.QueryRow(t.Context(), `
+		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
+		VALUES ($1, $2, 'Nouveau', 'Client') RETURNING id`,
+		fixture.tenantID, fixture.homeLocationID,
+	).Scan(&newCustomerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.fixtures.Exec(t.Context(), `
+		INSERT INTO customer_contacts (
+		    tenant_id, customer_id, kind, value, normalized_value, is_primary
+		) VALUES ($1, $2, 'phone', '06 12 34 56 78', '+33612345678', TRUE)`,
+		fixture.tenantID, newCustomerID,
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCustomerShareAndOffboardHTTPRoutes(t *testing.T) {
+	fixture := newCustomerFixture(t)
+	memberHandler := customerHandler(fixture.store, customers.Principal{
+		UserID: fixture.homeStaffID, TenantID: fixture.tenantID,
+	})
+	ownerHandler := customerHandler(fixture.store, customers.Principal{
+		UserID: fixture.ownerID, TenantID: fixture.tenantID,
+	})
+
+	response := postForm(memberHandler, "/customers/"+fixture.customerID+"/shares", url.Values{
+		customers.FieldReceivingLocation: {fixture.receivingLocation},
+	})
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("member grant over http = %d, want 403", response.Code)
+	}
+
+	response = postForm(ownerHandler, "/customers/"+fixture.customerID+"/shares", url.Values{
+		customers.FieldReceivingLocation: {fixture.receivingLocation},
+	})
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "notice=shared") {
+		t.Fatalf("owner grant over http = %d %q", response.Code, response.Header().Get("Location"))
+	}
+
+	profile, err := fixture.store.Profile(t.Context(), fixture.tenantID, fixture.ownerID, fixture.customerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profile.Grants) != 1 {
+		t.Fatalf("grants after http grant = %#v", profile.Grants)
+	}
+	grantID := profile.Grants[0].ID
+
+	response = postForm(ownerHandler, "/customers/"+fixture.customerID+"/shares/"+grantID+"/revoke", nil)
+	if response.Code != http.StatusSeeOther || !strings.Contains(response.Header().Get("Location"), "notice=revoked") {
+		t.Fatalf("owner revoke over http = %d %q", response.Code, response.Header().Get("Location"))
+	}
+
+	response = postForm(ownerHandler, "/customers/"+fixture.customerID+"/offboard", nil)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/customers?notice=offboarded" {
+		t.Fatalf("owner offboard over http = %d %q", response.Code, response.Header().Get("Location"))
+	}
+
+	response = request(ownerHandler, "/customers/"+fixture.customerID)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("profile after http offboard = %d, want 404", response.Code)
+	}
+}
+
 func newCustomerFixture(t *testing.T) customerFixture {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)
@@ -321,6 +467,14 @@ func customerHandler(store *customers.Store, principal customers.Principal) http
 func request(handler http.Handler, target string) *httptest.ResponseRecorder {
 	record := httptest.NewRecorder()
 	handler.ServeHTTP(record, httptest.NewRequest(http.MethodGet, target, nil))
+	return record
+}
+
+func postForm(handler http.Handler, target string, form url.Values) *httptest.ResponseRecorder {
+	record := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	handler.ServeHTTP(record, request)
 	return record
 }
 

@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 44 commits.
+  `origin/main` by 45 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -73,6 +73,15 @@ the code and migrations remain the implementation source of truth.
     later proposal with the same key from the same location supersedes the
     earlier value in place (upsert on the table's own unique constraint)
     instead of accumulating duplicates.
+- Customer-profile controls for owners/admins: grant or revoke an individual
+  dossier share with another site (`app_current_user_manages_tenant()` gates
+  it, not home-location ownership — a staff member who can edit the dossier
+  still cannot share or offboard it), inspect the full share history
+  (nothing is ever deleted, only `revoked_at` set), and offboard a customer
+  who has left. Offboarding soft-deletes the customer and their active
+  contacts; the active-contact unique index is partial
+  (`WHERE deleted_at IS NULL`), so the freed phone/email becomes assignable
+  to a new customer automatically, with no separate release step.
 - Provider-neutral ports exist for telephony, speech, LLMs, calendars, vehicle
   lookup, secrets, and business lookup. No permanent provider choice has been
   imposed.
@@ -84,24 +93,31 @@ absent.
 
 ## Recommended next slices
 
-1. Add customer-profile controls for owners/admins to grant and revoke an
-   individual dossier share and inspect its immutable history.
-2. Connect Google Calendar through the existing provider boundary, including
+1. Connect Google Calendar through the existing provider boundary, including
    idempotent event synchronization, reconciliation, and an explicit conflict
-   ownership policy.
-3. Build one end-to-end inbound telephone tracer bullet with webhook
+   ownership policy. **Needs a decision from the team first**: a real Google
+   Cloud OAuth client (id/secret) has to be created and authorized — this
+   repo cannot self-provision third-party credentials.
+2. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
-   catalog, and scheduling tools.
-4. Add the WhatsApp channel after the channel-neutral conversation/runtime
+   catalog, and scheduling tools. **Needs a vendor decision first**: which
+   telephony provider (a real phone number, real cost) and which STT/TTS
+   provider, before any adapter code is worth writing against a live account.
+3. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
-   of the core domain.
-5. Select and integrate a French registration-plate/VIN data provider behind
+   of the core domain. **Needs a Meta Business/WABA account set up by the
+   team first** — compliance and identity ownership make this one to not
+   provision unilaterally.
+4. Select and integrate a French registration-plate/VIN data provider behind
    the existing vehicle lookup port, with confirmation and lookup audit.
-6. Give the assistant a way to name a bookable resource for services that
+   **Needs a vendor decision first**: this is a paid data provider choice
+   with a contract, not a code decision.
+5. Give the assistant a way to name a bookable resource for services that
    need manual resource selection (today booking/rescheduling/availability
    only work for auto-allocated services — see `agenda.mapAssistantToolFieldError`).
+   No external dependency; buildable any time.
 
 ## Still planned, not yet implemented
 
@@ -116,6 +132,8 @@ absent.
   catalog path, including a review-first extraction workflow for unstructured
   documents.
 
-When work resumes, start with item 1 and keep each addition as a tested vertical
-slice. Do not connect a real model before its permitted tools, authorization,
+When work resumes, item 5 is the only slice with no external dependency —
+everything else above needs a vendor/credential decision from the team
+first (flagged inline). Keep each addition as a tested vertical slice. Do
+not connect a real model before its permitted tools, authorization,
 confirmation rules, and audits are complete.

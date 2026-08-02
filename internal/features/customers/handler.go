@@ -6,9 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/a-h/templ"
+
+	"github.com/esrid/garageband/internal/platform/db"
 )
 
 const maxSearchRunes = 100
@@ -39,6 +42,7 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, "search customers", err)
 		return
 	}
+	page.Notice = noticeFromQuery(r.URL.Query().Get("notice"))
 	h.render(w, r, Index(page), http.StatusOK)
 }
 
@@ -63,7 +67,127 @@ func (h *handler) show(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, "load customer profile", err)
 		return
 	}
+	profile.Notice = noticeFromQuery(r.URL.Query().Get("notice"))
 	h.render(w, r, Show(profile), http.StatusOK)
+}
+
+// grant shares a customer's dossier with another site. Only owners/admins
+// may (Store.Grant checks with requireCustomerManager); everyone else gets a
+// plain 403, since this is an internal tool action, not a public form.
+func (h *handler) grant(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	customerID := r.PathValue("customerID")
+	if !uuidPattern.MatchString(customerID) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	receivingLocationID := strings.TrimSpace(r.PostForm.Get(FieldReceivingLocation))
+	if !uuidPattern.MatchString(receivingLocationID) {
+		http.Redirect(w, r, "/customers/"+customerID+"?notice=error", http.StatusSeeOther)
+		return
+	}
+	_, err := h.store.Grant(r.Context(), principal.TenantID, principal.UserID, customerID, receivingLocationID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		http.NotFound(w, r)
+	case errors.Is(err, ErrForbidden):
+		http.Error(w, "Action interdite.", http.StatusForbidden)
+	case err != nil:
+		http.Redirect(w, r, "/customers/"+customerID+"?notice="+grantErrorNotice(err), http.StatusSeeOther)
+	default:
+		http.Redirect(w, r, "/customers/"+customerID+"?notice=shared", http.StatusSeeOther)
+	}
+}
+
+func (h *handler) revoke(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	customerID := r.PathValue("customerID")
+	grantID := r.PathValue("grantID")
+	if !uuidPattern.MatchString(customerID) || !uuidPattern.MatchString(grantID) {
+		http.NotFound(w, r)
+		return
+	}
+	err := h.store.Revoke(r.Context(), principal.TenantID, principal.UserID, grantID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		http.NotFound(w, r)
+	case errors.Is(err, ErrForbidden):
+		http.Error(w, "Action interdite.", http.StatusForbidden)
+	case err != nil:
+		h.fail(w, "revoke customer share", err)
+	default:
+		http.Redirect(w, r, "/customers/"+customerID+"?notice=revoked", http.StatusSeeOther)
+	}
+}
+
+// offboard soft-deletes a customer who has left. It redirects to the search
+// screen, not back to the profile: the profile query filters deleted_at IS
+// NULL, so the dossier would 404 right after the action that just succeeded.
+func (h *handler) offboard(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	customerID := r.PathValue("customerID")
+	if !uuidPattern.MatchString(customerID) {
+		http.NotFound(w, r)
+		return
+	}
+	err := h.store.Offboard(r.Context(), principal.TenantID, principal.UserID, customerID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		http.NotFound(w, r)
+	case errors.Is(err, ErrForbidden):
+		http.Error(w, "Action interdite.", http.StatusForbidden)
+	case err != nil:
+		h.fail(w, "offboard customer", err)
+	default:
+		http.Redirect(w, r, "/customers?notice=offboarded", http.StatusSeeOther)
+	}
+}
+
+// grantErrorNotice turns a constraint violation into a notice code the view
+// resolves to French copy — the constraints (one active grant per site, never
+// the home site) are the actual validation; this only decodes what they
+// already rejected.
+func grantErrorNotice(err error) string {
+	if pgErr, ok := db.PgError(err); ok {
+		switch pgErr.Code {
+		case "23505":
+			return "grant_duplicate"
+		case "23514":
+			return "grant_same_location"
+		}
+	}
+	return "error"
+}
+
+func noticeFromQuery(code string) Notice {
+	switch code {
+	case "shared":
+		return Notice{Kind: NoticeSuccess, Message: "Partage ajouté."}
+	case "revoked":
+		return Notice{Kind: NoticeSuccess, Message: "Partage révoqué."}
+	case "offboarded":
+		return Notice{Kind: NoticeSuccess, Message: "Client archivé. Son téléphone et son e-mail sont libres pour un nouveau client."}
+	case "grant_duplicate":
+		return Notice{Kind: NoticeError, Message: "Ce site a déjà accès à ce dossier."}
+	case "grant_same_location":
+		return Notice{Kind: NoticeError, Message: "Impossible de partager avec le site d'origine."}
+	case "error":
+		return Notice{Kind: NoticeError, Message: "L'action n'a pas pu être effectuée. Réessayez."}
+	}
+	return Notice{}
 }
 
 func (h *handler) resolve(w http.ResponseWriter, r *http.Request) (Principal, bool) {
