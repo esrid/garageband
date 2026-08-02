@@ -3,6 +3,7 @@ package agenda_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/esrid/garageband/internal/features/agenda"
@@ -58,23 +59,78 @@ func TestCheckAvailabilityToolReusesTheBookingRules(t *testing.T) {
 	}
 }
 
-func TestCheckAvailabilityToolNamesItsScopeBoundaryForManualResources(t *testing.T) {
+func TestManualResourceServicesCanBeListedCheckedAndBooked(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	mustExec(t, fixture.fixtures, `
 		INSERT INTO location_opening_hours (tenant_id, location_id, weekday, opens_at, closes_at)
 		VALUES ($1, $2, 3, '08:00', '14:00')`, fixture.tenantID, fixture.locationID)
 	scope := assistanttools.Scope{
 		TenantID: fixture.tenantID, UserID: fixture.userID, LocationID: fixture.locationID,
+		IdempotencyKey: "manual-resource-book",
 	}
+
 	// The fixture's service has no service_resource_requirements row, so it
-	// is not auto-allocated and needs a resource id this tool cannot supply.
+	// is not auto-allocated: naming no resource is a normal, resolvable
+	// validation error now, not a scope boundary.
 	_, err := fixture.store.Execute(
 		t.Context(), scope, agenda.ToolCheckAvailability,
 		json.RawMessage(`{"service_id":"`+fixture.serviceID+`","date":"2026-08-12"}`),
 	)
 	var toolErr *assistanttools.ToolError
-	if !errors.As(err, &toolErr) || toolErr.Code != "unsupported" {
-		t.Fatalf("manual-resource service = %v, want an unsupported ToolError", err)
+	if !errors.As(err, &toolErr) || toolErr.Code != "invalid_arguments" {
+		t.Fatalf("manual-resource service without resource_ids = %v, want invalid_arguments", err)
+	}
+
+	listResult, err := fixture.store.Execute(t.Context(), scope, agenda.ToolListBookableResources, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resources struct {
+		Resources []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Kind string `json:"kind"`
+		} `json:"resources"`
+	}
+	if err := json.Unmarshal(listResult.Output, &resources); err != nil {
+		t.Fatal(err)
+	}
+	if len(resources.Resources) != 2 || resources.Resources[0].Name != "Pont principal" {
+		t.Fatalf("bookable resources = %#v", resources.Resources)
+	}
+
+	checkInput := json.RawMessage(`{"service_id":"` + fixture.serviceID + `","date":"2026-08-12","resource_ids":["` + fixture.resourceID + `"]}`)
+	checkResult, err := fixture.store.Execute(t.Context(), scope, agenda.ToolCheckAvailability, checkInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var availability struct {
+		AutoAllocated bool `json:"auto_allocated"`
+		Slots         []struct {
+			StartsAt string `json:"starts_at"`
+		} `json:"slots"`
+	}
+	if err := json.Unmarshal(checkResult.Output, &availability); err != nil {
+		t.Fatal(err)
+	}
+	if availability.AutoAllocated || len(availability.Slots) == 0 {
+		t.Fatalf("availability with resource_ids = %#v", availability)
+	}
+
+	bookInput := json.RawMessage(`{
+		"customer_id":"` + fixture.customerID + `","vehicle_id":"` + fixture.vehicleID + `",
+		"service_id":"` + fixture.serviceID + `","date":"2026-08-12","start_time":"09:00",
+		"resource_ids":["` + fixture.resourceID + `"]
+	}`)
+	preview, err := fixture.store.Preview(t.Context(), scope, agenda.ToolBookAppointment, bookInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(preview.Summary, "Pont principal") {
+		t.Fatalf("book preview summary = %q, want it to name the chosen resource", preview.Summary)
+	}
+	if _, err := fixture.store.Execute(t.Context(), scope, agenda.ToolBookAppointment, preview.Input); err != nil {
+		t.Fatal(err)
 	}
 }
 

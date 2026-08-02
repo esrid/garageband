@@ -11,7 +11,7 @@ the code and migrations remain the implementation source of truth.
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 45 commits.
+  `origin/main` by 46 commits.
 - No push has been performed. Pushing `main` to the remote is the next Git
   operation when the team is ready.
 
@@ -72,7 +72,14 @@ the code and migrations remain the implementation source of truth.
     location, not the customer's home location, unlike corrections), and a
     later proposal with the same key from the same location supersedes the
     earlier value in place (upsert on the table's own unique constraint)
-    instead of accumulating duplicates.
+    instead of accumulating duplicates;
+  - list a location's bookable resources (`list_bookable_resources`) and
+    name one when booking a service that needs manual resource selection
+    (`book_appointment`/`check_availability` now accept `resource_ids`,
+    wired straight into `Store.Save`/`Store.Availability`'s existing
+    parameter — no new booking logic). A manual-allocation service booked
+    without naming a resource is a normal, resolvable validation error now,
+    not the earlier hard "unsupported" wall.
 - Customer-profile controls for owners/admins: grant or revoke an individual
   dossier share with another site (`app_current_user_manages_tenant()` gates
   it, not home-location ownership — a staff member who can edit the dossier
@@ -114,10 +121,10 @@ absent.
    the existing vehicle lookup port, with confirmation and lookup audit.
    **Needs a vendor decision first**: this is a paid data provider choice
    with a contract, not a code decision.
-5. Give the assistant a way to name a bookable resource for services that
-   need manual resource selection (today booking/rescheduling/availability
-   only work for auto-allocated services — see `agenda.mapAssistantToolFieldError`).
-   No external dependency; buildable any time.
+
+All four remaining slices need a vendor or credential decision from the team
+before their adapter code is worth writing — none is a code decision this
+repo can make unilaterally.
 
 ## Still planned, not yet implemented
 
@@ -132,8 +139,8 @@ absent.
   catalog path, including a review-first extraction workflow for unstructured
   documents.
 
-When work resumes, item 5 is the only slice with no external dependency —
-everything else above needs a vendor/credential decision from the team
-first (flagged inline). Keep each addition as a tested vertical slice. Do
-not connect a real model before its permitted tools, authorization,
-confirmation rules, and audits are complete.
+When work resumes, all four remaining slices need a vendor or credential
+decision from the team first (flagged inline) — none is buildable further
+without one. Keep each addition as a tested vertical slice. Do not connect a
+real model before its permitted tools, authorization, confirmation rules,
+and audits are complete.

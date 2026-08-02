@@ -19,6 +19,7 @@ import (
 const (
 	ToolCheckAvailability     = "check_availability"
 	ToolFindAppointments      = "find_appointments"
+	ToolListBookableResources = "list_bookable_resources"
 	ToolBookAppointment       = "book_appointment"
 	ToolRescheduleAppointment = "reschedule_appointment"
 	ToolCancelAppointment     = "cancel_appointment"
@@ -28,9 +29,19 @@ var checkAvailabilitySchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "service_id": {"type": "string", "description": "Service offering id to check availability for"},
-    "date": {"type": "string", "description": "Date to check, YYYY-MM-DD"}
+    "date": {"type": "string", "description": "Date to check, YYYY-MM-DD"},
+    "resource_ids": {
+      "type": "array", "items": {"type": "string"},
+      "description": "Bookable resource ids to check. Required, from list_bookable_resources, only when the service is not auto-allocated (see auto_allocated in the result of a first call without resource_ids)."
+    }
   },
   "required": ["service_id", "date"],
+  "additionalProperties": false
+}`)
+
+var listBookableResourcesSchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {},
   "additionalProperties": false
 }`)
 
@@ -51,7 +62,11 @@ var bookAppointmentSchema = json.RawMessage(`{
     "service_id": {"type": "string", "description": "Service offering id"},
     "date": {"type": "string", "description": "YYYY-MM-DD"},
     "start_time": {"type": "string", "description": "HH:MM, 24h"},
-    "note": {"type": "string", "description": "Optional note for the workshop"}
+    "note": {"type": "string", "description": "Optional note for the workshop"},
+    "resource_ids": {
+      "type": "array", "items": {"type": "string"},
+      "description": "Bookable resource ids to reserve, from list_bookable_resources. Required only when check_availability reported auto_allocated: false for this service."
+    }
   },
   "required": ["customer_id", "vehicle_id", "service_id", "date", "start_time"],
   "additionalProperties": false
@@ -78,21 +93,25 @@ var cancelAppointmentSchema = json.RawMessage(`{
 }`)
 
 type checkAvailabilityInput struct {
-	ServiceID string `json:"service_id"`
-	Date      string `json:"date"`
+	ServiceID   string   `json:"service_id"`
+	Date        string   `json:"date"`
+	ResourceIDs []string `json:"resource_ids,omitempty"`
 }
 
 type findAppointmentsInput struct {
 	Date string `json:"date"`
 }
 
+type listBookableResourcesInput struct{}
+
 type bookAppointmentInput struct {
-	CustomerID string `json:"customer_id"`
-	VehicleID  string `json:"vehicle_id"`
-	ServiceID  string `json:"service_id"`
-	Date       string `json:"date"`
-	StartTime  string `json:"start_time"`
-	Note       string `json:"note,omitempty"`
+	CustomerID  string   `json:"customer_id"`
+	VehicleID   string   `json:"vehicle_id"`
+	ServiceID   string   `json:"service_id"`
+	Date        string   `json:"date"`
+	StartTime   string   `json:"start_time"`
+	Note        string   `json:"note,omitempty"`
+	ResourceIDs []string `json:"resource_ids,omitempty"`
 }
 
 type rescheduleAppointmentInput struct {
@@ -135,6 +154,12 @@ type appointmentWriteOutput struct {
 	Date string `json:"date"`
 }
 
+type bookableResourceOutput struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
 func (s *Store) Definitions() []assistanttools.Definition {
 	return []assistanttools.Definition{
 		{
@@ -146,6 +171,11 @@ func (s *Store) Definitions() []assistanttools.Definition {
 			Name:        ToolFindAppointments,
 			Description: "List the scoped location's appointments on a given date.",
 			InputSchema: findAppointmentsSchema, Consequence: assistanttools.ConsequenceRead,
+		},
+		{
+			Name:        ToolListBookableResources,
+			Description: "List the scoped location's bookable resources (bays, technicians, equipment, calendars). Call this before booking a service that check_availability reported as not auto-allocated.",
+			InputSchema: listBookableResourcesSchema, Consequence: assistanttools.ConsequenceRead,
 		},
 		{
 			Name:                 ToolBookAppointment,
@@ -185,7 +215,7 @@ func (s *Store) Preview(
 		}
 		result, err := s.Availability(
 			ctx, scope.TenantID, scope.UserID, scope.LocationID,
-			parsed.ServiceID, nil, parsed.Date,
+			parsed.ServiceID, parsed.ResourceIDs, parsed.Date,
 		)
 		if err != nil {
 			return assistanttools.Preview{}, mapAvailabilityError(err)
@@ -204,6 +234,17 @@ func (s *Store) Preview(
 		}
 		return assistanttools.Preview{
 			Summary: appointmentsSummary(parsed.Date, day.Appointments), Input: canonical,
+		}, nil
+	case ToolListBookableResources:
+		if err := parseListBookableResourcesInput(input); err != nil {
+			return assistanttools.Preview{}, err
+		}
+		resources, err := s.listBookableResources(ctx, scope)
+		if err != nil {
+			return assistanttools.Preview{}, err
+		}
+		return assistanttools.Preview{
+			Summary: bookableResourcesSummary(resources), Input: json.RawMessage(`{}`),
 		}, nil
 	case ToolBookAppointment:
 		parsed, canonical, err := parseBookAppointmentInput(input)
@@ -262,7 +303,7 @@ func (s *Store) Execute(
 		}
 		result, err := s.Availability(
 			ctx, scope.TenantID, scope.UserID, scope.LocationID,
-			parsed.ServiceID, nil, parsed.Date,
+			parsed.ServiceID, parsed.ResourceIDs, parsed.Date,
 		)
 		if err != nil {
 			return assistanttools.Result{}, mapAvailabilityError(err)
@@ -308,6 +349,20 @@ func (s *Store) Execute(
 			Summary: appointmentsSummary(parsed.Date, day.Appointments),
 			Output:  output, AffectedRecords: affected,
 		}, nil
+	case ToolListBookableResources:
+		resources, err := s.listBookableResources(ctx, scope)
+		if err != nil {
+			return assistanttools.Result{}, err
+		}
+		output, err := json.Marshal(struct {
+			Resources []bookableResourceOutput `json:"resources"`
+		}{Resources: resources})
+		if err != nil {
+			return assistanttools.Result{}, err
+		}
+		return assistanttools.Result{
+			Summary: bookableResourcesSummary(resources), Output: output,
+		}, nil
 	case ToolBookAppointment:
 		parsed, _, err := parseBookAppointmentInput(input)
 		if err != nil {
@@ -317,7 +372,8 @@ func (s *Store) Execute(
 			id, _, err := saveAppointment(ctx, tx, scope.TenantID, "", SaveInput{
 				LocationID: scope.LocationID, CustomerID: parsed.CustomerID,
 				VehicleID: parsed.VehicleID, ServiceID: parsed.ServiceID,
-				Date: parsed.Date, StartTime: parsed.StartTime, Note: parsed.Note,
+				ResourceIDs: parsed.ResourceIDs,
+				Date:        parsed.Date, StartTime: parsed.StartTime, Note: parsed.Note,
 			})
 			if err != nil {
 				return nil, nil, mapAgendaWriteError(err)
@@ -502,10 +558,49 @@ func bookAppointmentSummary(
 	}
 	summary := "Réserver « " + serviceName + " » pour " + form.Customer.Label +
 		" (" + vehicleName + ") le " + parsed.Date + " à " + parsed.StartTime + "."
+	if len(parsed.ResourceIDs) > 0 {
+		names := make([]string, 0, len(parsed.ResourceIDs))
+		for _, id := range parsed.ResourceIDs {
+			if name := optionLabel(form.Resources, id); name != "" {
+				names = append(names, name)
+			}
+		}
+		if len(names) > 0 {
+			summary += " Ressources : " + strings.Join(names, ", ") + "."
+		}
+	}
 	if parsed.Note != "" {
 		summary += " Note : " + parsed.Note
 	}
 	return summary, nil
+}
+
+// listBookableResources reuses the same rows the human booking form offers
+// (loadResourceOptions), plus kind, so the model can tell a bay from a
+// technician instead of picking a bare id.
+func (s *Store) listBookableResources(
+	ctx context.Context, scope assistanttools.Scope,
+) (resources []bookableResourceOutput, err error) {
+	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id::text, name, kind
+			FROM bookable_resources
+			WHERE tenant_id = $1 AND location_id = $2 AND active
+			ORDER BY kind, name, id`, scope.TenantID, scope.LocationID)
+		if err != nil {
+			return err
+		}
+		resources, err = pgx.CollectRows(rows, pgx.RowToStructByPos[bookableResourceOutput])
+		return err
+	})
+	return resources, err
+}
+
+func bookableResourcesSummary(resources []bookableResourceOutput) string {
+	if len(resources) == 0 {
+		return "Aucune ressource réservable n’est configurée pour ce site."
+	}
+	return strconv.Itoa(len(resources)) + " ressources réservables à ce site."
 }
 
 func optionLabel(options []Option, value string) string {
@@ -550,6 +645,7 @@ func parseCheckAvailabilityInput(input json.RawMessage) (checkAvailabilityInput,
 	if _, err := time.Parse(DateLayout, parsed.Date); err != nil {
 		return parsed, nil, agendaToolInputError(FieldDate, "Précisez une date valide (AAAA-MM-JJ).", nil)
 	}
+	parsed.ResourceIDs = trimResourceIDs(parsed.ResourceIDs)
 	canonical, err := json.Marshal(parsed)
 	return parsed, canonical, err
 }
@@ -601,6 +697,7 @@ func parseBookAppointmentInput(input json.RawMessage) (bookAppointmentInput, jso
 	if _, err := time.Parse("15:04", parsed.StartTime); err != nil {
 		return parsed, nil, agendaToolInputError(FieldStartTime, "Précisez une heure valide (HH:MM).", nil)
 	}
+	parsed.ResourceIDs = trimResourceIDs(parsed.ResourceIDs)
 	canonical, err := json.Marshal(parsed)
 	return parsed, canonical, err
 }
@@ -649,6 +746,32 @@ func parseCancelAppointmentInput(input json.RawMessage) (cancelAppointmentInput,
 	return parsed, canonical, err
 }
 
+// parseListBookableResourcesInput takes no fields, but is still strict about
+// unknown ones and trailing data, the same way every other tool input here is
+// parsed — no canonical value to return, the empty object is its own input.
+func parseListBookableResourcesInput(input json.RawMessage) error {
+	var parsed listBookableResourcesInput
+	decoder := json.NewDecoder(bytes.NewReader(input))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&parsed); err != nil {
+		return agendaToolInputError("", "Les arguments proposés sont invalides.", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return agendaToolInputError("", "Les arguments proposés sont invalides.", err)
+	}
+	return nil
+}
+
+func trimResourceIDs(values []string) []string {
+	trimmed := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			trimmed = append(trimmed, value)
+		}
+	}
+	return trimmed
+}
+
 func agendaToolInputError(field string, message string, cause error) error {
 	toolErr := &assistanttools.ToolError{Code: "invalid_arguments", Field: field, Message: message}
 	if cause == nil {
@@ -660,21 +783,13 @@ func agendaToolInputError(field string, message string, cause error) error {
 // mapAssistantToolFieldError translates the store's own validation errors
 // (already backed by database constraints and RLS) into the assistant's
 // error contract, so the model gets the same French field message a human
-// would see on the booking form — except FieldResource, a limit no agenda
-// tool lifts: a service without automatic resource allocation needs a
-// specific bookable resource chosen first, and no tool exposes internal
-// resource ids for the model to pick one. That is a scope boundary, not a
-// bug: the booking screen still handles it.
+// would see on the booking form. FieldResource ("Choisissez au moins une
+// ressource.") is not special-cased: list_bookable_resources lets the model
+// resolve it the same way a human would, by picking one and retrying.
 func mapAssistantToolFieldError(err error) error {
 	var fieldErr *FieldError
 	if !errors.As(err, &fieldErr) {
 		return err
-	}
-	if fieldErr.Field == FieldResource {
-		return &assistanttools.ToolError{
-			Code: "unsupported", Field: FieldResource,
-			Message: "Cette prestation nécessite de choisir une ressource spécifique (pont, technicien…) ; utilisez l’agenda pour cette action.",
-		}
 	}
 	return &assistanttools.ToolError{
 		Code: "invalid_arguments", Field: fieldErr.Field, Message: fieldErr.Message,
