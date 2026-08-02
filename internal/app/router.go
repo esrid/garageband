@@ -22,6 +22,7 @@ import (
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
 	"github.com/esrid/garageband/internal/platform/llm"
+	"github.com/esrid/garageband/internal/platform/secrets"
 	"github.com/esrid/garageband/web"
 )
 
@@ -74,6 +75,19 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 		},
 	)
 	locationStore := locations.NewStore(database)
+	calendarConfig := locations.CalendarConfig{Enabled: cfg.CalendarEnabled()}
+	if calendarConfig.Enabled {
+		calendarConfig.OAuth = cfg.GoogleCalendarOAuthConfig()
+		calendarConfig.Secure = cfg.CookieSecure
+		secretStore, err := secrets.NewAESStore(cfg.EncryptionKey)
+		if err != nil {
+			// Unreachable in practice: Config already validated the key
+			// length at boot. Fail loudly rather than silently disabling
+			// calendar connections if that ever stops being true.
+			panic(err)
+		}
+		calendarConfig.Secrets = secretStore
+	}
 	locations.Register(
 		mux,
 		locationStore,
@@ -85,6 +99,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
 		},
+		calendarConfig,
 	)
 	assistantStore := assistant.NewStore(database)
 	catalogStore := catalog.NewStore(database)

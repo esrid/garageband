@@ -357,6 +357,9 @@ templ Form(page FormPage) {
 					</div>
 				</form>
 				if !page.IsNew() {
+					if page.CalendarOffered {
+						@calendarSection(page)
+					}
 					@lifecycleSection(page)
 				}
 			}
@@ -707,6 +710,41 @@ templ dateField(name string, label string, value string, fieldError string) {
 			<span class="text-error text-xs">{ fieldError }</span>
 		}
 	</label>
+}
+
+// calendarSection lets a manager connect or disconnect this site's Google
+// Calendar. Its own bordered block, same pattern as lifecycleSection: the
+// action is destructive/security-sensitive enough to deserve a separate form
+// and a clear yes/no state, not a checkbox buried in the identity form.
+templ calendarSection(page FormPage) {
+	<section class="card card-border border-base-300 bg-base-100" aria-labelledby="calendar-heading">
+		<div class="card-body gap-3 p-5">
+			<h2 id="calendar-heading" class="text-base font-semibold">Google Calendar</h2>
+			if page.CalendarConnected {
+				<p class="text-sm opacity-70">
+					if page.CalendarAccount != "" {
+						Connecté à { page.CalendarAccount }.
+					} else {
+						Connecté.
+					}
+					Les rendez-vous de ce site sont envoyés vers ce calendrier.
+				</p>
+				<form method="post" action={ templ.URL("/locations/" + page.ID + "/calendar/disconnect") } data-pending-form>
+					<button type="submit" class="btn btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Déconnexion…">
+						Déconnecter Google Calendar
+					</button>
+				</form>
+			} else {
+				<p class="text-sm opacity-70">
+					Connectez un compte Google pour que les rendez-vous de ce site
+					apparaissent automatiquement dans son calendrier.
+				</p>
+				<a href={ templ.URL("/locations/" + page.ID + "/calendar/connect") } class="btn min-h-11 w-full sm:w-auto">
+					Connecter Google Calendar
+				</a>
+			}
+		</div>
+	</section>
 }
 
 // lifecycleSection keeps deactivation away from the save button: its own

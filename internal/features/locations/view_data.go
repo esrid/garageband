@@ -88,6 +88,18 @@ type FormPage struct {
 	FieldErrors map[string]string // field key -> French message, shown inline
 	Notice      Notice
 	CanManage   bool
+
+	// CalendarOffered is false when the Google Calendar feature itself is
+	// off (no OAuth client or encryption key configured), in which case the
+	// section does not render at all - matching how login providers stay
+	// hidden when unconfigured.
+	CalendarOffered bool
+	// CalendarConnected and CalendarAccount are independent: a connection
+	// can exist with an empty account (the display-only email lookup at
+	// connect time failed) - never infer "connected" from the account
+	// string being non-empty.
+	CalendarConnected bool
+	CalendarAccount   string
 }
 
 type SchedulePage struct {

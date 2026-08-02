@@ -26,6 +26,7 @@ var (
 type handler struct {
 	store     *Store
 	principal PrincipalResolver
+	calendar  CalendarConfig
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +93,24 @@ func (h *handler) showEdit(w http.ResponseWriter, r *http.Request) {
 		h.storeError(w, r, err)
 		return
 	}
-	h.renderForm(w, r, formFromLocation(location, canManage), http.StatusOK)
+	page := formFromLocation(location, canManage)
+	page.CalendarOffered = h.calendar.Enabled
+	if h.calendar.Enabled {
+		account, connected, err := h.store.CalendarAccount(r.Context(), principal.TenantID, principal.UserID, locationID)
+		if err != nil {
+			h.storeError(w, r, err)
+			return
+		}
+		page.CalendarAccount = account
+		page.CalendarConnected = connected
+	}
+	switch r.URL.Query().Get("calendar") {
+	case "connected":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le calendrier Google est connecté."}
+	case "disconnected":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le calendrier Google a été déconnecté."}
+	}
+	h.renderForm(w, r, page, http.StatusOK)
 }
 
 func (h *handler) showSchedule(w http.ResponseWriter, r *http.Request) {

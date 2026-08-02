@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/endpoints"
+
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/platform/dbtest"
 )
@@ -230,14 +233,86 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 }
 
 func locationHandler(store *locations.Store, principal locations.Principal) http.Handler {
+	return locationHandlerWithCalendar(store, principal, locations.CalendarConfig{})
+}
+
+func locationHandlerWithCalendar(
+	store *locations.Store, principal locations.Principal, calendar locations.CalendarConfig,
+) http.Handler {
 	mux := http.NewServeMux()
 	locations.Register(
 		mux,
 		store,
 		func(next http.Handler) http.Handler { return next },
 		func(context.Context) (locations.Principal, bool) { return principal, true },
+		calendar,
 	)
 	return mux
+}
+
+func TestCalendarRoutesAndUI(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "calendar-handler-owner@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	store := locations.NewStore(database)
+	created, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier Calendrier", CountryCode: "FR", Timezone: "America/Martinique",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := locations.Principal{UserID: ownerID, TenantID: tenantID}
+
+	// Feature disabled: no calendar section, routes 404.
+	disabledHandler := locationHandler(store, principal)
+	response := getLocationPage(disabledHandler, "/locations/"+created.ID)
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "Google Calendar") {
+		t.Fatalf("edit page with calendar disabled = %d %q", response.Code, response.Body.String())
+	}
+	if response = getLocationPage(disabledHandler, "/locations/"+created.ID+"/calendar/connect"); response.Code != http.StatusNotFound {
+		t.Fatalf("connect disabled = %d", response.Code)
+	}
+	if response = getLocationPage(disabledHandler, "/oauth/google-calendar/callback"); response.Code != http.StatusNotFound {
+		t.Fatalf("callback disabled = %d", response.Code)
+	}
+
+	// Feature enabled: not-connected copy shows, connect redirects to Google.
+	secretStore := newTestSecretStore(t)
+	enabledHandler := locationHandlerWithCalendar(store, principal, locations.CalendarConfig{
+		Enabled: true,
+		OAuth:   oauth2.Config{ClientID: "test-client", Endpoint: endpoints.Google},
+		Secrets: secretStore,
+	})
+	response = getLocationPage(enabledHandler, "/locations/"+created.ID)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Connecter Google Calendar") {
+		t.Fatalf("edit page with calendar enabled = %d %q", response.Code, response.Body.String())
+	}
+	response = getLocationPage(enabledHandler, "/locations/"+created.ID+"/calendar/connect")
+	if response.Code != http.StatusFound || !strings.Contains(response.Header().Get("Location"), "accounts.google.com") {
+		t.Fatalf("connect = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+
+	// Seed a connection directly through the store (the OAuth exchange itself
+	// needs a live Google account, out of reach here) and check the edit page
+	// reflects it, then disconnect end to end through the handler.
+	if err := store.ConnectCalendar(
+		t.Context(), tenantID, ownerID, created.ID, secretStore, "refresh-token", "owner@gmail.com",
+	); err != nil {
+		t.Fatal(err)
+	}
+	response = getLocationPage(enabledHandler, "/locations/"+created.ID)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "owner@gmail.com") {
+		t.Fatalf("edit page connected = %d %q", response.Code, response.Body.String())
+	}
+	response = postLocationForm(enabledHandler, "/locations/"+created.ID+"/calendar/disconnect", nil)
+	wantRedirect := "/locations/" + created.ID + "?calendar=disconnected"
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != wantRedirect {
+		t.Fatalf("disconnect = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+	response = getLocationPage(enabledHandler, wantRedirect)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "déconnecté") {
+		t.Fatalf("edit page after disconnect notice = %d %q", response.Code, response.Body.String())
+	}
 }
 
 func getLocationPage(handler http.Handler, target string) *httptest.ResponseRecorder {

@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-02
 
 This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
@@ -90,6 +90,20 @@ the code and migrations remain the implementation source of truth.
 - Provider-neutral ports exist for telephony, speech, LLMs, calendars, vehicle
   lookup, secrets, and business lookup. No permanent provider choice has been
   imposed.
+- Google Calendar is connected end to end for the location-management UI:
+  application-layer AES-256-GCM secret storage (`encrypted_secrets`, RLS
+  manager-gated writes) never puts a refresh token in Postgres in the clear;
+  `internal/platform/calendar` implements event upsert/delete and
+  freebusy against the documented REST endpoints with no new dependency
+  (`golang.org/x/oauth2` only, already in `go.mod`); and a manager can
+  connect/disconnect a site's calendar from its edit page (OAuth2
+  state+PKCE cookie flow mirroring the login provider, one active
+  connection per location, reconnecting replaces rather than accumulates).
+  Not yet wired: pushing appointment writes to the connected calendar
+  (agenda's save/cancel path) and sync-token-based reconciliation of
+  edits/deletes made directly in Google Calendar — Garageband is meant to
+  stay the source of truth (one-way push), but that policy isn't encoded
+  in code yet since nothing pushes.
 
 At this pause point, `make generate`, the complete `make test` suite, `go vet
 ./...`, and `git diff --check` pass. Database tests run against PostgreSQL 18
@@ -98,11 +112,12 @@ absent.
 
 ## Recommended next slices
 
-1. Connect Google Calendar through the existing provider boundary, including
-   idempotent event synchronization, reconciliation, and an explicit conflict
-   ownership policy. **Needs a decision from the team first**: a real Google
-   Cloud OAuth client (id/secret) has to be created and authorized — this
-   repo cannot self-provision third-party credentials.
+1. Wire appointment save/cancel in `internal/features/agenda` to push to a
+   location's connected Google Calendar (`calendar.NewGoogle` + the location's
+   decrypted refresh token), record sync state (`appointment_calendar_events`),
+   and add sync-token-based reconciliation. No vendor decision left — the
+   OAuth client, encrypted secret storage, and connect/disconnect UI are
+   already built and tested; this is now a code-only slice.
 2. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
@@ -120,14 +135,16 @@ absent.
    **Needs a vendor decision first**: this is a paid data provider choice
    with a contract, not a code decision.
 
-All four remaining slices need a vendor or credential decision from the team
-before their adapter code is worth writing — none is a code decision this
-repo can make unilaterally.
+Slices 2–4 need a vendor or credential decision from the team before their
+adapter code is worth writing — none is a code decision this repo can make
+unilaterally. Slice 1 (agenda → Google Calendar push) is code-only and can
+start any time.
 
 ## Still planned, not yet implemented
 
-- Real telephony, STT, TTS, LLM, Google Calendar, WhatsApp, and vehicle-data
-  adapters.
+- Real telephony, STT, TTS, and LLM provider runtimes; the WhatsApp channel;
+  vehicle-data adapters; and Google Calendar push/reconciliation from the
+  agenda (connect/disconnect itself is already implemented).
 - Live call handling, recordings/retention workflow, reminders, no-show flows,
   human handoff, and cross-channel telephone/WhatsApp continuity.
 - Duplicate-customer detection and merge, communication consent management,

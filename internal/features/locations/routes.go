@@ -19,8 +19,9 @@ func Register(
 	store *Store,
 	requireTenant Middleware,
 	principal PrincipalResolver,
+	calendar CalendarConfig,
 ) {
-	h := &handler{store: store, principal: principal}
+	h := &handler{store: store, principal: principal, calendar: calendar}
 	mux.Handle("GET /locations", requireTenant(http.HandlerFunc(h.index)))
 	mux.Handle("GET /locations/new", requireTenant(http.HandlerFunc(h.showNew)))
 	mux.Handle("POST /locations", requireTenant(http.HandlerFunc(h.create)))
@@ -45,4 +46,7 @@ func Register(
 		"POST /locations/{locationID}/reactivate",
 		requireTenant(http.HandlerFunc(h.reactivate)),
 	)
+	mux.Handle("GET /locations/{locationID}/calendar/connect", requireTenant(http.HandlerFunc(h.connectCalendar)))
+	mux.Handle("GET /oauth/google-calendar/callback", requireTenant(http.HandlerFunc(h.calendarCallback)))
+	mux.Handle("POST /locations/{locationID}/calendar/disconnect", requireTenant(http.HandlerFunc(h.disconnectCalendar)))
 }
