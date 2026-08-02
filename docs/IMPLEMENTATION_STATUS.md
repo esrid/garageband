@@ -10,10 +10,8 @@ the code and migrations remain the implementation source of truth.
 
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
-- The working tree is clean and the validated `main` branch is ahead of
-  `origin/main` by 46 commits.
-- No push has been performed. Pushing `main` to the remote is the next Git
-  operation when the team is ready.
+- The working tree is clean and `main` is pushed and up to date with
+  `origin/main` (`0930a56`).
 
 ## Completed and verified
 
