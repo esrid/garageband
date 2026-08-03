@@ -192,6 +192,7 @@ func TestProfileShowsIdentityVehiclesAndHistory(t *testing.T) {
 		"Historique", "Remplacement plaquettes avant",
 		"Réparation", "Terminée", "12 mars 2026",
 		`href="/customers"`,
+		`href="/agenda/new?customer_id=c1"`, "Nouveau rendez-vous",
 	)
 	// The dossier is ours, so no shared-read banner.
 	mustNotContain(t, page, "Dossier partagé, en lecture", "Partagé avec vous")

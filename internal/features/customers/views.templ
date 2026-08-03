@@ -174,10 +174,15 @@ templ Show(page Profile) {
 			</nav>
 			<header class="grid gap-2">
 				<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-					<h1 class="text-xl font-semibold">{ page.Customer.Label() }</h1>
-					if page.Customer.Shared {
-						<span class="badge badge-sm shrink-0">Partagé avec vous</span>
-					}
+					<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+						<h1 class="text-xl font-semibold">{ page.Customer.Label() }</h1>
+						if page.Customer.Shared {
+							<span class="badge badge-sm shrink-0">Partagé avec vous</span>
+						}
+					</div>
+					<a href={ templ.URL("/agenda/new?customer_id=" + page.Customer.ID) } class="btn btn-primary btn-sm min-h-11 shrink-0">
+						Nouveau rendez-vous
+					</a>
 				</div>
 				if len(page.Customer.Contacts()) > 0 {
 					<p class="text-sm opacity-80">

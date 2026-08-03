@@ -51,6 +51,17 @@ type PageInfo struct {
 	Type        string // og:type; empty means "website"
 	NoIndex     bool   // ask crawlers to skip this page (login, admin…)
 	Nav         Nav    // application shell; zero value renders none
+	// Wide drops the reading-width cap (max-w-2xl) for screens that are a
+	// data grid rather than prose or a form - the week agenda, for example.
+	// Off by default: most screens read better at a fixed width.
+	Wide bool
+}
+
+func (p PageInfo) mainWidth() string {
+	if p.Wide {
+		return "max-w-none"
+	}
+	return "max-w-2xl"
 }
 
 func (p PageInfo) ogType() string {
@@ -96,7 +107,7 @@ templ Layout(page PageInfo) {
 		<body class="min-h-dvh bg-base-200">
 			<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:btn focus:btn-primary">Aller au contenu</a>
 			if page.Nav.visible() {
-				@shell(page.Nav) {
+				@shell(page.Nav, page.mainWidth()) {
 					{ children... }
 				}
 			} else {
@@ -105,7 +116,7 @@ templ Layout(page PageInfo) {
 						<span class="text-base font-semibold tracking-tight">Garageband</span>
 					</div>
 				</header>
-				<main id="main" class="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+				<main id="main" class={ "mx-auto w-full px-4 py-6 sm:py-10", page.mainWidth() }>
 					{ children... }
 				</main>
 			}
@@ -118,7 +129,7 @@ templ Layout(page PageInfo) {
 // primary navigation, and the way out. It only links to screens that exist.
 // Verified against https://daisyui.com/components/drawer/ and
 // https://daisyui.com/components/menu/ 2026-08-03.
-templ shell(nav Nav) {
+templ shell(nav Nav, mainWidth string) {
 	<div class="drawer lg:drawer-open">
 		<input id="app-drawer" type="checkbox" class="drawer-toggle"/>
 		<div class="drawer-content flex min-h-dvh flex-col">
@@ -128,7 +139,7 @@ templ shell(nav Nav) {
 				</label>
 				<a href="/" class="px-2 text-base font-semibold tracking-tight">Garageband</a>
 			</div>
-			<main id="main" class="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:py-10">
+			<main id="main" class={ "mx-auto w-full flex-1 px-4 py-6 sm:py-10", mainWidth }>
 				{ children... }
 			</main>
 		</div>

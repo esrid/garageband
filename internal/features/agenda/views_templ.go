@@ -413,7 +413,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(ui.FormatDate(page.WeekStart))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 110, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 111, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -426,7 +426,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(ui.FormatDate(page.Days()[6]))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 110, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 111, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -439,7 +439,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(page.LocationName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 112, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 113, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -457,7 +457,7 @@ func ShowWeek(page Week) templ.Component {
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.WeekStart.Format(DateLayout))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 117, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 118, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 				if templ_7745c5c3_Err != nil {
@@ -470,7 +470,7 @@ func ShowWeek(page Week) templ.Component {
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocation)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 118, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 119, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 				if templ_7745c5c3_Err != nil {
@@ -488,7 +488,7 @@ func ShowWeek(page Week) templ.Component {
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Value)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 120, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 121, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 					if templ_7745c5c3_Err != nil {
@@ -511,7 +511,7 @@ func ShowWeek(page Week) templ.Component {
 					var templ_7745c5c3_Var27 string
 					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 120, Col: 99}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 121, Col: 99}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 					if templ_7745c5c3_Err != nil {
@@ -542,7 +542,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var28 templ.SafeURL
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(page.Path(page.PreviousWeek())))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 128, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 129, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {
@@ -555,7 +555,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var29 templ.SafeURL
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(page.Path(page.NextWeek())))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 131, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 132, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -568,7 +568,7 @@ func ShowWeek(page Week) templ.Component {
 			var templ_7745c5c3_Var30 templ.SafeURL
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(page.DayViewPath()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 134, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 135, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -586,7 +586,7 @@ func ShowWeek(page Week) templ.Component {
 				var templ_7745c5c3_Var31 templ.SafeURL
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(page.NewPath()))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 136, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 137, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 				if templ_7745c5c3_Err != nil {
@@ -637,6 +637,7 @@ func ShowWeek(page Week) templ.Component {
 			Title:   "Agenda de la semaine",
 			NoIndex: true,
 			Nav:     ui.Nav{Section: ui.SectionAgenda, Workspace: page.Organization, InWorkspace: true},
+			Wide:    true,
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -674,7 +675,7 @@ func weekGrid(page Week) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("grid-template-columns: 3.5rem repeat(7, 1fr); grid-template-rows: " + slotRows + ";")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 155, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 156, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
@@ -692,7 +693,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("grid-row: 1; grid-column: " + strconv.Itoa(dayIndex+2) + ";")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 159, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 160, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 			if templ_7745c5c3_Err != nil {
@@ -705,7 +706,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(ui.FormatWeekdayShort(day))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 160, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 161, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
@@ -718,7 +719,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(day.Day()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 160, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 161, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 			if templ_7745c5c3_Err != nil {
@@ -737,7 +738,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("grid-row: " + strconv.Itoa(slotIndex*2+2) + " / span 2; grid-column: 1;")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 166, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 167, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -750,7 +751,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 168, Col: 11}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 169, Col: 11}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -769,7 +770,7 @@ func weekGrid(page Week) templ.Component {
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("grid-row: 2 / span " + strconv.Itoa(page.SlotCount()) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 172, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 173, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -794,7 +795,7 @@ func weekGrid(page Week) templ.Component {
 				var templ_7745c5c3_Var42 templ.SafeURL
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(appointmentPath(appointment)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 175, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 176, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -820,7 +821,7 @@ func weekGrid(page Week) templ.Component {
 				var templ_7745c5c3_Var44 string
 				templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(page.GridRowStyle(appointment) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 179, Col: 96}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 180, Col: 96}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 				if templ_7745c5c3_Err != nil {
@@ -833,7 +834,7 @@ func weekGrid(page Week) templ.Component {
 				var templ_7745c5c3_Var45 string
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(ui.FormatTime(appointment.StartsAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 181, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 182, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 				if templ_7745c5c3_Err != nil {
@@ -846,7 +847,7 @@ func weekGrid(page Week) templ.Component {
 				var templ_7745c5c3_Var46 string
 				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.CustomerName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 181, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 182, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 				if templ_7745c5c3_Err != nil {
@@ -864,7 +865,7 @@ func weekGrid(page Week) templ.Component {
 					var templ_7745c5c3_Var47 string
 					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.ServiceName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 183, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 184, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 					if templ_7745c5c3_Err != nil {
@@ -939,7 +940,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(ui.FormatTimeRange(appointment.StartsAt, appointment.EndsAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 202, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 203, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -952,7 +953,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(statusLabel(appointment.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 204, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 205, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -970,7 +971,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var53 templ.SafeURL
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(customerPath(appointment)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 208, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 209, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -983,7 +984,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 209, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 210, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -997,7 +998,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var55 string
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 212, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 213, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 			if templ_7745c5c3_Err != nil {
@@ -1012,7 +1013,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.ServiceName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 217, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 218, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1036,7 +1037,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(" · ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 222, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 223, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 			if templ_7745c5c3_Err != nil {
@@ -1049,7 +1050,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var58 string
 			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.VehicleLabel)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 223, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 224, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 			if templ_7745c5c3_Err != nil {
@@ -1064,7 +1065,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var59 string
 			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.ResourceName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 229, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 230, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 			if templ_7745c5c3_Err != nil {
@@ -1088,7 +1089,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(" · ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 234, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 235, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 			if templ_7745c5c3_Err != nil {
@@ -1101,7 +1102,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(sourceLabel(appointment.Source))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 235, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 236, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1120,7 +1121,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var62 templ.SafeURL
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(appointmentPath(appointment)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 239, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 240, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1133,7 +1134,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var63 string
 			templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(" le rendez-vous de " + appointment.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 240, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 241, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 			if templ_7745c5c3_Err != nil {
@@ -1156,7 +1157,7 @@ func appointmentRow(appointment Appointment, canManage bool) templ.Component {
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(appointment.Note)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 245, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 246, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1216,7 +1217,7 @@ func Form(page FormPage) templ.Component {
 			var templ_7745c5c3_Var67 templ.SafeURL
 			templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(agendaPath(page)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 260, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 261, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 			if templ_7745c5c3_Err != nil {
@@ -1229,7 +1230,7 @@ func Form(page FormPage) templ.Component {
 			var templ_7745c5c3_Var68 string
 			templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(formTitle(page))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 263, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 264, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 			if templ_7745c5c3_Err != nil {
@@ -1242,7 +1243,7 @@ func Form(page FormPage) templ.Component {
 			var templ_7745c5c3_Var69 string
 			templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(page.LocationName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 264, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 265, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 			if templ_7745c5c3_Err != nil {
@@ -1269,7 +1270,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var70 templ.SafeURL
 				templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(formActionPath(page)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 279, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 280, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 				if templ_7745c5c3_Err != nil {
@@ -1282,7 +1283,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var71 string
 				templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocation)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 280, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 281, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 				if templ_7745c5c3_Err != nil {
@@ -1295,7 +1296,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var72 string
 				templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.LocationID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 280, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 281, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 				if templ_7745c5c3_Err != nil {
@@ -1308,7 +1309,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var73 string
 				templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldCustomer)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 281, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 282, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var73)
 				if templ_7745c5c3_Err != nil {
@@ -1321,7 +1322,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var74 string
 				templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Customer.ID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 281, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 282, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var74)
 				if templ_7745c5c3_Err != nil {
@@ -1334,7 +1335,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var75 string
 				templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(page.Customer.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 286, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 287, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 				if templ_7745c5c3_Err != nil {
@@ -1368,7 +1369,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var78 string
 					templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldVehicle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 293, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 294, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 					if templ_7745c5c3_Err != nil {
@@ -1381,7 +1382,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var79 string
 					templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldVehicle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 294, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 295, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 					if templ_7745c5c3_Err != nil {
@@ -1407,7 +1408,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var81 string
 					templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldVehicle)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 296, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 297, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var81)
 					if templ_7745c5c3_Err != nil {
@@ -1420,7 +1421,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var82 string
 					templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldVehicle, false, page.HasError(FieldVehicle)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 297, Col: 89}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 298, Col: 89}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var82)
 					if templ_7745c5c3_Err != nil {
@@ -1438,7 +1439,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var83 string
 						templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 302, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 303, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var83)
 						if templ_7745c5c3_Err != nil {
@@ -1461,7 +1462,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var84 string
 						templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 302, Col: 107}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 303, Col: 107}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 						if templ_7745c5c3_Err != nil {
@@ -1506,7 +1507,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var87 string
 					templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldService)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 308, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 309, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 					if templ_7745c5c3_Err != nil {
@@ -1519,7 +1520,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var88 string
 					templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldService)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 309, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 310, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var88)
 					if templ_7745c5c3_Err != nil {
@@ -1545,7 +1546,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var90 string
 					templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldService)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 311, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 312, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var90)
 					if templ_7745c5c3_Err != nil {
@@ -1558,7 +1559,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var91 string
 					templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldService, true, page.HasError(FieldService)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 312, Col: 88}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 313, Col: 88}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 					if templ_7745c5c3_Err != nil {
@@ -1576,7 +1577,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var92 string
 						templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 317, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 318, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 						if templ_7745c5c3_Err != nil {
@@ -1599,7 +1600,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var93 string
 						templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 317, Col: 107}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 318, Col: 107}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 						if templ_7745c5c3_Err != nil {
@@ -1648,7 +1649,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var96 string
 					templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDate)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 329, Col: 24}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 330, Col: 24}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 					if templ_7745c5c3_Err != nil {
@@ -1661,7 +1662,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var97 string
 					templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDate)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 330, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 331, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var97)
 					if templ_7745c5c3_Err != nil {
@@ -1687,7 +1688,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var99 string
 					templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.Date)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 333, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 334, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 					if templ_7745c5c3_Err != nil {
@@ -1700,7 +1701,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var100 string
 					templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldDate)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 334, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 335, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var100)
 					if templ_7745c5c3_Err != nil {
@@ -1713,7 +1714,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var101 string
 					templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldDate, false, page.HasError(FieldDate)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 335, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 336, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 					if templ_7745c5c3_Err != nil {
@@ -1753,7 +1754,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var104 string
 					templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldStartTime)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 341, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 342, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var104)
 					if templ_7745c5c3_Err != nil {
@@ -1766,7 +1767,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var105 string
 					templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldStartTime)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 342, Col: 31}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 343, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var105)
 					if templ_7745c5c3_Err != nil {
@@ -1792,7 +1793,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var107 string
 					templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.StartTime)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 345, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 346, Col: 39}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var107)
 					if templ_7745c5c3_Err != nil {
@@ -1805,7 +1806,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var108 string
 					templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldStartTime)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 346, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 347, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var108)
 					if templ_7745c5c3_Err != nil {
@@ -1818,7 +1819,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var109 string
 					templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldStartTime, false, page.HasError(FieldStartTime)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 347, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 348, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var109)
 					if templ_7745c5c3_Err != nil {
@@ -1858,7 +1859,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var112 string
 					templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldResource)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 352, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 353, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var112)
 					if templ_7745c5c3_Err != nil {
@@ -1884,7 +1885,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var114 string
 					templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldResource)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 352, Col: 281}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 353, Col: 281}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var114)
 					if templ_7745c5c3_Err != nil {
@@ -1897,7 +1898,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var115 string
 					templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldResource, true, page.HasError(FieldResource)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 352, Col: 365}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 353, Col: 365}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
 					if templ_7745c5c3_Err != nil {
@@ -1915,7 +1916,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var116 string
 						templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldResource)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 355, Col: 55}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 356, Col: 55}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var116)
 						if templ_7745c5c3_Err != nil {
@@ -1928,7 +1929,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var117 string
 						templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 355, Col: 78}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 356, Col: 78}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var117)
 						if templ_7745c5c3_Err != nil {
@@ -1951,7 +1952,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var118 string
 						templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(option.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 356, Col: 51}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 357, Col: 51}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 						if templ_7745c5c3_Err != nil {
@@ -2021,7 +2022,7 @@ func Form(page FormPage) templ.Component {
 							var templ_7745c5c3_Var119 string
 							templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldStartTime)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 388, Col: 54}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 389, Col: 54}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var119)
 							if templ_7745c5c3_Err != nil {
@@ -2034,7 +2035,7 @@ func Form(page FormPage) templ.Component {
 							var templ_7745c5c3_Var120 string
 							templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.ResolveAttributeValue(slot.Value)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 388, Col: 75}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 389, Col: 75}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var120)
 							if templ_7745c5c3_Err != nil {
@@ -2057,7 +2058,7 @@ func Form(page FormPage) templ.Component {
 							var templ_7745c5c3_Var121 string
 							templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(slot.Label)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 389, Col: 25}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 390, Col: 25}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 							if templ_7745c5c3_Err != nil {
@@ -2101,7 +2102,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var123 string
 					templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldNote)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 403, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 404, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var123)
 					if templ_7745c5c3_Err != nil {
@@ -2114,7 +2115,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var124 string
 					templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldNote)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 404, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 405, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var124)
 					if templ_7745c5c3_Err != nil {
@@ -2127,7 +2128,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var125 string
 					templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldNote, true, false))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 407, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 408, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var125)
 					if templ_7745c5c3_Err != nil {
@@ -2140,7 +2141,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var126 string
 					templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(page.Values.Note)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 408, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 409, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 					if templ_7745c5c3_Err != nil {
@@ -2163,7 +2164,7 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var127 templ.SafeURL
 				templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(agendaPath(page)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 413, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 414, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 				if templ_7745c5c3_Err != nil {
@@ -2196,7 +2197,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var128 templ.SafeURL
 					templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(cancelPath(page)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 431, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 432, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 					if templ_7745c5c3_Err != nil {
@@ -2296,7 +2297,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.ResolveAttributeValue(key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 451, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 452, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var133)
 		if templ_7745c5c3_Err != nil {
@@ -2309,7 +2310,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 		var templ_7745c5c3_Var134 string
 		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 452, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 453, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var134))
 		if templ_7745c5c3_Err != nil {
@@ -2346,7 +2347,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 			var templ_7745c5c3_Var135 string
 			templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.ResolveAttributeValue(key + "-hint")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 461, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 462, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var135)
 			if templ_7745c5c3_Err != nil {
@@ -2359,7 +2360,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 			var templ_7745c5c3_Var136 string
 			templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinStringErrs(hint)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 461, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 462, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 			if templ_7745c5c3_Err != nil {
@@ -2378,7 +2379,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 			var templ_7745c5c3_Var137 string
 			templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.ResolveAttributeValue(key + "-error")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 464, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 465, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var137)
 			if templ_7745c5c3_Err != nil {
@@ -2391,7 +2392,7 @@ func field(page FormPage, key string, label string, required bool, hint string, 
 			var templ_7745c5c3_Var138 string
 			templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinStringErrs(page.Error(key))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 465, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 466, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
 			if templ_7745c5c3_Err != nil {
@@ -2474,7 +2475,7 @@ func notice(n Notice) templ.Component {
 			var templ_7745c5c3_Var142 string
 			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(noticeTitle(n.Kind))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 482, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 483, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 			if templ_7745c5c3_Err != nil {
@@ -2487,7 +2488,7 @@ func notice(n Notice) templ.Component {
 			var templ_7745c5c3_Var143 string
 			templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(n.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 483, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/agenda/views.templ`, Line: 484, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 			if templ_7745c5c3_Err != nil {
