@@ -37,6 +37,15 @@ const (
 	FieldView = "view"
 )
 
+// FieldOutcome is the reminder queue's outcome field - which of the two
+// "remind" submit buttons was pressed (see remindersDue in views.templ).
+const FieldOutcome = "outcome"
+
+// OutcomeConfirmed is FieldOutcome's value when the customer confirmed on
+// the call; any other value (including absent) means no answer, and leaves
+// the appointment's status untouched.
+const OutcomeConfirmed = "confirmed"
+
 // Notice kinds. The view derives the heading from the kind, so French copy
 // stays in the view layer instead of leaking into handlers.
 const (

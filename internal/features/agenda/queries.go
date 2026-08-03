@@ -328,14 +328,18 @@ func loadReminderCandidates(
 	return candidates, nil
 }
 
-// MarkReminded records that a staffer has reached out about this
-// appointment, dropping it off the reminder list. Returns the appointment's
-// own date and location so the handler can redirect back to that day.
+// MarkReminded records the outcome of a staffer's manual call, dropping the
+// appointment off the reminder list either way. confirmed only flips status
+// to 'confirmed' when the appointment is still 'pending' - it never
+// downgrades an appointment that reached in_progress or beyond. Returns the
+// appointment's own date and location so the handler can redirect back to
+// that day.
 func (s *Store) MarkReminded(
 	ctx context.Context,
 	tenantID string,
 	userID string,
 	appointmentID string,
+	confirmed bool,
 ) (date string, locationID string, err error) {
 	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
 		var startsAt time.Time
@@ -353,8 +357,11 @@ func (s *Store) MarkReminded(
 			return err
 		}
 		result, err := tx.Exec(ctx, `
-			UPDATE appointments SET reminder_sent_at = now()
-			WHERE tenant_id = $1 AND id = $2`, tenantID, appointmentID,
+			UPDATE appointments
+			SET reminder_sent_at = now(),
+			    status = CASE WHEN $3 AND status = 'pending' THEN 'confirmed' ELSE status END
+			WHERE tenant_id = $1 AND id = $2`,
+			tenantID, appointmentID, confirmed,
 		)
 		if err != nil {
 			return err

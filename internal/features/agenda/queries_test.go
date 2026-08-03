@@ -318,6 +318,38 @@ func TestDayListsAppointmentsDueAReminderAndMarkingOneDoneDropsIt(t *testing.T) 
 	if len(page.RemindersDue) != 0 {
 		t.Fatalf("reminders due after marking = %d, want 0: %#v", len(page.RemindersDue), page.RemindersDue)
 	}
+	var status string
+	if err := fixture.fixtures.QueryRow(t.Context(),
+		`SELECT status FROM appointments WHERE id = $1`, soonID,
+	).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending" {
+		t.Fatalf("status after a no-answer outcome = %q, want unchanged pending", status)
+	}
+
+	secondID := insertReturningID(t, fixture.fixtures, `
+		INSERT INTO appointments (
+		    tenant_id, location_id, customer_id, vehicle_id, service_id,
+		    resource_id, starts_at, ends_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dashboard') RETURNING id::text`,
+		fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+		fixture.serviceID, fixture.secondResourceID, now.Add(8*time.Hour), now.Add(9*time.Hour),
+	)
+	form := url.Values{agenda.FieldOutcome: {agenda.OutcomeConfirmed}}
+	confirmResponse := postAgendaForm(mux, "/agenda/"+secondID+"/remind", form)
+	if confirmResponse.Code != http.StatusSeeOther ||
+		!strings.Contains(confirmResponse.Header().Get("Location"), "confirmed=1") {
+		t.Fatalf("confirm outcome = %d %q", confirmResponse.Code, confirmResponse.Header().Get("Location"))
+	}
+	if err := fixture.fixtures.QueryRow(t.Context(),
+		`SELECT status FROM appointments WHERE id = $1`, secondID,
+	).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "confirmed" {
+		t.Fatalf("status after a confirmed outcome = %q, want confirmed", status)
+	}
 }
 
 func TestFormShowsCustomersOtherUpcomingAppointmentsCappedWithAnAccurateTotal(t *testing.T) {

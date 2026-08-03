@@ -55,6 +55,8 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est annulé."}
 	case r.URL.Query().Get("reminded") == "1":
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rappel est enregistré."}
+	case r.URL.Query().Get("confirmed") == "1":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est confirmé."}
 	}
 	h.render(w, r, Show(page), http.StatusOK)
 }
@@ -387,10 +389,10 @@ func (h *handler) move(w http.ResponseWriter, r *http.Request) {
 	), http.StatusSeeOther)
 }
 
-// remind marks an appointment on the reminder queue as reached out to. It
-// does not place a call or send anything itself - there is no telephony
-// integration wired up (see internal/platform/telephony) - it just records
-// that a staffer already did, so the appointment drops off the list.
+// remind records the outcome of a staffer's manual call and drops the
+// appointment off the reminder queue either way. It does not place a call or
+// send anything itself - there is no telephony integration wired up (see
+// internal/platform/telephony).
 func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.resolve(w, r)
 	if !ok {
@@ -401,8 +403,13 @@ func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	confirmed := r.FormValue(FieldOutcome) == OutcomeConfirmed
 	date, locationID, err := h.store.MarkReminded(
-		r.Context(), principal.TenantID, principal.UserID, appointmentID,
+		r.Context(), principal.TenantID, principal.UserID, appointmentID, confirmed,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -412,8 +419,12 @@ func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, "mark appointment reminded", err)
 		return
 	}
+	remindedFlag := "reminded=1"
+	if confirmed {
+		remindedFlag = "confirmed=1"
+	}
 	http.Redirect(w, r, fmt.Sprintf(
-		"/agenda?%s=%s&%s=%s&reminded=1", FieldLocation, locationID, FieldDate, date,
+		"/agenda?%s=%s&%s=%s&%s", FieldLocation, locationID, FieldDate, date, remindedFlag,
 	), http.StatusSeeOther)
 }
 
