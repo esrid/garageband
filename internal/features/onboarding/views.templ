@@ -234,15 +234,19 @@ templ noticeIcon(kind string) {
 templ pendingScript() {
 	<script>
 		document.querySelectorAll("[data-pending-form]").forEach(function (form) {
-			form.addEventListener("submit", function () {
-				var button = form.querySelector("[data-pending-label]");
-				if (!button || !form.checkValidity()) {
+			form.addEventListener("submit", function (event) {
+				var button = event.submitter;
+				if (!button || !button.dataset.pendingLabel || !form.checkValidity()) {
 					return;
 				}
-				button.disabled = true;
-				button.innerHTML =
-					'<span class="loading loading-spinner loading-sm"></span>' +
-					button.dataset.pendingLabel;
+				var label = button.dataset.pendingLabel;
+				// Disabling synchronously here would drop the submitter's own
+				// name/value from the request the browser is about to send -
+				// defer one tick so submission happens first.
+				setTimeout(function () {
+					button.disabled = true;
+					button.innerHTML = '<span class="loading loading-spinner loading-sm"></span>' + label;
+				}, 0);
 			});
 		});
 	</script>
