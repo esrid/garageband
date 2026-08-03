@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/a-h/templ"
@@ -77,11 +78,23 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		h.handleReadError(w, r, "load agenda week", err)
 		return
 	}
+	switch {
+	case r.URL.Query().Get("saved") == "1":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous a été déplacé."}
+	case r.URL.Query().Get("moveError") == NoticeConflict:
+		page.Notice = Notice{Kind: NoticeConflict, Message: "Ce créneau est déjà pris ; le rendez-vous n'a pas été déplacé."}
+	case r.URL.Query().Get("moveError") == NoticeInvalid:
+		page.Notice = Notice{Kind: NoticeInvalid, Message: "Date ou heure invalide ; le rendez-vous n'a pas été déplacé."}
+	case r.URL.Query().Get("moveError") == NoticeError:
+		page.Notice = Notice{Kind: NoticeError, Message: "Le déplacement a échoué ; réessayez."}
+	}
 	h.render(w, r, ShowWeek(page), http.StatusOK)
 }
 
 func (h *handler) newAppointment(w http.ResponseWriter, r *http.Request) {
-	h.form(w, r, "", r.URL.Query().Get(FieldCustomer), r.URL.Query().Get(FieldLocation))
+	h.form(w, r, "", r.URL.Query().Get(FieldCustomer), r.URL.Query().Get(FieldLocation),
+		r.URL.Query().Get(FieldDate), r.URL.Query().Get(FieldStartTime),
+	)
 }
 
 func (h *handler) editAppointment(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +103,7 @@ func (h *handler) editAppointment(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.form(w, r, appointmentID, "", "")
+	h.form(w, r, appointmentID, "", "", "", "")
 }
 
 func (h *handler) form(
@@ -99,6 +112,8 @@ func (h *handler) form(
 	appointmentID string,
 	customerID string,
 	locationID string,
+	date string,
+	startTime string,
 ) {
 	principal, ok := h.resolve(w, r)
 	if !ok {
@@ -119,6 +134,16 @@ func (h *handler) form(
 	if err != nil {
 		h.handleReadError(w, r, "load appointment form", err)
 		return
+	}
+	// A click-to-create slot in the week grid already knows when; only a new
+	// booking (never an edit) takes this prefill, and only when it parses.
+	if appointmentID == "" {
+		if _, err := time.Parse(DateLayout, date); err == nil {
+			page.Values.Date = date
+		}
+		if _, err := time.Parse("15:04", startTime); err == nil {
+			page.Values.StartTime = startTime
+		}
 	}
 	h.render(w, r, Form(page), http.StatusOK)
 }
@@ -268,6 +293,63 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda?%s=%s&%s=%s&saved=1", FieldLocation, input.LocationID, FieldDate, date,
+	), http.StatusSeeOther)
+}
+
+// move is the week grid's drag-and-drop target: only date/start_time change,
+// everything else about the appointment stays exactly as it was.
+func (h *handler) move(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	appointmentID := r.PathValue("appointmentID")
+	if !uuidPattern.MatchString(appointmentID) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	locationID := strings.TrimSpace(r.FormValue(FieldLocation))
+	date := strings.TrimSpace(r.FormValue(FieldDate))
+	startTime := strings.TrimSpace(r.FormValue(FieldStartTime))
+
+	newDate, err := h.store.Reschedule(
+		r.Context(), principal.TenantID, principal.UserID, appointmentID, date, startTime,
+	)
+	if err != nil {
+		var fieldError *FieldError
+		var conflict *ConflictError
+		kind := NoticeError
+		switch {
+		case errors.As(err, &fieldError):
+			kind = NoticeInvalid
+		case errors.As(err, &conflict):
+			kind = NoticeConflict
+		case errors.Is(err, sql.ErrNoRows):
+			http.NotFound(w, r)
+			return
+		default:
+			h.fail(w, "move appointment", err)
+			return
+		}
+		// Nothing changed server-side on any of these errors: reloading the
+		// week the drag started in is the "snap back" a failed drop needs.
+		http.Redirect(w, r, fmt.Sprintf(
+			"/agenda/week?%s=%s&%s=%s&moveError=%s",
+			FieldLocation, locationID, FieldDate, date, kind,
+		), http.StatusSeeOther)
+		return
+	}
+	if pushErr := h.store.SyncAppointmentCalendar(
+		r.Context(), principal.TenantID, principal.UserID, appointmentID, h.calendar,
+	); pushErr != nil {
+		slog.Error("sync appointment calendar", "err", pushErr)
+	}
+	http.Redirect(w, r, fmt.Sprintf(
+		"/agenda/week?%s=%s&%s=%s&saved=1", FieldLocation, locationID, FieldDate, newDate,
 	), http.StatusSeeOther)
 }
 

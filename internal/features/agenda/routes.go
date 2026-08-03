@@ -18,4 +18,5 @@ func Register(
 	mux.Handle("GET /agenda/{appointmentID}", requireTenant(http.HandlerFunc(h.editAppointment)))
 	mux.Handle("POST /agenda/{appointmentID}", requireTenant(http.HandlerFunc(h.update)))
 	mux.Handle("POST /agenda/{appointmentID}/cancel", requireTenant(http.HandlerFunc(h.cancel)))
+	mux.Handle("POST /agenda/{appointmentID}/move", requireTenant(http.HandlerFunc(h.move)))
 }

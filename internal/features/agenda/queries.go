@@ -885,6 +885,71 @@ func cancelAppointment(
 	return date, locationID, err
 }
 
+// Reschedule moves an appointment to a new date/time without touching
+// anything else about it - the customer, vehicle, service, and resources it
+// already has. Used by the week grid's drag-and-drop: dragging only ever
+// changes when a booking happens, never who or what it's for.
+func (s *Store) Reschedule(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	appointmentID string,
+	date string,
+	startTime string,
+) (newDate string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		input, err := loadCurrentSaveInput(ctx, tx, tenantID, appointmentID)
+		if err != nil {
+			return err
+		}
+		input.Date = date
+		input.StartTime = startTime
+		_, newDate, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
+		return err
+	})
+	return newDate, err
+}
+
+// loadCurrentSaveInput reads an appointment's current fields as the exact
+// SaveInput that produced them, so a caller changing only date/time never
+// risks resubmitting a stale or tampered customer/vehicle/service value.
+func loadCurrentSaveInput(
+	ctx context.Context, tx pgx.Tx, tenantID, appointmentID string,
+) (SaveInput, error) {
+	var input SaveInput
+	var customerID, vehicleID, serviceID sql.NullString
+	if err := tx.QueryRow(ctx, `
+		SELECT appointment.location_id::text, appointment.customer_id::text,
+		       appointment.vehicle_id::text, appointment.service_id::text,
+		       COALESCE(appointment.customer_note, '')
+		FROM appointments appointment
+		WHERE appointment.tenant_id = $1 AND appointment.id = $2
+		  AND app_current_user_can_access_location(appointment.location_id)`,
+		tenantID, appointmentID,
+	).Scan(&input.LocationID, &customerID, &vehicleID, &serviceID, &input.Note); err != nil {
+		return SaveInput{}, err
+	}
+	input.CustomerID, input.VehicleID, input.ServiceID = customerID.String, vehicleID.String, serviceID.String
+
+	rows, err := tx.Query(ctx, `
+		SELECT resource_id::text FROM appointment_resource_reservations
+		WHERE tenant_id = $1 AND appointment_id = $2`,
+		tenantID, appointmentID,
+	)
+	if err != nil {
+		return SaveInput{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var resourceID string
+		if err := rows.Scan(&resourceID); err != nil {
+			return SaveInput{}, err
+		}
+		input.ResourceIDs = append(input.ResourceIDs, resourceID)
+	}
+	return input, rows.Err()
+}
+
 func loadLocationContext(
 	ctx context.Context,
 	tx pgx.Tx,

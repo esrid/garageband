@@ -149,9 +149,16 @@ templ ShowWeek(page Week) {
 	}
 }
 
+// weekGrid renders the grid twice over: every half-hour cell is a real link
+// (click an empty one to book at that exact time) and a drop target (data-date
+// /data-start-time), and every appointment is a draggable link (plain click
+// still edits it - HTML5 drag events don't hijack a normal click). Dragging
+// resubmits the existing move form instead of duplicating the appointment's
+// other fields into the DOM: see dragScript.
 templ weekGrid(page Week) {
 	{{ slotRows := "auto repeat(" + strconv.Itoa(page.SlotCount()) + ", 1.75rem)" }}
 	<div
+		id="week-grid"
 		class="grid min-w-[720px] gap-px rounded-box border border-base-300 bg-base-300"
 		style={ "grid-template-columns: 3.5rem repeat(7, 1fr); grid-template-rows: " + slotRows + ";" }
 	>
@@ -170,11 +177,22 @@ templ weekGrid(page Week) {
 			</div>
 		}
 		for dayIndex, day := range page.Days() {
-			<div class="bg-base-100" style={ "grid-row: 2 / span " + strconv.Itoa(page.SlotCount()) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }></div>
+			for slotIndex, slotTime := range page.SlotStartTimes() {
+				<a
+					href={ templ.URL(page.NewPathAt(day, slotTime)) }
+					class="agenda-slot bg-base-100 transition-colors hover:bg-base-200"
+					data-date={ day.Format(DateLayout) }
+					data-start-time={ slotTime }
+					aria-label={ "Nouveau rendez-vous, " + ui.FormatWeekdayShort(day) + " " + strconv.Itoa(day.Day()) + " à " + slotTime }
+					style={ "grid-row: " + strconv.Itoa(slotIndex+2) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }
+				></a>
+			}
 			for _, appointment := range page.AppointmentsOn(day) {
 				<a
 					href={ templ.URL(appointmentPath(appointment)) }
-					class={ "m-px overflow-hidden rounded-sm px-1 py-0.5 text-left text-[0.65rem] leading-tight",
+					draggable="true"
+					data-appointment-id={ appointment.ID }
+					class={ "agenda-appointment m-px cursor-grab overflow-hidden rounded-sm px-1 py-0.5 text-left text-[0.65rem] leading-tight active:cursor-grabbing",
 						templ.KV("bg-primary text-primary-content", appointment.Occupies()),
 						templ.KV("bg-base-200 text-base-content/60 line-through", !appointment.Occupies()) }
 					style={ page.GridRowStyle(appointment) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }
@@ -187,6 +205,61 @@ templ weekGrid(page Week) {
 			}
 		}
 	</div>
+	<form id="agenda-move-form" method="post" class="hidden">
+		<input type="hidden" name={ FieldLocation } value={ page.LocationID }/>
+		<input type="hidden" name={ FieldDate }/>
+		<input type="hidden" name={ FieldStartTime }/>
+	</form>
+	@dragScript()
+}
+
+// dragScript wires drag-and-drop on top of the grid built above. It only
+// ever resubmits the existing move form with a new date/start_time -
+// dropping is a real POST + full navigation, not a fetch call, so a
+// successful move, a conflict, and every other outcome all go through the
+// exact same server-rendered notice path every other write in this app
+// already uses.
+templ dragScript() {
+	<script>
+		(function () {
+			var grid = document.getElementById("week-grid");
+			var form = document.getElementById("agenda-move-form");
+			if (!grid || !form) {
+				return;
+			}
+			var dateInput = form.querySelector('[name="date"]');
+			var startTimeInput = form.querySelector('[name="start_time"]');
+
+			grid.querySelectorAll(".agenda-appointment").forEach(function (block) {
+				block.addEventListener("dragstart", function (event) {
+					event.dataTransfer.setData("text/plain", block.dataset.appointmentId);
+					event.dataTransfer.effectAllowed = "move";
+				});
+			});
+
+			grid.querySelectorAll(".agenda-slot").forEach(function (cell) {
+				cell.addEventListener("dragover", function (event) {
+					event.preventDefault();
+					cell.classList.add("bg-primary/20");
+				});
+				cell.addEventListener("dragleave", function () {
+					cell.classList.remove("bg-primary/20");
+				});
+				cell.addEventListener("drop", function (event) {
+					event.preventDefault();
+					cell.classList.remove("bg-primary/20");
+					var appointmentID = event.dataTransfer.getData("text/plain");
+					if (!appointmentID) {
+						return;
+					}
+					form.action = "/agenda/" + appointmentID + "/move";
+					dateInput.value = cell.dataset.date;
+					startTimeInput.value = cell.dataset.startTime;
+					form.submit();
+				});
+			});
+		})();
+	</script>
 }
 
 // appointmentRow puts the time first: on a day screen that is the column the

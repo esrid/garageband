@@ -298,6 +298,77 @@ func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 	}
 }
 
+func TestMoveAppointmentHTTPRedirectsOnSuccessAndSnapsBackOnConflict(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	movingID, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "11:00"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
+		},
+		agenda.CalendarConfig{},
+	)
+
+	// Dropping it onto the other appointment's slot conflicts and moves
+	// nothing: the drag "snaps back" by redirecting to the unchanged week.
+	conflicting := url.Values{
+		agenda.FieldLocation:  {fixture.locationID},
+		agenda.FieldDate:      {"2026-08-12"},
+		agenda.FieldStartTime: {"11:00"},
+	}
+	response := postAgendaForm(mux, "/agenda/"+movingID+"/move", conflicting)
+	if response.Code != http.StatusSeeOther ||
+		!strings.Contains(response.Header().Get("Location"), "moveError=conflict") {
+		t.Fatalf("conflicting move = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+	day, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stillAt0900 bool
+	for _, appointment := range day.Appointments {
+		if appointment.ID == movingID && appointment.StartsAt.Format("15:04") == "09:00" {
+			stillAt0900 = true
+		}
+	}
+	if !stillAt0900 {
+		t.Fatalf("appointment moved despite the conflict redirect: %#v", day.Appointments)
+	}
+
+	// A free slot moves it and redirects to the week it landed in.
+	free := url.Values{
+		agenda.FieldLocation:  {fixture.locationID},
+		agenda.FieldDate:      {"2026-08-13"},
+		agenda.FieldStartTime: {"14:00"},
+	}
+	response = postAgendaForm(mux, "/agenda/"+movingID+"/move", free)
+	if response.Code != http.StatusSeeOther ||
+		!strings.Contains(response.Header().Get("Location"), "/agenda/week") ||
+		!strings.Contains(response.Header().Get("Location"), "saved=1") {
+		t.Fatalf("free move = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+	movedDay, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(movedDay.Appointments) != 1 || movedDay.Appointments[0].ID != movingID {
+		t.Fatalf("moved day = %#v", movedDay.Appointments)
+	}
+}
+
 func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	mustExec(t, fixture.fixtures, `
@@ -442,6 +513,76 @@ func TestAgendaIndexDefaultsToTheActiveSiteOverAlphabeticalOrder(t *testing.T) {
 	if response.Code != http.StatusOK ||
 		!strings.Contains(response.Body.String(), `Atelier Martinique <span class="opacity-50"`) {
 		t.Fatalf("agenda without ?location= = %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestRescheduleMovesAnAppointmentPreservingItsOtherFields(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	id, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newDate, err := fixture.store.Reschedule(
+		t.Context(), fixture.tenantID, fixture.userID, id, "2026-08-13", "11:00",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newDate != "2026-08-13" {
+		t.Fatalf("reschedule date = %q, want 2026-08-13", newDate)
+	}
+	day, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(day.Appointments) != 1 || day.Appointments[0].ID != id ||
+		day.Appointments[0].CustomerName == "" || day.Appointments[0].ServiceName != "Révision" ||
+		day.Appointments[0].StartsAt.Format("15:04") != "11:00" {
+		t.Fatalf("rescheduled appointment = %#v", day.Appointments)
+	}
+	oldDay, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(oldDay.Appointments) != 0 {
+		t.Fatalf("appointment still on the old day: %#v", oldDay.Appointments)
+	}
+}
+
+func TestRescheduleReportsAResourceConflictAndLeavesTheAppointmentInPlace(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	movingID, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "11:00"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = fixture.store.Reschedule(t.Context(), fixture.tenantID, fixture.userID, movingID, "2026-08-12", "11:00")
+	var conflict *agenda.ConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("reschedule onto an occupied slot = %v, want ConflictError", err)
+	}
+
+	day, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stillAt0900 bool
+	for _, appointment := range day.Appointments {
+		if appointment.ID == movingID && appointment.StartsAt.Format("15:04") == "09:00" {
+			stillAt0900 = true
+		}
+	}
+	if !stillAt0900 {
+		t.Fatalf("appointment moved despite a reported conflict: %#v", day.Appointments)
 	}
 }
 

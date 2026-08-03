@@ -235,6 +235,43 @@ func (w Week) SlotCount() int {
 	return (w.GridEndHour() - w.GridStartHour()) * (60 / weekGridSlotMinutes)
 }
 
+// SlotStartTimes is every half-hour slot's "HH:MM", top to bottom - one per
+// grid row, so a cell and an hour label always agree on what row they're in.
+func (w Week) SlotStartTimes() []string {
+	times := make([]string, 0, w.SlotCount())
+	for minutes := w.GridStartHour() * 60; minutes < w.GridEndHour()*60; minutes += weekGridSlotMinutes {
+		times = append(times, pad2(minutes/60)+":"+pad2(minutes%60))
+	}
+	return times
+}
+
+func pad2(n int) string {
+	if n < 10 {
+		return "0" + strconv.Itoa(n)
+	}
+	return strconv.Itoa(n)
+}
+
+// NewPathAt links an empty grid cell straight to the booking flow, site/date
+// /time already filled in; the customer still has to be chosen, same as
+// every other entry point into this form.
+func (w Week) NewPathAt(day time.Time, startTime string) string {
+	return w.NewPath() + newPathSeparator(w.LocationID) +
+		FieldDate + "=" + day.Format(DateLayout) + "&" + FieldStartTime + "=" + startTime
+}
+
+func newPathSeparator(locationID string) string {
+	if locationID == "" {
+		return "?"
+	}
+	return "&"
+}
+
+// MovePath is where a dragged appointment's new date/time is submitted.
+func (w Week) MovePath(appointmentID string) string {
+	return "/agenda/" + appointmentID + "/move"
+}
+
 // GridRowStyle is the CSS grid-row line range for one appointment, as an
 // inline style value ready for a templ style attribute. Grid lines are
 // 1-indexed and the header row occupies line 1, so slots start at line 2.
