@@ -20,7 +20,7 @@ templ Index(page Page) {
 			</header>
 			@notice(page.Notice)
 			<search>
-				<form method="get" action="/customers" class="flex flex-col gap-2 sm:flex-row" data-pending-form up-submit>
+				<form method="get" action="/customers" class="flex flex-col gap-2 sm:flex-row" data-pending-form up-submit up-focus="keep">
 					<input type="hidden" name={ FieldNext } value={ page.Next }/>
 					<div class="grid flex-1 gap-1">
 						<label class="sr-only" for={ FieldQuery }>Rechercher un client</label>
@@ -33,6 +33,8 @@ templ Index(page Page) {
 							placeholder="Nom, téléphone, plaque…"
 							autocomplete="off"
 							aria-describedby="search-hint"
+							up-autosubmit
+							up-watch-delay="300"
 						/>
 					</div>
 					<button type="submit" class="btn btn-primary min-h-11 sm:w-auto" data-pending-label="Recherche…">
