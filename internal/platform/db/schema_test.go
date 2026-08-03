@@ -573,6 +573,245 @@ func TestAppointmentCollisionAndCustomerHistory(t *testing.T) {
 	}
 }
 
+// TestOwnerScopedWritesRejectMembers pins the boundary a garage needs: the
+// mechanic and the front desk run the day-to-day work, but reshaping the
+// business — plugging a platform in, renaming the company, adding staff — stays
+// with the owner. The reads they need for that daily work must keep working.
+func TestOwnerScopedWritesRejectMembers(t *testing.T) {
+	d := dbtest.Open(t)
+	role := dbtest.RuntimeRole(t, d)
+	ownerID := insertUser(t, d, "rls-scope-owner@example.com")
+	memberID := insertUser(t, d, "rls-scope-member@example.com")
+	strangerID := insertUser(t, d, "rls-scope-stranger@example.com")
+	tenantID := insertTenant(t, d, "rls-scope")
+	insertMembershipRole(t, d, tenantID, ownerID, "owner")
+	insertMembershipRole(t, d, tenantID, memberID, "member")
+	locationID := insertLocation(t, d, tenantID, "rls-scope-site")
+
+	asUser := func(userID string, fn func(tx pgx.Tx) error) error {
+		return d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+				return err
+			}
+			return fn(tx)
+		})
+	}
+
+	insertLocationAssignment(t, d, tenantID, memberID, locationID, ownerID)
+
+	var connectionID string
+	if err := asUser(ownerID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `
+			INSERT INTO provider_connections (
+				tenant_id, location_id, kind, provider, secret_ref
+			) VALUES ($1, $2, 'calendar', 'google', 'secret-ref')
+			RETURNING id`, tenantID, locationID).Scan(&connectionID)
+	}); err != nil {
+		t.Fatalf("owner could not connect a platform: %v", err)
+	}
+
+	// Booking an appointment syncs the calendar, so a member must still read
+	// the connection it was never allowed to create.
+	if err := asUser(memberID, func(tx pgx.Tx) error {
+		var visible int
+		if err := tx.QueryRow(
+			t.Context(), `SELECT COUNT(*) FROM provider_connections`,
+		).Scan(&visible); err != nil {
+			return err
+		}
+		if visible != 1 {
+			t.Fatalf("member sees %d provider connections, want 1", visible)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, write := range map[string]string{
+		"connect a platform": `
+			INSERT INTO provider_connections (
+				tenant_id, location_id, kind, provider, secret_ref
+			) VALUES ($1, $2, 'llm', 'openai', 'member-secret')`,
+		"create an agent": `
+			INSERT INTO agents (tenant_id, location_id, name)
+			VALUES ($1, $2, 'Member agent')`,
+	} {
+		err := asUser(memberID, func(tx pgx.Tx) error {
+			_, err := tx.Exec(t.Context(), write, tenantID, locationID)
+			return err
+		})
+		if err == nil {
+			t.Fatalf("member unexpectedly allowed to %s", name)
+		}
+	}
+
+	// A DELETE blocked by RLS filters the rows away instead of raising: the
+	// surviving connection is what proves the policy held.
+	if err := asUser(memberID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(),
+			`DELETE FROM provider_connections WHERE id = $1`, connectionID)
+		if err != nil {
+			return err
+		}
+		if removed := result.RowsAffected(); removed != 0 {
+			t.Fatalf("member disconnected %d platforms, want 0", removed)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := asUser(memberID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(),
+			`UPDATE tenants SET name = 'Renamed by member' WHERE id = $1`, tenantID)
+		if err != nil {
+			return err
+		}
+		if renamed := result.RowsAffected(); renamed != 0 {
+			t.Fatalf("member renamed %d organizations, want 0", renamed)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The escalation the invite feature will write against: a member must not
+	// be able to add staff, least of all promote themselves.
+	if err := asUser(memberID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'owner')`, tenantID, strangerID)
+		return err
+	}); err == nil {
+		t.Fatal("member unexpectedly added a membership")
+	}
+	if err := asUser(memberID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(), `
+			UPDATE tenant_memberships SET role = 'owner'
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, memberID)
+		if err != nil {
+			return err
+		}
+		if promoted := result.RowsAffected(); promoted != 0 {
+			t.Fatalf("member promoted themselves %d times, want 0", promoted)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := asUser(ownerID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(), `
+			DELETE FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, ownerID)
+		if err != nil {
+			return err
+		}
+		if removed := result.RowsAffected(); removed != 0 {
+			t.Fatalf("owner locked themselves out of %d memberships, want 0", removed)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := asUser(ownerID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(t.Context(), `
+			DELETE FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, memberID)
+		if err != nil {
+			return err
+		}
+		if removed := result.RowsAffected(); removed != 1 {
+			t.Fatalf("owner removed %d memberships, want 1", removed)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestOwnerlessTenantOnlyBootstrapsItsCreator pins the one branch that lets a
+// membership be written without an owner to authorize it. Onboarding needs it;
+// it must not double as a way into someone else's tenant.
+func TestOwnerlessTenantOnlyBootstrapsItsCreator(t *testing.T) {
+	d := dbtest.Open(t)
+	role := dbtest.RuntimeRole(t, d)
+	creatorID := insertUser(t, d, "bootstrap-creator@example.com")
+	strangerID := insertUser(t, d, "bootstrap-stranger@example.com")
+	tenantID := insertTenant(t, d, "bootstrap-tenant")
+
+	asUser := func(userID string, fn func(tx pgx.Tx) error) error {
+		return d.WithinTenantUser(t.Context(), tenantID, userID, func(tx pgx.Tx) error {
+			if err := dbtest.SetLocalRole(t.Context(), tx, role); err != nil {
+				return err
+			}
+			return fn(tx)
+		})
+	}
+
+	if err := asUser(creatorID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'owner')`, tenantID, strangerID)
+		return err
+	}); err == nil {
+		t.Fatal("bootstrap unexpectedly enrolled a third party")
+	}
+
+	if err := asUser(creatorID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'member')`, tenantID, creatorID)
+		return err
+	}); err == nil {
+		t.Fatal("bootstrap unexpectedly created a tenant with no owner")
+	}
+
+	if err := asUser(creatorID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'owner')`, tenantID, creatorID)
+		return err
+	}); err != nil {
+		t.Fatalf("creator could not claim their own new tenant: %v", err)
+	}
+
+	// The branch closes behind the first owner: the tenant is no longer empty.
+	if err := asUser(strangerID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'owner')`, tenantID, strangerID)
+		return err
+	}); err == nil {
+		t.Fatal("stranger unexpectedly joined an already-owned tenant")
+	}
+}
+
+// TestUserEmailIsUniqueAcrossProviders keeps one human on one row: an invited
+// employee who later signs in with Google must be merged, not duplicated.
+func TestUserEmailIsUniqueAcrossProviders(t *testing.T) {
+	d := dbtest.Open(t)
+	insertUser(t, d, "shared-address@example.com")
+
+	_, err := d.Exec(t.Context(), `
+		INSERT INTO users (provider, provider_id, email, name)
+		VALUES ('google', 'google-123', 'Shared-Address@example.com', 'Same human')`)
+	if err == nil {
+		t.Fatal("a second user unexpectedly claimed the same email address")
+	}
+
+	// Employees invited without a work address share the empty string, which
+	// the partial index must leave alone.
+	for _, providerID := range []string{"invite-1", "invite-2"} {
+		if _, err := d.Exec(t.Context(), `
+			INSERT INTO users (provider, provider_id, email, name)
+			VALUES ('invite', $1, '', 'Mechanic')`, providerID); err != nil {
+			t.Fatalf("invited employee without an email rejected: %v", err)
+		}
+	}
+}
+
 func insertTenant(t *testing.T, database interface {
 	QueryRow(ctx context.Context, query string, args ...any) pgx.Row
 }, slug string) string {
