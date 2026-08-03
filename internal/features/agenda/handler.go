@@ -97,6 +97,10 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{Kind: NoticeInvalid, Message: "Date ou heure invalide ; le rendez-vous n'a pas été déplacé."}
 	case r.URL.Query().Get("moveError") == NoticeError:
 		page.Notice = Notice{Kind: NoticeError, Message: "Le déplacement a échoué ; réessayez."}
+	case r.URL.Query().Get("reminded") == "1":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rappel est enregistré."}
+	case r.URL.Query().Get("confirmed") == "1":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est confirmé."}
 	}
 	h.render(w, r, ShowWeek(page), http.StatusOK)
 }
@@ -408,6 +412,7 @@ func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	confirmed := r.FormValue(FieldOutcome) == OutcomeConfirmed
+	view := returnView(r.FormValue(FieldView))
 	date, locationID, err := h.store.MarkReminded(
 		r.Context(), principal.TenantID, principal.UserID, appointmentID, confirmed,
 	)
@@ -423,9 +428,10 @@ func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
 	if confirmed {
 		remindedFlag = "confirmed=1"
 	}
-	http.Redirect(w, r, fmt.Sprintf(
-		"/agenda?%s=%s&%s=%s&%s", FieldLocation, locationID, FieldDate, date, remindedFlag,
-	), http.StatusSeeOther)
+	http.Redirect(w, r,
+		agendaViewPath(view, locationID, date)+"&"+remindedFlag,
+		http.StatusSeeOther,
+	)
 }
 
 func (h *handler) cancel(w http.ResponseWriter, r *http.Request) {

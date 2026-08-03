@@ -166,6 +166,9 @@ type Week struct {
 	Locations    []Option
 	WeekStart    time.Time // Monday, in the location's timezone
 	Appointments []Appointment
+	// RemindersDue mirrors Day.RemindersDue - independent of WeekStart, same
+	// location-wide work queue either view shows.
+	RemindersDue []ReminderCandidate
 	CanManage    bool
 	Notice       Notice
 }

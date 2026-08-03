@@ -405,6 +405,10 @@ func (s *Store) Week(
 		start := page.WeekStart
 		end := start.AddDate(0, 0, 7)
 		page.Appointments, err = loadAppointments(ctx, tx, tenantID, location.ID, start, end, location.Timezone)
+		if err != nil {
+			return err
+		}
+		page.RemindersDue, err = loadReminderCandidates(ctx, tx, tenantID, location.ID, location.Timezone)
 		return err
 	})
 	return page, err

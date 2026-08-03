@@ -350,6 +350,30 @@ func TestDayListsAppointmentsDueAReminderAndMarkingOneDoneDropsIt(t *testing.T) 
 	if status != "confirmed" {
 		t.Fatalf("status after a confirmed outcome = %q, want confirmed", status)
 	}
+
+	// The week view shares the same location-wide queue, and a reminder
+	// marked from there returns to the week view, not the day view.
+	thirdID := insertReturningID(t, fixture.fixtures, `
+		INSERT INTO appointments (
+		    tenant_id, location_id, customer_id, vehicle_id, service_id,
+		    resource_id, starts_at, ends_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dashboard') RETURNING id::text`,
+		fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+		fixture.serviceID, fixture.resourceID, now.Add(10*time.Hour), now.Add(11*time.Hour),
+	)
+	weekPage, err := fixture.store.Week(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(weekPage.RemindersDue) != 1 || weekPage.RemindersDue[0].AppointmentID != thirdID {
+		t.Fatalf("week reminders due = %#v, want just %q", weekPage.RemindersDue, thirdID)
+	}
+	weekForm := url.Values{agenda.FieldView: {"week"}}
+	weekResponse := postAgendaForm(mux, "/agenda/"+thirdID+"/remind", weekForm)
+	if weekResponse.Code != http.StatusSeeOther ||
+		!strings.HasPrefix(weekResponse.Header().Get("Location"), "/agenda/week?") {
+		t.Fatalf("remind from week = %d %q", weekResponse.Code, weekResponse.Header().Get("Location"))
+	}
 }
 
 func TestFormShowsCustomersOtherUpcomingAppointmentsCappedWithAnAccurateTotal(t *testing.T) {

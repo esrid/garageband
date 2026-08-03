@@ -40,7 +40,7 @@ templ Show(page Day) {
 				}
 			</header>
 			@notice(page.Notice)
-			@remindersDue(page)
+			@remindersDue(page.RemindersDue, "")
 			<nav aria-label="Changer de jour" class="flex flex-wrap items-center gap-2">
 				<a href={ templ.URL(page.Path(page.PreviousDate())) } class="btn btn-sm min-h-11">
 					<span aria-hidden="true">←</span> Veille
@@ -97,8 +97,8 @@ templ Show(page Day) {
 // has reached out about yet - manual (no telephony integration exists in
 // this codebase), so each row is a phone number to call and a button to
 // mark done once it's been called.
-templ remindersDue(page Day) {
-	if len(page.RemindersDue) > 0 {
+templ remindersDue(reminders []ReminderCandidate, view string) {
+	if len(reminders) > 0 {
 		<section class="card card-border border-warning/50 bg-warning/10" aria-labelledby="reminders-heading">
 			<div class="card-body gap-3 p-5">
 				<h2 id="reminders-heading" class="text-base font-semibold">Rappels à faire</h2>
@@ -106,7 +106,7 @@ templ remindersDue(page Day) {
 					Ces rendez-vous approchent et le client n'a pas encore été relancé.
 				</p>
 				<ul class="grid gap-2">
-					for _, reminder := range page.RemindersDue {
+					for _, reminder := range reminders {
 						<li class="flex flex-wrap items-center justify-between gap-2 rounded-btn bg-base-100 p-3">
 							<div class="grid gap-0.5">
 								<p class="text-sm font-medium">
@@ -127,6 +127,7 @@ templ remindersDue(page Day) {
 								</p>
 							</div>
 							<form method="post" action={ templ.URL(remindPath(reminder.AppointmentID)) } class="flex flex-wrap gap-2" data-pending-form>
+								<input type="hidden" name={ FieldView } value={ view }/>
 								<button
 									type="submit"
 									name={ FieldOutcome }
@@ -181,6 +182,7 @@ templ ShowWeek(page Week) {
 				}
 			</header>
 			@notice(page.Notice)
+			@remindersDue(page.RemindersDue, "week")
 			<nav aria-label="Changer de semaine" class="flex flex-wrap items-center gap-2">
 				<a href={ templ.URL(page.Path(page.PreviousWeek())) } class="btn btn-sm min-h-11">
 					<span aria-hidden="true">←</span> Semaine précédente
