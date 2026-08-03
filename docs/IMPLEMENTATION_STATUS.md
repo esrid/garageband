@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-08-02
+Last updated: 2026-08-03
 
 This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
@@ -10,8 +10,25 @@ the code and migrations remain the implementation source of truth.
 
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
-- The working tree is clean and `main` is pushed and up to date with
-  `origin/main` (`0930a56`).
+- The working tree is clean at `0ed3751`. Note that `main` is ahead of the
+  last pushed state recorded here (`0930a56`).
+
+## Known risk to settle before a second customer
+
+The application connects to PostgreSQL as `garage`, a **superuser with
+`BYPASSRLS`**. PostgreSQL exempts such roles from row security, so every policy
+in `internal/platform/db/migrations` — tenant isolation included — is inert at
+runtime. Nothing is currently exposed by this: every store also scopes its
+queries in Go, and the owner/admin checks are duplicated there
+(`requireAdministrator`, `requireManager`). But the defence exists once instead
+of twice, and one forgotten `WHERE` would leak across garages.
+
+The fix is two database roles rather than one: migrations keep a privileged
+role, while the web process connects as a plain `NOSUPERUSER NOBYPASSRLS` role
+holding only table privileges. The RLS test suite already proves the policies
+behave correctly — `internal/platform/db/schema_test.go` switches to a
+non-superuser role with `dbtest.SetLocalRole` precisely because superusers
+bypass row security — so this is a deployment change, not a code change.
 
 ## Completed and verified
 
@@ -99,11 +116,28 @@ the code and migrations remain the implementation source of truth.
   connect/disconnect a site's calendar from its edit page (OAuth2
   state+PKCE cookie flow mirroring the login provider, one active
   connection per location, reconnecting replaces rather than accumulates).
-  Not yet wired: pushing appointment writes to the connected calendar
-  (agenda's save/cancel path) and sync-token-based reconciliation of
-  edits/deletes made directly in Google Calendar — Garageband is meant to
-  stay the source of truth (one-way push), but that policy isn't encoded
-  in code yet since nothing pushes.
+  The agenda now pushes: booking and rescheduling call
+  `Store.SyncAppointmentCalendar` and cancelling calls
+  `Store.RemoveAppointmentCalendarEvent` (`agenda/handler.go`), with sync
+  state in `appointment_calendar_events`. Still one-way by design —
+  Garageband stays the source of truth — so edits made directly in Google
+  Calendar are not reconciled back, and no sync token is consumed.
+- Staff who own no email account, password or Google login can now work in
+  the app. An owner enrols someone from the team screen by name and sites
+  alone; the store mints a twelve-character base32 code (60 bits, an
+  alphabet with no O/0 or I/1 to mishear) whose SHA-256 hash is all the
+  database keeps. The employee enters it at `/rejoindre` on any machine, in
+  whatever case and dashes they type, or taps the same secret as a link.
+  Previewing a link never consumes it, so a messenger's preview fetch cannot
+  burn an employee's only way in; only the POST does. Owners reissue a code
+  (retiring the previous one) for a second screen or a lost one, correct a
+  name without touching access, and remove someone — which takes their
+  pending code with it through the membership foreign key and clears their
+  workspace without signing them out of another garage they belong to.
+  Staff sessions last 90 days because their device is the credential.
+- Appointment reminders are a staff workflow, not an automated one: an
+  employee records the outcome of a call they placed themselves and the
+  appointment drops off the reminder queue either way. Nothing dials.
 
 At this pause point, `make generate`, the complete `make test` suite, `go vet
 ./...`, and `git diff --check` pass. Database tests run against PostgreSQL 18
@@ -112,12 +146,11 @@ absent.
 
 ## Recommended next slices
 
-1. Wire appointment save/cancel in `internal/features/agenda` to push to a
-   location's connected Google Calendar (`calendar.NewGoogle` + the location's
-   decrypted refresh token), record sync state (`appointment_calendar_events`),
-   and add sync-token-based reconciliation. No vendor decision left — the
-   OAuth client, encrypted secret storage, and connect/disconnect UI are
-   already built and tested; this is now a code-only slice.
+1. Split the database role in two, as described under "Known risk" above. No
+   vendor decision, no code change: a `NOSUPERUSER NOBYPASSRLS` role with table
+   privileges, `DATABASE_URL` pointed at it for the web process, migrations
+   keeping the privileged role. Until this lands, every RLS policy in the repo
+   is decoration at runtime.
 2. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
@@ -137,16 +170,24 @@ absent.
 
 Slices 2–4 need a vendor or credential decision from the team before their
 adapter code is worth writing — none is a code decision this repo can make
-unilaterally. Slice 1 (agenda → Google Calendar push) is code-only and can
-start any time.
+unilaterally. Slice 1 is a deployment change nobody has to be consulted about,
+which is why it goes first.
 
 ## Still planned, not yet implemented
 
 - Real telephony, STT, TTS, and LLM provider runtimes; the WhatsApp channel;
-  vehicle-data adapters; and Google Calendar push/reconciliation from the
-  agenda (connect/disconnect itself is already implemented).
-- Live call handling, recordings/retention workflow, reminders, no-show flows,
-  human handoff, and cross-channel telephone/WhatsApp continuity.
+  vehicle-data adapters; and reconciliation of edits made directly in Google
+  Calendar (one-way push from the agenda is implemented).
+- Live call handling, recordings/retention workflow, automated reminders,
+  no-show flows, human handoff, and cross-channel telephone/WhatsApp
+  continuity. Transferring a caller to a person — "je veux parler à un
+  mécanicien" — is unbuilt and unspecified: the app knows staff as accounts
+  and as bookable resources, but holds no phone number for a human, and the
+  telephony port has no transfer primitive.
+- Signing a staff device out without removing the person from the
+  organization, and showing an owner whether and when someone signed in.
+  Today revoking is all-or-nothing and the team screen only distinguishes
+  "invitation pending" from "has joined".
 - Duplicate-customer detection and merge, communication consent management,
   billing/subscriptions, retention/export/erasure workflows, operational
   monitoring, and production security runbooks.
