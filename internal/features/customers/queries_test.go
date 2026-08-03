@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/esrid/garageband/internal/features/customers"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -409,6 +411,68 @@ func TestCreateCustomerHTTPRoute(t *testing.T) {
 	})
 	if response.Code != http.StatusSeeOther || !strings.HasPrefix(response.Header().Get("Location"), "/customers/") {
 		t.Fatalf("create redirect without next = %d %q", response.Code, response.Header().Get("Location"))
+	}
+}
+
+// TestSearchShowsUpcomingAppointmentsCappedWithAnAccurateTotal locks in the
+// search card's warning: four occupying appointments in the future should
+// show as "4" even though the capped list only carries three, and a
+// cancelled booking must not count at all.
+func TestSearchShowsUpcomingAppointmentsCappedWithAnAccurateTotal(t *testing.T) {
+	fixture := newCustomerFixture(t)
+
+	var resourceID string
+	if err := fixture.fixtures.QueryRow(t.Context(), `
+		INSERT INTO bookable_resources (tenant_id, location_id, kind, name)
+		VALUES ($1, $2, 'bay', 'Pont 1') RETURNING id`,
+		fixture.tenantID, fixture.homeLocationID,
+	).Scan(&resourceID); err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)
+	for i, status := range []string{"confirmed", "pending", "in_progress", "confirmed"} {
+		startsAt := base.AddDate(0, 0, i)
+		if _, err := fixture.fixtures.Exec(t.Context(), `
+			INSERT INTO appointments (
+				tenant_id, location_id, customer_id, vehicle_id, resource_id,
+				status, starts_at, ends_at, customer_note
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			fixture.tenantID, fixture.homeLocationID, fixture.customerID, fixture.vehicleID, resourceID,
+			status, startsAt, startsAt.Add(time.Hour), "Contrôle "+strconv.Itoa(i),
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cancelled := base.AddDate(0, 0, 10)
+	if _, err := fixture.fixtures.Exec(t.Context(), `
+		INSERT INTO appointments (
+			tenant_id, location_id, customer_id, vehicle_id,
+			status, starts_at, ends_at, cancelled_at
+		) VALUES ($1, $2, $3, $4, 'cancelled', $5, $6, now())`,
+		fixture.tenantID, fixture.homeLocationID, fixture.customerID, fixture.vehicleID,
+		cancelled, cancelled.Add(time.Hour),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := fixture.store.Search(t.Context(), fixture.tenantID, fixture.homeStaffID, "Martin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Customers) != 1 {
+		t.Fatalf("search = %#v", page.Customers)
+	}
+	result := page.Customers[0]
+	if result.UpcomingAppointmentCount != 4 {
+		t.Fatalf("upcoming count = %d, want 4 (cancelled must not count)", result.UpcomingAppointmentCount)
+	}
+	if len(result.UpcomingAppointments) != 3 {
+		t.Fatalf("upcoming list = %#v, want 3 (capped)", result.UpcomingAppointments)
+	}
+	if result.UpcomingAppointments[0].Reason != "Contrôle 0" ||
+		!result.UpcomingAppointments[0].StartsAt.Before(result.UpcomingAppointments[1].StartsAt) {
+		t.Fatalf("upcoming order/reason = %#v", result.UpcomingAppointments)
 	}
 }
 

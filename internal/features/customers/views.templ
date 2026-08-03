@@ -1,6 +1,10 @@
 package customers
 
-import "github.com/esrid/garageband/internal/ui"
+import (
+	"strconv"
+
+	"github.com/esrid/garageband/internal/ui"
+)
 
 // Interface copy is French; identifiers and comments stay English.
 
@@ -191,6 +195,26 @@ templ customerCard(customer Customer, next string) {
 				<p class="text-xs opacity-60">{ vehicleSummary(customer.Vehicles) }</p>
 			} else {
 				<p class="text-xs opacity-60">Aucun véhicule enregistré</p>
+			}
+			if len(customer.UpcomingAppointments) > 0 {
+				<div class="rounded-btn border border-warning/50 bg-warning/10 p-2">
+					<p class="text-xs font-semibold text-warning">
+						{ upcomingSummary(len(customer.UpcomingAppointments)) }
+					</p>
+					<ul class="mt-1 grid gap-0.5 text-xs">
+						for _, appointment := range customer.UpcomingAppointments {
+							<li>
+								{ ui.FormatDate(appointment.StartsAt) } à { ui.FormatTime(appointment.StartsAt) }
+								if appointment.Reason != "" {
+									<span class="opacity-70">{ " · " + appointment.Reason }</span>
+								}
+							</li>
+						}
+						if more := customer.moreUpcomingAppointments(); more > 0 {
+							<li class="opacity-70">{ "+" + strconv.Itoa(more) + " autre(s)" }</li>
+						}
+					</ul>
+				</div>
 			}
 			if customer.HomeLocationName != "" {
 				<p class="text-xs opacity-60">

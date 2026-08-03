@@ -7,6 +7,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -14,6 +15,11 @@ import (
 )
 
 const searchLimit = 50
+
+// upcomingAppointmentLimit caps how many future bookings a search card
+// shows - enough to catch "they're already booked twice this quarter"
+// without turning the card into a mini calendar.
+const upcomingAppointmentLimit = 3
 
 // ErrForbidden means the actor is not an owner/admin and therefore may not
 // manage sharing or offboard a customer, regardless of location access.
@@ -104,6 +110,41 @@ func (s *Store) Search(
 			           WHERE vehicle.tenant_id = customer.tenant_id
 			             AND vehicle.customer_id = customer.id
 			             AND vehicle.deleted_at IS NULL
+			       ), '[]'::JSONB),
+			       (
+			           SELECT COUNT(*)
+			           FROM appointments appointment
+			           WHERE appointment.tenant_id = customer.tenant_id
+			             AND appointment.customer_id = customer.id
+			             AND appointment.starts_at >= now()
+			             AND appointment.status IN ('pending', 'confirmed', 'in_progress')
+			       ),
+			       COALESCE((
+			           SELECT jsonb_agg(row_to_json(upcoming))
+			           FROM (
+			               SELECT
+			                   to_char(
+			                       appointment.starts_at AT TIME ZONE appt_location.timezone,
+			                       'YYYY-MM-DD"T"HH24:MI:SS'
+			                   ) AS starts_at,
+			                   COALESCE(
+			                       service.name,
+			                       NULLIF(btrim(appointment.customer_note), ''), ''
+			                   ) AS reason
+			               FROM appointments appointment
+			               JOIN locations appt_location
+			                 ON appt_location.tenant_id = appointment.tenant_id
+			                AND appt_location.id = appointment.location_id
+			               LEFT JOIN service_offerings service
+			                 ON service.tenant_id = appointment.tenant_id
+			                AND service.id = appointment.service_id
+			               WHERE appointment.tenant_id = customer.tenant_id
+			                 AND appointment.customer_id = customer.id
+			                 AND appointment.starts_at >= now()
+			                 AND appointment.status IN ('pending', 'confirmed', 'in_progress')
+			               ORDER BY appointment.starts_at
+			               LIMIT $8
+			           ) upcoming
 			       ), '[]'::JSONB)
 			FROM customers customer
 			JOIN locations home_location
@@ -147,6 +188,7 @@ func (s *Store) Search(
 			         COALESCE(customer.first_name, ''), customer.id
 			LIMIT $7`,
 			tenantID, namePattern, phone, email, plate, vin, searchLimit,
+			upcomingAppointmentLimit,
 		)
 		if err != nil {
 			return err
@@ -513,19 +555,44 @@ func mapCreateError(err error) error {
 	return err
 }
 
+// upcomingAppointmentRow is what the search query's JSON subquery produces:
+// starts_at is already converted to the appointment's own location timezone
+// (see the query in Search), so it parses as a local wall-clock time - the
+// same convention agenda.loadAppointments uses, just carried through JSON
+// instead of a driver-native timestamp.
+type upcomingAppointmentRow struct {
+	StartsAt string `json:"starts_at"`
+	Reason   string `json:"reason"`
+}
+
+const upcomingAppointmentLayout = "2006-01-02T15:04:05"
+
 func scanSearchCustomer(row pgx.CollectableRow) (Customer, error) {
 	var customer Customer
-	var vehiclesJSON []byte
+	var vehiclesJSON, upcomingJSON []byte
 	if err := row.Scan(
 		&customer.ID, &customer.HomeLocationID,
 		&customer.FirstName, &customer.LastName, &customer.CompanyName,
 		&customer.Phone, &customer.Email, &customer.HomeLocationName,
-		&customer.Shared, &vehiclesJSON,
+		&customer.Shared, &vehiclesJSON, &customer.UpcomingAppointmentCount, &upcomingJSON,
 	); err != nil {
 		return Customer{}, err
 	}
 	if err := json.Unmarshal(vehiclesJSON, &customer.Vehicles); err != nil {
 		return Customer{}, err
+	}
+	var upcomingRows []upcomingAppointmentRow
+	if err := json.Unmarshal(upcomingJSON, &upcomingRows); err != nil {
+		return Customer{}, err
+	}
+	for _, row := range upcomingRows {
+		startsAt, err := time.Parse(upcomingAppointmentLayout, row.StartsAt)
+		if err != nil {
+			return Customer{}, err
+		}
+		customer.UpcomingAppointments = append(
+			customer.UpcomingAppointments, UpcomingAppointment{StartsAt: startsAt, Reason: row.Reason},
+		)
 	}
 	return customer, nil
 }

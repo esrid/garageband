@@ -67,6 +67,14 @@ func (v Vehicle) Label() string {
 	}
 }
 
+// UpcomingAppointment is one still-to-come booking, shown right on the
+// search card - three months out is easy to forget by the time someone is
+// looking at the search results trying to book *another* one.
+type UpcomingAppointment struct {
+	StartsAt time.Time
+	Reason   string // the service booked, or the customer's own note
+}
+
 // Customer is one search result.
 type Customer struct {
 	ID             string
@@ -77,6 +85,11 @@ type Customer struct {
 	Phone          string // primary contact, already formatted
 	Email          string // primary contact
 	Vehicles       []Vehicle
+	// UpcomingAppointments is capped (upcomingAppointmentLimit in
+	// queries.go) and ordered soonest first; UpcomingAppointmentCount is the
+	// real total, so the card never undercounts what it truncated.
+	UpcomingAppointments     []UpcomingAppointment
+	UpcomingAppointmentCount int
 	// HomeLocationName is the site that owns the record. Shared says this
 	// customer reaches you through an explicit grant rather than ownership.
 	HomeLocationName string
@@ -182,6 +195,23 @@ func ResultSummary(count int) string {
 		return "1 client trouvé"
 	}
 	return strconv.Itoa(count) + " clients trouvés"
+}
+
+// upcomingSummary counts a customer's upcoming bookings in words, agreeing in
+// number - the heading over the list in customerCard. Takes the real total
+// (Customer.UpcomingAppointmentCount), not len(UpcomingAppointments), which
+// is capped and would undercount a customer with more bookings than fit.
+func upcomingSummary(count int) string {
+	if count == 1 {
+		return "A déjà un rendez-vous à venir"
+	}
+	return "A déjà " + strconv.Itoa(count) + " rendez-vous à venir"
+}
+
+// moreUpcomingAppointments is how many upcoming bookings didn't fit in the
+// capped list shown on the card - 0 when nothing was truncated.
+func (c Customer) moreUpcomingAppointments() int {
+	return c.UpcomingAppointmentCount - len(c.UpcomingAppointments)
 }
 
 // vehicleSummary lists the plates a customer drives, capped so one fleet
