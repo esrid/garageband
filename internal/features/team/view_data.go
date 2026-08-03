@@ -44,7 +44,7 @@ type LocationRef struct {
 
 // Invite states shown next to a member who has never signed in.
 const (
-	InvitePending = "pending"
+	InvitePending        = "pending"
 	InvitePendingExpired = "expired"
 )
 
@@ -134,6 +134,16 @@ const FieldLocations = "location_ids"
 
 // FieldName is the invitation form's text input.
 const FieldName = "name"
+
+// namePath is where one member's rename form posts.
+func namePath(member Member) string {
+	return "/team/" + member.UserID + "/name"
+}
+
+// nameFieldID keeps each rename input addressable by its own label.
+func nameFieldID(member Member) string {
+	return "name-" + member.UserID
+}
 
 // codePath is where one member's "new code" form posts.
 func codePath(member Member) string {

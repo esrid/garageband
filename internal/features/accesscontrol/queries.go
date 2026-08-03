@@ -407,6 +407,56 @@ func (s *Store) ReissueInvite(
 	return invite, nil
 }
 
+// RenameStaff fixes a name the owner typed wrong. Without it the only cure for
+// a typo is removing the person and enrolling them again, which costs them
+// their access and their sites.
+//
+// Only invited staff can be renamed. An owner or admin signed in through an
+// identity provider has their name refreshed from it at every login, so editing
+// it here would quietly revert — better to refuse than to pretend.
+//
+// users carries no row security (it is an identity table, like sessions), so
+// the authorization below is the whole guard, not a second line of defence.
+func (s *Store) RenameStaff(
+	ctx context.Context,
+	tenantID string,
+	actorUserID string,
+	targetUserID string,
+	name string,
+) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrNameRequired
+	}
+	return s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
+		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
+			return err
+		}
+		// Reading the role through tenant_memberships is also what proves the
+		// target belongs to this garage: users is global.
+		var targetRole string
+		if err := tx.QueryRow(ctx, `
+			SELECT role FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, targetUserID,
+		).Scan(&targetRole); err != nil {
+			return err
+		}
+		if targetRole == "owner" || targetRole == "admin" {
+			return ErrForbidden
+		}
+		result, err := tx.Exec(ctx, `
+			UPDATE users SET name = $2, updated_at = now()
+			WHERE id = $1 AND provider = 'invite'`, targetUserID, name)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != 1 {
+			return ErrForbidden
+		}
+		return nil
+	})
+}
+
 // issueInvite writes one pending invitation and hands back the only copy of its
 // raw code. Callers have already authorized the change.
 func issueInvite(

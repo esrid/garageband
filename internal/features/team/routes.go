@@ -38,6 +38,9 @@ type StaffInviter func(ctx context.Context, p Principal, name string, locationID
 // a second screen or a lost code.
 type InviteReissuer func(ctx context.Context, p Principal, targetUserID string) (Invitation, error)
 
+// StaffRenamer corrects a name the owner typed wrong.
+type StaffRenamer func(ctx context.Context, p Principal, targetUserID string, name string) error
+
 // StaffRemover takes someone out of the organization.
 type StaffRemover func(ctx context.Context, p Principal, targetUserID string) error
 
@@ -50,6 +53,7 @@ type Deps struct {
 	ReplaceAssignments AssignmentReplacer
 	InviteStaff        StaffInviter
 	ReissueInvite      InviteReissuer
+	RenameStaff        StaffRenamer
 	RemoveStaff        StaffRemover
 }
 
@@ -60,6 +64,10 @@ func Register(mux *http.ServeMux, requireTenant Middleware, deps Deps) {
 	mux.Handle(
 		"POST /team/{userID}/locations",
 		requireTenant(http.HandlerFunc(h.replace)),
+	)
+	mux.Handle(
+		"POST /team/{userID}/name",
+		requireTenant(http.HandlerFunc(h.rename)),
 	)
 	mux.Handle(
 		"POST /team/{userID}/code",

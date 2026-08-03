@@ -135,6 +135,7 @@ func teamHandler(load team.PageLoader, replace team.AssignmentReplacer) http.Han
 			ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
 				return team.Invitation{}, nil
 			},
+			RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
 			RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
 		},
 	)
@@ -178,6 +179,7 @@ func TestTeamInviteRendersLinkOnce(t *testing.T) {
 		ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
 			return team.Invitation{}, nil
 		},
+		RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
 		RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
 	})
 
@@ -246,6 +248,7 @@ func TestTeamRevokeRoundTrip(t *testing.T) {
 				ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
 					return team.Invitation{}, nil
 				},
+				RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
 				RemoveStaff: func(_ context.Context, _ team.Principal, target string) error {
 					gotTarget = target
 					return test.removeErr

@@ -263,6 +263,16 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			}
 			return staffInvitation(cfg.BaseURL, invite.Token), nil
 		},
+		RenameStaff: func(
+			ctx context.Context,
+			principal team.Principal,
+			targetUserID string,
+			name string,
+		) error {
+			return teamError(accessStore.RenameStaff(
+				ctx, principal.TenantID, principal.UserID, targetUserID, name,
+			))
+		},
 		RemoveStaff: func(
 			ctx context.Context,
 			principal team.Principal,

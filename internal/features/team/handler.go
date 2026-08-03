@@ -34,6 +34,10 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{
 			Kind: NoticeSuccess, Message: "Les accès aux sites ont été enregistrés.",
 		}
+	case "renamed":
+		page.Notice = Notice{
+			Kind: NoticeSuccess, Message: "Le nom a été corrigé.",
+		}
 	case "removed":
 		page.Notice = Notice{
 			Kind:    NoticeSuccess,
@@ -130,6 +134,35 @@ func (h *handler) renderInvitation(
 	page.Invite = invitation
 	page.InvitedName = name
 	h.render(w, r, page, http.StatusOK)
+}
+
+// rename fixes a typo without costing the person their access or their sites.
+func (h *handler) rename(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	targetUserID, ok := h.target(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.Form.Get(FieldName))
+	if name == "" || len(name) > nameLimit {
+		h.renderNotice(w, r, principal, Notice{
+			Kind:    NoticeError,
+			Message: "Indiquez le prénom et le nom de la personne.",
+		}, http.StatusUnprocessableEntity)
+		return
+	}
+	if err := h.deps.RenameStaff(r.Context(), principal, targetUserID, name); err != nil {
+		h.failWrite(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/team?saved=renamed", http.StatusSeeOther)
 }
 
 func (h *handler) replace(w http.ResponseWriter, r *http.Request) {

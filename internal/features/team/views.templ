@@ -248,6 +248,36 @@ templ memberCard(member Member, page Page) {
 				</details>
 			}
 			if page.CanManage && member.Removable() {
+				<details class="collapse-arrow collapse border border-base-300 bg-base-200">
+					<summary class="collapse-title min-h-11 py-3 text-sm font-medium">
+						Corriger son nom<span class="sr-only">{ " de " + member.Label() }</span>
+					</summary>
+					<div class="collapse-content">
+						<form method="post" action={ templ.URL(namePath(member)) } class="grid gap-3" data-pending-form>
+							<label class="floating-label" for={ nameFieldID(member) }>
+								<span>Prénom et nom</span>
+								<input
+									type="text"
+									id={ nameFieldID(member) }
+									name={ FieldName }
+									class="input input-bordered w-full"
+									placeholder="Prénom et nom"
+									value={ member.Name }
+									required
+									maxlength="120"
+									autocomplete="off"
+								/>
+							</label>
+							<p class="text-xs opacity-60">
+								Corriger le nom ne touche ni à son accès, ni à ses ateliers, ni à
+								son code.
+							</p>
+							<button type="submit" class="btn btn-primary min-h-11 w-full sm:w-auto sm:justify-self-start" data-pending-label="Enregistrement…">
+								Enregistrer son nom
+							</button>
+						</form>
+					</div>
+				</details>
 				<div class="flex flex-wrap gap-2">
 					<form method="post" action={ templ.URL(codePath(member)) } data-pending-form>
 						<button type="submit" class="btn btn-sm min-h-11" data-pending-label="Génération…">

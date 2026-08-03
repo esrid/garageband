@@ -437,3 +437,73 @@ func TestInviteCodeIsShortAndReissuable(t *testing.T) {
 		t.Fatalf("reissuing for the owner = %v, want ErrForbidden", err)
 	}
 }
+
+// TestRenameStaffFixesTyposWithoutCostingAccess pins the cheap cure for the
+// mistake an owner makes most: a name typed wrong. It must not cost the person
+// their sites, their code, or their session.
+func TestRenameStaffFixesTyposWithoutCostingAccess(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "rename-owner@example.com")
+	memberID := createUser(t, database, "rename-member@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	addMembership(t, database, tenantID, memberID, "member")
+	locationID := createLocation(t, database, tenantID, "rename-workshop")
+	store := accesscontrol.NewStore(database)
+
+	invite, err := store.InviteStaff(
+		t.Context(), tenantID, ownerID, "acceuil", []string{locationID},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.RenameStaff(
+		t.Context(), tenantID, ownerID, invite.UserID, "   ",
+	); !errors.Is(err, accesscontrol.ErrNameRequired) {
+		t.Fatalf("blank rename = %v, want ErrNameRequired", err)
+	}
+	if err := store.RenameStaff(
+		t.Context(), tenantID, memberID, invite.UserID, "Pirate",
+	); !errors.Is(err, accesscontrol.ErrForbidden) {
+		t.Fatalf("member rename = %v, want ErrForbidden", err)
+	}
+	// The owner signs in through Google, which rewrites their name at every
+	// login: editing it here would quietly revert.
+	if err := store.RenameStaff(
+		t.Context(), tenantID, ownerID, ownerID, "Le Patron",
+	); !errors.Is(err, accesscontrol.ErrForbidden) {
+		t.Fatalf("renaming the owner = %v, want ErrForbidden", err)
+	}
+
+	if err := store.RenameStaff(
+		t.Context(), tenantID, ownerID, invite.UserID, "  Accueil  ",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	overview, err := store.TeamOverview(t.Context(), tenantID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := findMember(t, overview.Members, invite.UserID)
+	if renamed.Name != "Accueil" {
+		t.Fatalf("name = %q, want %q", renamed.Name, "Accueil")
+	}
+	// Everything the person had must survive the correction.
+	if !slices.Equal(renamed.LocationIDs, []string{locationID}) {
+		t.Fatalf("sites after rename = %v, want %v", renamed.LocationIDs, []string{locationID})
+	}
+	if renamed.InviteState != accesscontrol.InvitePending {
+		t.Fatalf("invite state after rename = %q, want it still pending", renamed.InviteState)
+	}
+	var codeSurvives bool
+	if err := database.QueryRow(t.Context(), `
+		SELECT EXISTS (SELECT 1 FROM staff_invites WHERE token_hash = $1)`,
+		accesscontrol.HashToken(invite.Token),
+	).Scan(&codeSurvives); err != nil {
+		t.Fatal(err)
+	}
+	if !codeSurvives {
+		t.Fatal("the rename invalidated the code the person was already given")
+	}
+}
