@@ -70,6 +70,9 @@ templ List(page Index) {
 				}
 			}
 		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
 	}
 }
 
@@ -78,7 +81,7 @@ templ List(page Index) {
 // would silently drop it.
 templ searchForm(page Index) {
 	<search class="grow">
-		<form method="get" action="/catalog" class="join w-full" role="search">
+		<form method="get" action="/catalog" class="join w-full" role="search" data-pending-form up-submit up-focus="keep">
 			if page.Kind != "" {
 				<input type="hidden" name="kind" value={ page.Kind }/>
 			}
@@ -90,8 +93,11 @@ templ searchForm(page Index) {
 				value={ page.Query }
 				placeholder="Vidange, plaquettes, forfait…"
 				class="input join-item min-h-11 w-full"
+				autocomplete="off"
+				up-autosubmit
+				up-watch-delay="300"
 			/>
-			<button type="submit" class="btn join-item min-h-11">Rechercher</button>
+			<button type="submit" class="btn join-item min-h-11" data-pending-label="Recherche…">Rechercher</button>
 		</form>
 	</search>
 }
@@ -338,7 +344,7 @@ templ priceSection(page FormPage) {
 			<fieldset class="grid gap-2">
 				<legend class="label font-medium text-base-content">Comment ce prix s'annonce</legend>
 				for _, kind := range []string{PriceFixed, PriceFrom, PriceRange, PriceQuote} {
-					<label class="label min-h-11 cursor-pointer justify-start gap-3">
+					<label class="label min-h-11 cursor-pointer justify-start gap-3 whitespace-normal">
 						<input
 							type="radio"
 							name={ FieldPriceKind }
@@ -388,7 +394,7 @@ templ priceSection(page FormPage) {
 				<legend class="label font-medium text-base-content">Ce montant est</legend>
 				<div class="flex flex-wrap gap-2">
 					for _, basis := range []string{TaxExclusive, TaxInclusive} {
-						<label class="label min-h-11 cursor-pointer justify-start gap-2">
+						<label class="label min-h-11 cursor-pointer justify-start gap-2 whitespace-normal">
 							<input
 								type="radio"
 								name={ FieldTaxBasis }
@@ -471,7 +477,7 @@ templ scopeSection(page FormPage) {
 			<h2 class="text-base font-semibold">Où ce prix s'applique</h2>
 			<fieldset class="grid gap-2">
 				<legend class="sr-only">Étendue</legend>
-				<label class="label min-h-11 cursor-pointer justify-start gap-3">
+				<label class="label min-h-11 cursor-pointer justify-start gap-3 whitespace-normal">
 					<input
 						type="radio"
 						name={ FieldScope }
@@ -481,7 +487,7 @@ templ scopeSection(page FormPage) {
 					/>
 					<span class="font-medium text-base-content">Tous les sites</span>
 				</label>
-				<label class="label min-h-11 cursor-pointer justify-start gap-3">
+				<label class="label min-h-11 cursor-pointer justify-start gap-3 whitespace-normal">
 					<input
 						type="radio"
 						name={ FieldScope }
@@ -500,7 +506,7 @@ templ scopeSection(page FormPage) {
 					</p>
 				}
 				for _, location := range page.Locations {
-					<label class="label min-h-11 cursor-pointer justify-start gap-3">
+					<label class="label min-h-11 cursor-pointer justify-start gap-3 whitespace-normal">
 						<input
 							type="checkbox"
 							name={ FieldLocations }

@@ -282,12 +282,17 @@ func (h *handler) importPreview(w http.ResponseWriter, r *http.Request) {
 	mode := strings.TrimSpace(r.URL.Query().Get(FieldMode))
 	if mode == ModeMerge || mode == ModeReplace {
 		plan, planErr := h.store.Plan(r.Context(), principal.TenantID, principal.UserID, preview.Import.ID, mode)
-		if planErr == nil {
+		if planErr != nil {
+			slog.ErrorContext(r.Context(), "plan catalog publication", "error", planErr, "importID", preview.Import.ID, "mode", mode)
+			page.Notice = Notice{Kind: NoticeInvalid, Message: "Impossible de calculer ce que ce mode changerait. Réessayez."}
+		} else {
 			page.Mode = mode
 			page.Plan = Plan{Create: plan.Create, Update: plan.Update, Remove: plan.Remove, Skip: plan.Skip}
 		}
 	}
-	page.Notice = catalogNotice(r.URL.Query().Get("notice"))
+	if page.Notice.Empty() {
+		page.Notice = catalogNotice(r.URL.Query().Get("notice"))
+	}
 	h.render(w, r, PreviewPage(page), http.StatusOK)
 }
 
