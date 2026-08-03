@@ -62,6 +62,28 @@ func parseUpload(filename string, content []byte) (string, []parsedRow, string) 
 	return format, rows, ""
 }
 
+// importTemplateCSV is a ready-to-fill example matching what parseUpload
+// accepts, so a person never has to guess column names or number formats.
+// It is exercised by TestImportTemplateParsesCleanly rather than left to
+// rot silently if the parser's expectations ever drift.
+func importTemplateCSV() []byte {
+	var buf bytes.Buffer
+	buf.WriteString("\ufeff") // BOM: Excel needs it to open UTF-8 as UTF-8.
+	writer := csv.NewWriter(&buf)
+	writer.Comma = ';'
+	for _, row := range [][]string{
+		{"Nom", "Type", "Référence", "Description", "Type de prix", "Prix", "Prix max", "TVA", "Durée", "Base taxe"},
+		{"Vidange complète", "Prestation", "VID-01", "Huile et filtre inclus", "Fixe", "89,90", "", "20", "60", "TTC"},
+		{"Plaquettes de frein avant", "Prestation", "FRE-01", "Remplacement des deux plaquettes", "A partir de", "120,00", "", "20", "90", "TTC"},
+		{"Diagnostic électronique", "Prestation", "DIAG-01", "Lecture des codes défaut", "Fourchette", "39,00", "79,00", "20", "30", "TTC"},
+		{"Forfait embrayage", "Forfait", "EMB-01", "Remplacement kit embrayage complet", "Sur devis", "", "", "20", "240", "TTC"},
+	} {
+		_ = writer.Write(row) // writing to a bytes.Buffer cannot fail
+	}
+	writer.Flush()
+	return buf.Bytes()
+}
+
 func uploadFormat(filename string) string {
 	switch strings.ToLower(filepath.Ext(strings.TrimSpace(filename))) {
 	case ".csv":

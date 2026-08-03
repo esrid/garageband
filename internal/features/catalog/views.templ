@@ -647,6 +647,11 @@ templ UploadForm(page Upload) {
 				<p class="text-sm opacity-70">
 					Rien n'est publié à ce stade. Vous verrez chaque ligne avant de décider.
 				</p>
+				<p class="text-sm">
+					Pas sûr du format ?
+					<a href="/catalog/imports/template.csv" class="link" download>Téléchargez un modèle</a>
+					avec les colonnes reconnues et quelques exemples.
+				</p>
 			</header>
 			@notice(page.Notice)
 			if page.Refused() {

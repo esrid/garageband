@@ -20,6 +20,18 @@ func TestParseFrenchCSVNormalizesMoneyTaxAndDuration(t *testing.T) {
 	}
 }
 
+func TestImportTemplateParsesCleanly(t *testing.T) {
+	format, rows, rejection := parseUpload("modele-catalogue.csv", importTemplateCSV())
+	if rejection != "" || format != "csv" || len(rows) != 4 {
+		t.Fatalf("template parse = format %q rejection %q rows %#v", format, rejection, rows)
+	}
+	for _, row := range rows {
+		if row.Issue != "" {
+			t.Fatalf("template row %d has an issue: %q", row.Number, row.Issue)
+		}
+	}
+}
+
 func TestParseCSVRejectsMissingColumnsAndUnsafeAmounts(t *testing.T) {
 	_, _, rejection := parseUpload("bad.csv", []byte("name;description\nVidange;Sans prix\n"))
 	if rejection != "no_columns" {

@@ -14,6 +14,7 @@ func Register(
 	mux.Handle("POST /catalog", requireTenant(http.HandlerFunc(h.create)))
 	mux.Handle("GET /catalog/imports", requireTenant(http.HandlerFunc(h.imports)))
 	mux.Handle("GET /catalog/imports/new", requireTenant(http.HandlerFunc(h.newImport)))
+	mux.Handle("GET /catalog/imports/template.csv", requireTenant(http.HandlerFunc(h.importTemplate)))
 	mux.Handle("POST /catalog/imports", requireTenant(http.HandlerFunc(h.upload)))
 	mux.Handle("GET /catalog/imports/{importID}", requireTenant(http.HandlerFunc(h.importPreview)))
 	mux.Handle("POST /catalog/imports/{importID}/publish", requireTenant(http.HandlerFunc(h.publish)))

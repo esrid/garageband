@@ -190,6 +190,17 @@ func (h *handler) newImport(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, UploadForm(page), http.StatusOK)
 }
 
+func (h *handler) importTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.current(w, r); !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="modele-catalogue.csv"`)
+	if _, err := w.Write(importTemplateCSV()); err != nil {
+		slog.Error("write catalog import template", "err", err)
+	}
+}
+
 func (h *handler) upload(w http.ResponseWriter, r *http.Request) {
 	principal, ok := h.current(w, r)
 	if !ok {
