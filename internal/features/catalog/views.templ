@@ -18,6 +18,7 @@ templ List(page Index) {
 		Title:   "Catalogue",
 		NoIndex: true,
 		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+		Wide:    true,
 	}) {
 		<div class="grid gap-5">
 			<header class="grid gap-1">
@@ -59,7 +60,7 @@ templ List(page Index) {
 					</div>
 				} else {
 					<p class="text-sm opacity-70" aria-live="polite">{ itemSummary(len(page.Items)) }</p>
-					<ul class="grid gap-3">
+					<ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						for _, item := range page.Items {
 							<li>
 								@itemCard(item, page.Now, page.CanManage)
@@ -545,6 +546,7 @@ templ ImportList(page Imports) {
 		Title:   "Imports du catalogue",
 		NoIndex: true,
 		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+		Wide:    true,
 	}) {
 		<div class="grid gap-5">
 			<nav aria-label="Fil d'Ariane" class="text-sm">
@@ -574,7 +576,7 @@ templ ImportList(page Imports) {
 					</div>
 				</div>
 			} else {
-				<ul class="grid gap-3">
+				<ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 					for _, imp := range page.Imports {
 						<li>
 							@importCard(imp, page.CanManage)
@@ -743,6 +745,7 @@ templ PreviewPage(page Preview) {
 		Title:   page.Import.Filename,
 		NoIndex: true,
 		Nav:     ui.Nav{Section: ui.SectionCatalog, Workspace: page.Organization, InWorkspace: true},
+		Wide:    true,
 	}) {
 		<div class="grid gap-5">
 			<nav aria-label="Fil d'Ariane" class="text-sm">
