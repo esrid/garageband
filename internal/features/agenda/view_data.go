@@ -294,6 +294,15 @@ type CustomerRef struct {
 
 func (c CustomerRef) Chosen() bool { return strings.TrimSpace(c.ID) != "" }
 
+// UpcomingAppointment is one of the chosen customer's other still-to-come
+// bookings, shown right in the form - the moment a new date gets picked is
+// exactly when a staffer needs to see "already has one in 3 months", not
+// only back on the search card they left behind.
+type UpcomingAppointment struct {
+	StartsAt time.Time
+	Reason   string // the service booked, or the customer's own note
+}
+
 // Option is one entry of a select control.
 type Option struct {
 	Value string
@@ -355,6 +364,12 @@ type FormPage struct {
 	// for the day view (the default). It round-trips through the form as a
 	// hidden field so a save lands back on the screen it started from.
 	ReturnView string
+	// UpcomingAppointments is the chosen customer's other upcoming bookings
+	// (capped at upcomingAppointmentLimit, soonest first, current appointment
+	// excluded when editing); UpcomingAppointmentCount is the real total, so
+	// the warning never undercounts what it truncated.
+	UpcomingAppointments     []UpcomingAppointment
+	UpcomingAppointmentCount int
 }
 
 func (p FormPage) IsNew() bool { return strings.TrimSpace(p.ID) == "" }
@@ -474,6 +489,21 @@ func bookedSummary(count int) string {
 		return "1 rendez-vous"
 	}
 	return strconv.Itoa(count) + " rendez-vous"
+}
+
+// upcomingAppointmentsSummary counts the customer's other upcoming bookings
+// in words, agreeing in number - the heading over FormPage.UpcomingAppointments.
+func upcomingAppointmentsSummary(count int) string {
+	if count == 1 {
+		return "A déjà un autre rendez-vous à venir"
+	}
+	return "A déjà " + strconv.Itoa(count) + " autres rendez-vous à venir"
+}
+
+// moreUpcomingAppointments is how many of the customer's upcoming bookings
+// didn't fit in the capped list - 0 when nothing was truncated.
+func (p FormPage) moreUpcomingAppointments() int {
+	return p.UpcomingAppointmentCount - len(p.UpcomingAppointments)
 }
 
 func noticeTitle(kind string) string {

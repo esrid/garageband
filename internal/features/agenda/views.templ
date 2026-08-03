@@ -191,6 +191,7 @@ templ weekGrid(page Week) {
 			for _, appointment := range page.AppointmentsOn(day) {
 				<a
 					href={ templ.URL(appointmentPath(appointment)) }
+					up-layer="new"
 					draggable="true"
 					data-appointment-id={ appointment.ID }
 					class={ "agenda-appointment m-px cursor-grab overflow-hidden rounded-sm px-1 py-0.5 text-left text-[0.65rem] leading-tight active:cursor-grabbing",
@@ -311,7 +312,7 @@ templ appointmentRow(appointment Appointment, canManage bool) {
 					}
 				</p>
 				if canManage {
-					<a href={ templ.URL(appointmentPath(appointment)) } class="btn btn-ghost btn-sm min-h-11">
+					<a href={ templ.URL(appointmentPath(appointment)) } up-layer="new" class="btn btn-ghost btn-sm min-h-11">
 						Modifier<span class="sr-only">{ " le rendez-vous de " + appointment.CustomerName }</span>
 					</a>
 				}
@@ -373,6 +374,26 @@ templ Form(page FormPage) {
 									Pour changer de client, ouvrez sa fiche et repartez de là.
 								</p>
 							</div>
+							if len(page.UpcomingAppointments) > 0 {
+								<div class="rounded-btn border border-warning/50 bg-warning/10 p-2">
+									<p class="text-xs font-semibold text-warning">
+										{ upcomingAppointmentsSummary(page.UpcomingAppointmentCount) }
+									</p>
+									<ul class="mt-1 grid gap-0.5 text-xs">
+										for _, appointment := range page.UpcomingAppointments {
+											<li>
+												{ ui.FormatDate(appointment.StartsAt) } à { ui.FormatTime(appointment.StartsAt) }
+												if appointment.Reason != "" {
+													<span class="opacity-70">{ " · " + appointment.Reason }</span>
+												}
+											</li>
+										}
+										if more := page.moreUpcomingAppointments(); more > 0 {
+											<li class="opacity-70">{ "+" + strconv.Itoa(more) + " autre(s)" }</li>
+										}
+									</ul>
+								</div>
+							}
 							@field(page, FieldVehicle, "Véhicule", true, "", false) {
 								<select
 									id={ FieldVehicle }

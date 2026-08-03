@@ -492,6 +492,12 @@ func (s *Store) Form(
 				return err
 			}
 			page.Vehicles = vehicles
+			upcoming, total, err := loadUpcomingAppointments(ctx, tx, tenantID, page.Customer.ID, appointmentID)
+			if err != nil {
+				return err
+			}
+			page.UpcomingAppointments = upcoming
+			page.UpcomingAppointmentCount = total
 		}
 		if page.Services, err = loadServiceOptions(ctx, tx, tenantID, location.ID); err != nil {
 			return err
@@ -1034,6 +1040,85 @@ func loadVehicleOptions(
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[Option])
+}
+
+// upcomingAppointmentLimit caps how many of a customer's other upcoming
+// bookings show inline in the form. Mirrors customers.upcomingAppointmentLimit
+// (same idea, kept separate since a feature never imports another feature's
+// constants).
+const upcomingAppointmentLimit = 3
+
+// loadUpcomingAppointments finds a customer's other still-to-come bookings,
+// soonest first, capped at upcomingAppointmentLimit. excludeAppointmentID
+// leaves out the appointment currently being edited (empty when booking a
+// new one, so nothing is excluded).
+func loadUpcomingAppointments(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	customerID string,
+	excludeAppointmentID string,
+) (appointments []UpcomingAppointment, total int, err error) {
+	if err = tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM appointments appointment
+		WHERE appointment.tenant_id = $1
+		  AND appointment.customer_id = $2
+		  AND appointment.id::text != $3
+		  AND appointment.starts_at >= now()
+		  AND appointment.status IN ('pending', 'confirmed', 'in_progress')`,
+		tenantID, customerID, excludeAppointmentID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return nil, 0, nil
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT
+		    to_char(
+		        appointment.starts_at AT TIME ZONE appt_location.timezone,
+		        'YYYY-MM-DD"T"HH24:MI:SS'
+		    ),
+		    COALESCE(
+		        service.name,
+		        NULLIF(btrim(appointment.customer_note), ''), ''
+		    )
+		FROM appointments appointment
+		JOIN locations appt_location
+		  ON appt_location.tenant_id = appointment.tenant_id
+		 AND appt_location.id = appointment.location_id
+		LEFT JOIN service_offerings service
+		  ON service.tenant_id = appointment.tenant_id
+		 AND service.id = appointment.service_id
+		WHERE appointment.tenant_id = $1
+		  AND appointment.customer_id = $2
+		  AND appointment.id::text != $3
+		  AND appointment.starts_at >= now()
+		  AND appointment.status IN ('pending', 'confirmed', 'in_progress')
+		ORDER BY appointment.starts_at
+		LIMIT $4`,
+		tenantID, customerID, excludeAppointmentID, upcomingAppointmentLimit,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var startsAt, reason string
+		if err := rows.Scan(&startsAt, &reason); err != nil {
+			return nil, 0, err
+		}
+		parsed, err := time.Parse("2006-01-02T15:04:05", startsAt)
+		if err != nil {
+			return nil, 0, err
+		}
+		appointments = append(appointments, UpcomingAppointment{StartsAt: parsed, Reason: reason})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return appointments, total, nil
 }
 
 func loadServiceOptions(

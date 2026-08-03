@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -255,6 +256,63 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 	var conflict *agenda.ConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(conflict.Resource, "ensemble") {
 		t.Fatalf("automatic capacity conflict = %#v, err %v", conflict, err)
+	}
+}
+
+func TestFormShowsCustomersOtherUpcomingAppointmentsCappedWithAnAccurateTotal(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	base := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)
+	var editingID string
+	for i, status := range []string{"confirmed", "pending", "in_progress", "confirmed"} {
+		id := insertReturningID(t, fixture.fixtures, `
+			INSERT INTO appointments (
+			    tenant_id, location_id, customer_id, vehicle_id, service_id,
+			    resource_id, status, starts_at, ends_at, source
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'dashboard')
+			RETURNING id::text`,
+			fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+			fixture.serviceID, fixture.resourceID, status,
+			base.AddDate(0, 0, i), base.AddDate(0, 0, i).Add(time.Hour),
+		)
+		if i == 0 {
+			editingID = id
+		}
+	}
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO appointments (
+		    tenant_id, location_id, customer_id, vehicle_id, service_id,
+		    resource_id, status, starts_at, ends_at, cancelled_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, 'cancelled', $7, $8, now(), 'dashboard')`,
+		fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+		fixture.serviceID, fixture.resourceID,
+		base.AddDate(0, 0, 9), base.AddDate(0, 0, 9).Add(time.Hour),
+	)
+
+	page, err := fixture.store.Form(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.customerID, fixture.locationID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.UpcomingAppointmentCount != 4 {
+		t.Fatalf("count = %d, want 4 (cancelled excluded)", page.UpcomingAppointmentCount)
+	}
+	if len(page.UpcomingAppointments) != 3 {
+		t.Fatalf("capped list length = %d, want 3", len(page.UpcomingAppointments))
+	}
+	if !page.UpcomingAppointments[0].StartsAt.Before(page.UpcomingAppointments[1].StartsAt) {
+		t.Fatalf("appointments not soonest-first: %#v", page.UpcomingAppointments)
+	}
+
+	// Editing one of those same appointments must not warn about itself.
+	editPage, err := fixture.store.Form(
+		t.Context(), fixture.tenantID, fixture.userID, editingID, "", "",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if editPage.UpcomingAppointmentCount != 3 {
+		t.Fatalf("count while editing = %d, want 3 (self excluded)", editPage.UpcomingAppointmentCount)
 	}
 }
 
