@@ -27,7 +27,7 @@ Environment variables only (12-factor):
 | Var | Default | Notes |
 |---|---|---|
 | `ADDR` | `:8080` | listen address |
-| `DATABASE_URL` | required | PostgreSQL connection URL or pgx keyword DSN |
+| `DATABASE_URL` | required | PostgreSQL connection URL or pgx keyword DSN. Must be an unprivileged role for `cmd/web` — see [Database roles](#database-roles) |
 | `BASE_URL` | `http://localhost:8080` | public origin, used for OAuth callback URLs |
 | `COOKIE_SECURE` | `true` | set `false` only for local http development |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | enables "Continue with google" on `/login`; register `BASE_URL` + `/auth/google/callback` as the redirect URI in the Google console |
@@ -36,6 +36,40 @@ Environment variables only (12-factor):
 Queries use native PostgreSQL placeholders and types. Writes that must hit
 exactly one row (update/delete by id) go through
 `db.ExecOne`, which returns `sql.ErrNoRows` for handlers to map to a 404.
+
+## Database roles
+
+Tenant isolation is enforced by row-level security, and **PostgreSQL exempts
+superusers and `BYPASSRLS` roles from it**. Point `DATABASE_URL` at a superuser
+and every policy in `internal/platform/db/migrations` silently stops applying:
+the app keeps working, because the stores also scope their queries in Go, but
+one forgotten `WHERE` then leaks one garage's data into another.
+
+So `cmd/web` connects as an unprivileged role, while `cmd/migrate` keeps a
+privileged one — migrations create tables and policies, the application only
+reads and writes rows. Create it once per database:
+
+```sql
+CREATE ROLE garageband_app LOGIN PASSWORD '…'
+    NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+GRANT USAGE ON SCHEMA public TO garageband_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO garageband_app;
+-- so tables added by later migrations are granted without a manual step
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO garageband_app;
+```
+
+To check a deployment is actually protected, connect as the application role
+and count any tenant table without setting a tenant context. The answer must be
+zero:
+
+```sh
+psql "$DATABASE_URL" -c 'SELECT count(*) FROM customers'
+```
+
+The test suite makes the same distinction: `dbtest.OpenRuntime` hands stores a
+connection that `SET ROLE`s to a non-superuser, so store tests exercise the
+policies rather than only the Go-side checks.
 
 ## Layout
 

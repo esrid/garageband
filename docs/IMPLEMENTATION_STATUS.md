@@ -13,22 +13,24 @@ the code and migrations remain the implementation source of truth.
 - The working tree is clean at `0ed3751`. Note that `main` is ahead of the
   last pushed state recorded here (`0930a56`).
 
-## Known risk to settle before a second customer
+## Row-level security is only real under an unprivileged role
 
-The application connects to PostgreSQL as `garage`, a **superuser with
-`BYPASSRLS`**. PostgreSQL exempts such roles from row security, so every policy
-in `internal/platform/db/migrations` — tenant isolation included — is inert at
-runtime. Nothing is currently exposed by this: every store also scopes its
-queries in Go, and the owner/admin checks are duplicated there
-(`requireAdministrator`, `requireManager`). But the defence exists once instead
-of twice, and one forgotten `WHERE` would leak across garages.
+PostgreSQL exempts superusers and `BYPASSRLS` roles from row security, so a
+deployment whose `DATABASE_URL` names a superuser runs with every policy in
+`internal/platform/db/migrations` inert — tenant isolation included. The app
+still behaves, because the stores scope their queries in Go too, but the
+defence then exists once instead of twice.
 
-The fix is two database roles rather than one: migrations keep a privileged
-role, while the web process connects as a plain `NOSUPERUSER NOBYPASSRLS` role
-holding only table privileges. The RLS test suite already proves the policies
-behave correctly — `internal/platform/db/schema_test.go` switches to a
-non-superuser role with `dbtest.SetLocalRole` precisely because superusers
-bypass row security — so this is a deployment change, not a code change.
+`cmd/web` must therefore connect as a `NOSUPERUSER NOBYPASSRLS` role holding
+only table privileges, while `cmd/migrate` keeps a privileged one. The SQL and
+the one-line check that proves a deployment is protected are in the README
+under "Database roles". Any new environment has to do this explicitly; nothing
+in the schema can enforce it.
+
+Test coverage makes the same distinction: `dbtest.OpenRuntime` gives stores a
+connection that `SET ROLE`s to a non-superuser, and every feature that owns
+tenant data now uses it. Only the OAuth-flow tests, which touch `users` and
+`sessions` (neither carries row security), still open a privileged connection.
 
 ## Completed and verified
 
@@ -146,32 +148,26 @@ absent.
 
 ## Recommended next slices
 
-1. Split the database role in two, as described under "Known risk" above. No
-   vendor decision, no code change: a `NOSUPERUSER NOBYPASSRLS` role with table
-   privileges, `DATABASE_URL` pointed at it for the web process, migrations
-   keeping the privileged role. Until this lands, every RLS policy in the repo
-   is decoration at runtime.
-2. Build one end-to-end inbound telephone tracer bullet with webhook
+1. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
    catalog, and scheduling tools. **Needs a vendor decision first**: which
    telephony provider (a real phone number, real cost) and which STT/TTS
    provider, before any adapter code is worth writing against a live account.
-3. Add the WhatsApp channel after the channel-neutral conversation/runtime
+2. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
    of the core domain. **Needs a Meta Business/WABA account set up by the
    team first** — compliance and identity ownership make this one to not
    provision unilaterally.
-4. Select and integrate a French registration-plate/VIN data provider behind
+3. Select and integrate a French registration-plate/VIN data provider behind
    the existing vehicle lookup port, with confirmation and lookup audit.
    **Needs a vendor decision first**: this is a paid data provider choice
    with a contract, not a code decision.
 
-Slices 2–4 need a vendor or credential decision from the team before their
+All three need a vendor or credential decision from the team before their
 adapter code is worth writing — none is a code decision this repo can make
-unilaterally. Slice 1 is a deployment change nobody has to be consulted about,
-which is why it goes first.
+unilaterally.
 
 ## Still planned, not yet implemented
 
