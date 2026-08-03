@@ -163,6 +163,16 @@ func (h *handler) form(
 			page.Values.StartTime = startTime
 		}
 		page.ReturnView = view
+		// Nobody to book for yet: skip straight to the customer picker
+		// instead of showing an intermediate "choose a client" screen with
+		// nothing else to do on it. The Form template still renders that
+		// card as a fallback for a tampered/incomplete POST resubmission
+		// (see renderSubmitted), where redirecting mid-submit would be the
+		// wrong move - but a fresh GET never needs to show it.
+		if !page.Ready() {
+			http.Redirect(w, r, page.CustomerPickerPath(), http.StatusSeeOther)
+			return
+		}
 	}
 	h.render(w, r, Form(page), http.StatusOK)
 }

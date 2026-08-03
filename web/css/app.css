@@ -32,3 +32,12 @@
   --color-warning-content: oklch(32% 0.08 66.29);
   --color-error-content: oklch(32% 0.13 27.518);
 }
+
+/* Unpoly's overlay panel (a custom element, not a daisyUI component) ships
+   square corners. --radius-box is the same corner radius daisyUI already
+   gives every card/box in this theme (web/static/app.css, pastel theme) -
+   reused here rather than a new hard-coded value, so the modal reads as
+   part of the theme instead of a bolted-on library default. */
+up-modal-box {
+  border-radius: var(--radius-box);
+}
