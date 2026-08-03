@@ -108,10 +108,10 @@ type Page struct {
 	Locations    []LocationRef // every site of the organization, active or not
 	CanManage    bool          // false renders the read-only presentation
 	Notice       Notice
-	// InviteLink is set for exactly one render: the response to creating an
-	// invitation. The database keeps only the token's hash, so a page that
-	// does not show it here can never show it again.
-	InviteLink string
+	// Invite is set for exactly one render: the response to creating or
+	// reissuing an invitation. The database keeps only the code's hash, so a
+	// page that does not show it here can never show it again.
+	Invite Invitation
 	// InvitedName names who InviteLink belongs to, so an owner enrolling three
 	// people in a row cannot hand the wrong link to the wrong person.
 	InvitedName string
@@ -134,6 +134,24 @@ const FieldLocations = "location_ids"
 
 // FieldName is the invitation form's text input.
 const FieldName = "name"
+
+// codePath is where one member's "new code" form posts.
+func codePath(member Member) string {
+	return "/team/" + member.UserID + "/code"
+}
+
+// groupInviteCode breaks the code into groups of four. Twelve unbroken
+// characters get miscounted when read out loud across a workshop.
+func groupInviteCode(code string) string {
+	var grouped strings.Builder
+	for i, r := range code {
+		if i > 0 && i%4 == 0 {
+			grouped.WriteByte('-')
+		}
+		grouped.WriteRune(r)
+	}
+	return grouped.String()
+}
 
 // revokePath is where one member's removal form posts.
 func revokePath(member Member) string {

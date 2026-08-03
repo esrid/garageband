@@ -124,12 +124,47 @@ func (h *handler) invitationPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// invitationCodePage offers the typed way in, for a screen nobody can hand a
+// link to.
+func (h *handler) invitationCodePage(w http.ResponseWriter, r *http.Request) {
+	if err := InvitationCodePage(false).Render(r.Context(), w); err != nil {
+		slog.Error("render invitation code page", "err", err)
+	}
+}
+
+// acceptInvitationCode consumes a typed code directly. Unlike a pasted link
+// there is no preview step: a person typing twelve characters is not a
+// messenger's preview bot, and the extra click would only be in the way.
+func (h *handler) acceptInvitationCode(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	token, err := h.store.AcceptInvitation(r.Context(), r.Form.Get("code"))
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, sql.ErrNoRows) {
+			h.fail(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		if err := InvitationCodePage(true).Render(r.Context(), w); err != nil {
+			slog.Error("render invitation code page", "err", err)
+		}
+		return
+	}
+	h.startStaffSession(w, r, token)
+}
+
 func (h *handler) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	token, err := h.store.AcceptInvitation(r.Context(), r.PathValue("token"))
 	if err != nil {
 		h.renderInvitationDeadEnd(w, r, err)
 		return
 	}
+	h.startStaffSession(w, r, token)
+}
+
+func (h *handler) startStaffSession(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,

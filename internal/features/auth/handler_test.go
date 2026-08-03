@@ -450,7 +450,7 @@ func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
 			INSERT INTO staff_invites (
 				tenant_id, user_id, token_hash, created_by_user_id, expires_at
 			) VALUES ($1, $2, $3, $4, now() + interval '7 days')`,
-			tenantID, employee, sha256Hex("staff-token"), owner)
+			tenantID, employee, sha256Hex("STAFFCODE234"), owner)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -458,7 +458,7 @@ func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
 
 	// Previewing twice still leaves the link usable.
 	for attempt := range 2 {
-		invitation, err := store.InvitationByToken(t.Context(), "staff-token")
+		invitation, err := store.InvitationByToken(t.Context(), "STAFFCODE234")
 		if err != nil {
 			t.Fatalf("preview %d: %v", attempt, err)
 		}
@@ -467,7 +467,15 @@ func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
 		}
 	}
 
-	sessionToken, err := store.AcceptInvitation(t.Context(), "staff-token")
+	// The employee types what they see on a shop screen, not an exact string:
+	// lower case and the dashes the team screen prints must both land.
+	if _, err := store.InvitationByToken(t.Context(), " staf-fcod-e234 "); err != nil {
+		t.Fatalf("preview of a typed code: %v", err)
+	}
+
+	// Accepting goes through the same normalizer, so the grouped form the team
+	// screen prints is directly usable.
+	sessionToken, err := store.AcceptInvitation(t.Context(), "STAF-FCOD-E234")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,13 +492,13 @@ func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
 		t.Fatalf("active tenant = %q, want %q", user.ActiveTenantID, tenantID)
 	}
 
-	if _, err := store.AcceptInvitation(t.Context(), "staff-token"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := store.AcceptInvitation(t.Context(), "STAFFCODE234"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("second acceptance = %v, want pgx.ErrNoRows", err)
 	}
-	if _, err := store.InvitationByToken(t.Context(), "staff-token"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := store.InvitationByToken(t.Context(), "STAFFCODE234"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("preview after acceptance = %v, want pgx.ErrNoRows", err)
 	}
-	if _, err := store.InvitationByToken(t.Context(), "never-issued"); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := store.InvitationByToken(t.Context(), "NEVERISSUED2"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("unknown token = %v, want pgx.ErrNoRows", err)
 	}
 }

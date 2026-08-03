@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -357,5 +358,82 @@ func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
 	}
 	if invitesLeft != 0 {
 		t.Fatalf("%d invitations survived the revocation, want 0", invitesLeft)
+	}
+}
+
+// TestInviteCodeIsShortAndReissuable covers what a garage actually needs: a
+// code short enough to read out loud, and a way to hand someone a new one when
+// they sit down at a second computer.
+func TestInviteCodeIsShortAndReissuable(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "code-owner@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	locationID := createLocation(t, database, tenantID, "code-workshop")
+	store := accesscontrol.NewStore(database)
+
+	first, err := store.InviteStaff(
+		t.Context(), tenantID, ownerID, "Sophie Accueil", []string{locationID},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Token) != 12 {
+		t.Fatalf("code %q is %d characters, want 12", first.Token, len(first.Token))
+	}
+	for _, r := range first.Token {
+		if !((r >= 'A' && r <= 'Z') || (r >= '2' && r <= '7')) {
+			t.Fatalf("code %q contains %q, outside the unambiguous base32 alphabet", first.Token, r)
+		}
+	}
+
+	// What the employee types is never exactly what the screen shows.
+	for _, typed := range []string{
+		first.Token,
+		strings.ToLower(first.Token),
+		first.Token[:4] + "-" + first.Token[4:8] + "-" + first.Token[8:],
+		" " + strings.ToLower(first.Token[:4]) + " " + first.Token[4:] + " ",
+	} {
+		if got := accesscontrol.NormalizeInviteCode(typed); got != first.Token {
+			t.Fatalf("normalizing %q gave %q, want %q", typed, got, first.Token)
+		}
+	}
+
+	second, err := store.ReissueInvite(t.Context(), tenantID, ownerID, first.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Token == first.Token {
+		t.Fatal("reissuing handed back the same code")
+	}
+
+	// Exactly one code is live at a time: the replaced one is gone, not merely
+	// superseded.
+	var live int
+	if err := database.QueryRow(t.Context(), `
+		SELECT COUNT(*) FROM staff_invites
+		WHERE user_id = $1 AND accepted_at IS NULL`, first.UserID,
+	).Scan(&live); err != nil {
+		t.Fatal(err)
+	}
+	if live != 1 {
+		t.Fatalf("%d live codes after reissuing, want 1", live)
+	}
+	var survives bool
+	if err := database.QueryRow(t.Context(), `
+		SELECT EXISTS (SELECT 1 FROM staff_invites WHERE token_hash = $1)`,
+		accesscontrol.HashToken(first.Token),
+	).Scan(&survives); err != nil {
+		t.Fatal(err)
+	}
+	if survives {
+		t.Fatal("the replaced code still works")
+	}
+
+	// The owner signs in with Google; handing them a staff code would be a way
+	// to take their seat.
+	if _, err := store.ReissueInvite(
+		t.Context(), tenantID, ownerID, ownerID,
+	); !errors.Is(err, accesscontrol.ErrForbidden) {
+		t.Fatalf("reissuing for the owner = %v, want ErrForbidden", err)
 	}
 }

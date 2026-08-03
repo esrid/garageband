@@ -241,14 +241,27 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			principal team.Principal,
 			name string,
 			locationIDs []string,
-		) (string, error) {
+		) (team.Invitation, error) {
 			invite, err := accessStore.InviteStaff(
 				ctx, principal.TenantID, principal.UserID, name, locationIDs,
 			)
 			if err != nil {
-				return "", teamError(err)
+				return team.Invitation{}, teamError(err)
 			}
-			return cfg.BaseURL + "/rejoindre/" + invite.Token, nil
+			return staffInvitation(cfg.BaseURL, invite.Token), nil
+		},
+		ReissueInvite: func(
+			ctx context.Context,
+			principal team.Principal,
+			targetUserID string,
+		) (team.Invitation, error) {
+			invite, err := accessStore.ReissueInvite(
+				ctx, principal.TenantID, principal.UserID, targetUserID,
+			)
+			if err != nil {
+				return team.Invitation{}, teamError(err)
+			}
+			return staffInvitation(cfg.BaseURL, invite.Token), nil
 		},
 		RemoveStaff: func(
 			ctx context.Context,
@@ -279,4 +292,10 @@ func teamError(err error) error {
 	default:
 		return err
 	}
+}
+
+// staffInvitation presents one credential two ways: a code to type on a shop
+// computer, and the same secret as a link to tap on a phone.
+func staffInvitation(baseURL, token string) team.Invitation {
+	return team.Invitation{Link: baseURL + "/rejoindre/" + token, Code: token}
 }

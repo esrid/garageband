@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -240,7 +241,7 @@ func (s *Store) InvitationByToken(ctx context.Context, token string) (Invitation
 		JOIN users user_account ON user_account.id = invite.user_id
 		WHERE invite.token_hash = $1
 		  AND invite.accepted_at IS NULL
-		  AND invite.expires_at > now()`, hashToken(token),
+		  AND invite.expires_at > now()`, hashToken(normalizeInviteCode(token)),
 	).Scan(&tenantID, &invitation.Name)
 	if err != nil {
 		return Invitation{}, err
@@ -277,7 +278,7 @@ func (s *Store) AcceptInvitation(ctx context.Context, token string) (sessionToke
 		UPDATE staff_invites
 		SET accepted_at = now()
 		WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now()
-		RETURNING tenant_id, user_id`, hashToken(token),
+		RETURNING tenant_id, user_id`, hashToken(normalizeInviteCode(token)),
 	).Scan(&tenantID, &userID); err != nil {
 		return "", err
 	}
@@ -301,6 +302,19 @@ func (s *Store) AcceptInvitation(ctx context.Context, token string) (sessionToke
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
 	_, err := s.db.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, hashToken(token))
 	return err
+}
+
+// normalizeInviteCode mirrors how the code was minted: RFC 4648 base32, upper
+// case, no separators. It lets an employee type what they see — dashes, lower
+// case, a stray space — instead of a string that must be transcribed exactly.
+func normalizeInviteCode(raw string) string {
+	var normalized strings.Builder
+	for _, r := range strings.ToUpper(raw) {
+		if (r >= 'A' && r <= 'Z') || (r >= '2' && r <= '7') {
+			normalized.WriteRune(r)
+		}
+	}
+	return normalized.String()
 }
 
 func hashToken(token string) string {

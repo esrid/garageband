@@ -63,7 +63,7 @@ func (h *handler) invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.deps.InviteStaff(r.Context(), principal, name, locationIDs)
+	invitation, err := h.deps.InviteStaff(r.Context(), principal, name, locationIDs)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrForbidden):
@@ -81,12 +81,53 @@ func (h *handler) invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.renderInvitation(w, r, principal, invitation, name)
+}
+
+// reissue mints a new code for someone already on the team: a second screen to
+// sign in on, or a code that was lost. Like invite, it answers with the page
+// itself, because the code exists nowhere but this response.
+func (h *handler) reissue(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	targetUserID, ok := h.target(w, r)
+	if !ok {
+		return
+	}
+	invitation, err := h.deps.ReissueInvite(r.Context(), principal, targetUserID)
+	if err != nil {
+		h.failWrite(w, r, err)
+		return
+	}
+	h.renderInvitation(w, r, principal, invitation, "")
+}
+
+// renderInvitation shows a credential exactly once. name may be empty, in which
+// case the member list supplies it: reissuing knows an id, not a person.
+func (h *handler) renderInvitation(
+	w http.ResponseWriter,
+	r *http.Request,
+	principal Principal,
+	invitation Invitation,
+	name string,
+) {
 	page, err := h.deps.LoadPage(r.Context(), principal)
 	if err != nil {
 		h.fail(w, err)
 		return
 	}
-	page.InviteLink = link
+	if name == "" {
+		targetUserID := r.PathValue("userID")
+		for _, member := range page.Members {
+			if member.UserID == targetUserID {
+				name = member.Label()
+				break
+			}
+		}
+	}
+	page.Invite = invitation
 	page.InvitedName = name
 	h.render(w, r, page, http.StatusOK)
 }

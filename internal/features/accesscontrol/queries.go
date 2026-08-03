@@ -81,6 +81,27 @@ type StaffInvite struct {
 // ponytail: re-inviting from the team screen mints a new one.
 const inviteTTL = 7 * 24 * time.Hour
 
+// inviteCodeLength is a compromise between a secret and something a garage
+// owner can read out loud across a workshop. rand.Text() emits RFC 4648 base32,
+// whose alphabet (A-Z, 2-7) has no 0/O or 1/I to mishear, so 12 characters
+// carry 60 bits: at a thousand guesses a second for the whole week the code
+// lives, the odds of hitting one are about one in two billion.
+const inviteCodeLength = 12
+
+// NormalizeInviteCode accepts what a person actually types — lower case, the
+// dashes the screen shows, a stray space — and reduces it to the alphabet the
+// code was minted from. Anything else is dropped rather than rejected, because
+// an employee squinting at a code should not have to know it failed on a space.
+func NormalizeInviteCode(raw string) string {
+	var normalized strings.Builder
+	for _, r := range strings.ToUpper(raw) {
+		if (r >= 'A' && r <= 'Z') || (r >= '2' && r <= '7') {
+			normalized.WriteRune(r)
+		}
+	}
+	return normalized.String()
+}
+
 type TeamOverview struct {
 	Organization string
 	ActorRole    string
@@ -335,17 +356,78 @@ func (s *Store) InviteStaff(
 		); err != nil {
 			return err
 		}
-		invite.Token = rand.Text() + rand.Text()
-		invite.ExpiresAt = time.Now().UTC().Add(inviteTTL)
-		_, err := tx.Exec(ctx, `
-			INSERT INTO staff_invites (
-				tenant_id, user_id, token_hash, created_by_user_id, expires_at
-			) VALUES ($1, $2, $3, $4, $5)`,
-			tenantID, invite.UserID, HashToken(invite.Token), actorUserID,
-			invite.ExpiresAt,
-		)
+		invite, err = issueInvite(ctx, tx, tenantID, actorUserID, invite.UserID)
 		return err
 	})
+	if err != nil {
+		return StaffInvite{}, err
+	}
+	return invite, nil
+}
+
+// ReissueInvite mints a fresh code for someone already on the team. It is the
+// answer to the two things that actually happen in a garage: the employee needs
+// to sign in on a second screen, and someone lost the link. Any previous
+// pending code stops working, so only one is ever in circulation.
+func (s *Store) ReissueInvite(
+	ctx context.Context,
+	tenantID string,
+	actorUserID string,
+	targetUserID string,
+) (invite StaffInvite, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
+		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
+			return err
+		}
+		var targetRole string
+		if err := tx.QueryRow(ctx, `
+			SELECT role FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, targetUserID,
+		).Scan(&targetRole); err != nil {
+			return err
+		}
+		// Owners and admins sign in with their own identity provider; handing
+		// one of them a staff code would be a way to take their seat.
+		if targetRole == "owner" || targetRole == "admin" {
+			return ErrForbidden
+		}
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM staff_invites
+			WHERE tenant_id = $1 AND user_id = $2 AND accepted_at IS NULL`,
+			tenantID, targetUserID,
+		); err != nil {
+			return err
+		}
+		invite, err = issueInvite(ctx, tx, tenantID, actorUserID, targetUserID)
+		return err
+	})
+	if err != nil {
+		return StaffInvite{}, err
+	}
+	return invite, nil
+}
+
+// issueInvite writes one pending invitation and hands back the only copy of its
+// raw code. Callers have already authorized the change.
+func issueInvite(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	actorUserID string,
+	targetUserID string,
+) (StaffInvite, error) {
+	invite := StaffInvite{
+		UserID:    targetUserID,
+		Token:     rand.Text()[:inviteCodeLength],
+		ExpiresAt: time.Now().UTC().Add(inviteTTL),
+	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO staff_invites (
+			tenant_id, user_id, token_hash, created_by_user_id, expires_at
+		) VALUES ($1, $2, $3, $4, $5)`,
+		tenantID, targetUserID, HashToken(invite.Token), actorUserID,
+		invite.ExpiresAt,
+	)
 	if err != nil {
 		return StaffInvite{}, err
 	}

@@ -129,8 +129,11 @@ func teamHandler(load team.PageLoader, replace team.AssignmentReplacer) http.Han
 			},
 			LoadPage:           load,
 			ReplaceAssignments: replace,
-			InviteStaff: func(context.Context, team.Principal, string, []string) (string, error) {
-				return "", nil
+			InviteStaff: func(context.Context, team.Principal, string, []string) (team.Invitation, error) {
+				return team.Invitation{}, nil
+			},
+			ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
+				return team.Invitation{}, nil
 			},
 			RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
 		},
@@ -164,10 +167,16 @@ func TestTeamInviteRendersLinkOnce(t *testing.T) {
 			return team.Page{Organization: "Garage Central", CanManage: true}, nil
 		},
 		ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
-		InviteStaff: func(_ context.Context, _ team.Principal, name string, locations []string) (string, error) {
+		InviteStaff: func(_ context.Context, _ team.Principal, name string, locations []string) (team.Invitation, error) {
 			gotName = name
 			gotLocations = slices.Clone(locations)
-			return "https://app.example/rejoindre/secret-token", nil
+			return team.Invitation{
+				Link: "https://app.example/rejoindre/SECRETCODE12",
+				Code: "SECRETCODE12",
+			}, nil
+		},
+		ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
+			return team.Invitation{}, nil
 		},
 		RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
 	})
@@ -183,14 +192,18 @@ func TestTeamInviteRendersLinkOnce(t *testing.T) {
 	if gotName != "Karim Mécano" || !slices.Equal(gotLocations, []string{locationA}) {
 		t.Fatalf("invite = name %q locations %v", gotName, gotLocations)
 	}
-	if !strings.Contains(response.Body.String(), "https://app.example/rejoindre/secret-token") {
+	if !strings.Contains(response.Body.String(), "https://app.example/rejoindre/SECRETCODE12") {
 		t.Fatal("the invitation link is missing from the page that minted it")
+	}
+	// The code is shown grouped, because it gets read out loud.
+	if !strings.Contains(response.Body.String(), "SECR-ETCO-DE12") {
+		t.Fatal("the typed code is missing from the page that minted it")
 	}
 
 	// A later view of the screen cannot show it again: it was never stored.
 	response = request(mux, http.MethodGet, "/team", nil)
-	if strings.Contains(response.Body.String(), "secret-token") {
-		t.Fatal("the invitation link came back on a later page load")
+	if strings.Contains(response.Body.String(), "SECRETCODE12") {
+		t.Fatal("the invitation code came back on a later page load")
 	}
 
 	// A nameless employee is rejected without ever reaching the store.
@@ -227,8 +240,11 @@ func TestTeamRevokeRoundTrip(t *testing.T) {
 					return team.Page{}, nil
 				},
 				ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
-				InviteStaff: func(context.Context, team.Principal, string, []string) (string, error) {
-					return "", nil
+				InviteStaff: func(context.Context, team.Principal, string, []string) (team.Invitation, error) {
+					return team.Invitation{}, nil
+				},
+				ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
+					return team.Invitation{}, nil
 				},
 				RemoveStaff: func(_ context.Context, _ team.Principal, target string) error {
 					gotTarget = target

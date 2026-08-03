@@ -89,23 +89,35 @@ templ Index(page Page) {
 // the owner has one chance to hand it over, and nothing can recover it after
 // this render.
 templ inviteLink(page Page) {
-	if page.InviteLink != "" {
+	if page.Invite.Code != "" {
 		<div role="alert" class="alert alert-success items-start text-left">
 			@successIcon()
-			<div class="grid w-full gap-2">
-				<span class="font-semibold">{ page.InvitedName + " est ajouté" }</span>
+			<div class="grid w-full gap-3">
+				<span class="font-semibold">{ "Code d'accès de " + page.InvitedName }</span>
+				<output class="rounded-box bg-base-100 px-4 py-3 text-center font-mono text-2xl font-semibold tracking-[0.25em] text-base-content">
+					{ groupInviteCode(page.Invite.Code) }
+				</output>
 				<span class="text-sm">
-					Montrez-lui ce lien, ou envoyez-le-lui. Il ouvre l'accès une seule fois,
-					et ne sera plus affiché ici.
+					Sur n'importe quel ordinateur, la personne ouvre <span class="font-medium">/rejoindre</span>
+					et tape ce code. Rien à installer, aucun compte à créer.
 				</span>
-				<input
-					type="text"
-					class="input input-bordered w-full font-mono text-xs"
-					value={ page.InviteLink }
-					readonly
-					aria-label={ "Lien d'invitation de " + page.InvitedName }
-					onfocus="this.select()"
-				/>
+				<details>
+					<summary class="min-h-11 cursor-pointer py-2 text-sm font-medium">
+						Envoyer un lien à la place
+					</summary>
+					<input
+						type="text"
+						class="input input-bordered mt-2 w-full font-mono text-xs"
+						value={ page.Invite.Link }
+						readonly
+						aria-label={ "Lien d'invitation de " + page.InvitedName }
+						onfocus="this.select()"
+					/>
+				</details>
+				<span class="text-xs opacity-70">
+					Le code ne sert qu'une fois et ne sera plus affiché. Pour un deuxième
+					appareil, générez-en un nouveau.
+				</span>
 			</div>
 		</div>
 	}
@@ -236,11 +248,18 @@ templ memberCard(member Member, page Page) {
 				</details>
 			}
 			if page.CanManage && member.Removable() {
-				<form method="post" action={ templ.URL(revokePath(member)) } class="justify-self-start" data-pending-form>
-					<button type="submit" class="btn btn-error btn-sm min-h-11" data-pending-label="Retrait…">
-						Retirer de l'équipe<span class="sr-only">{ " " + member.Label() }</span>
-					</button>
-				</form>
+				<div class="flex flex-wrap gap-2">
+					<form method="post" action={ templ.URL(codePath(member)) } data-pending-form>
+						<button type="submit" class="btn btn-sm min-h-11" data-pending-label="Génération…">
+							Nouveau code<span class="sr-only">{ " pour " + member.Label() }</span>
+						</button>
+					</form>
+					<form method="post" action={ templ.URL(revokePath(member)) } data-pending-form>
+						<button type="submit" class="btn btn-error btn-sm min-h-11" data-pending-label="Retrait…">
+							Retirer de l'équipe<span class="sr-only">{ " " + member.Label() }</span>
+						</button>
+					</form>
+				</div>
 			}
 		</div>
 	</article>

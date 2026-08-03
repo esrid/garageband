@@ -32,6 +32,48 @@ templ InvitationPage(invitation Invitation, token string) {
 	}
 }
 
+// InvitationCodePage is the way in on a machine nobody can hand a link to —
+// the reception PC, a second workshop screen. The employee types the code the
+// owner reads out instead of transcribing a URL.
+templ InvitationCodePage(failed bool) {
+	@ui.Layout(ui.PageInfo{Title: "Entrer avec un code", NoIndex: true}) {
+		<div class="card card-border mx-auto max-w-sm border-base-300 bg-base-100">
+			<div class="card-body gap-4">
+				<h1 class="card-title text-xl">Entrer avec un code</h1>
+				if failed {
+					<div role="alert" class="alert alert-warning items-start text-left">
+						<span class="text-sm">
+							Ce code ne fonctionne pas. Il a peut-être déjà servi ou expiré :
+							demandez-en un nouveau à votre responsable.
+						</span>
+					</div>
+				}
+				<p class="text-sm opacity-70">
+					Votre responsable vous donne un code à douze lettres et chiffres.
+					Les tirets et les majuscules n'ont pas d'importance.
+				</p>
+				<form method="post" action="/rejoindre" class="grid gap-3">
+					<label class="floating-label">
+						<span>Votre code</span>
+						<input
+							type="text"
+							name="code"
+							class="input input-bordered w-full text-center font-mono text-lg tracking-widest uppercase"
+							placeholder="XXXX-XXXX-XXXX"
+							autocomplete="off"
+							autocapitalize="characters"
+							spellcheck="false"
+							required
+							autofocus
+						/>
+					</label>
+					<button type="submit" class="btn btn-primary btn-block min-h-11">Continuer</button>
+				</form>
+			</div>
+		</div>
+	}
+}
+
 // InvitationExpiredPage covers every dead end the same way: consumed, expired,
 // or never valid. It deliberately says nothing about which, and points at the
 // only person who can fix it.
