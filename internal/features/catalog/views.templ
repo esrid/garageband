@@ -32,6 +32,11 @@ templ List(page Index) {
 				@emptyCard("Aucun site accessible",
 					"Un prix s'applique à un site. Créez-en un, ou demandez à un administrateur de vous en donner l'accès.",
 					"/locations", "Voir les sites")
+			} else if page.Total() == 0 {
+				// Nothing to search or filter yet: a search bar and six "0"
+				// filter pills would only be noise around the two buttons
+				// that actually matter on day one.
+				@emptyCatalog(page)
 			} else {
 				<div class="flex flex-wrap items-center gap-2">
 					@searchForm(page)
@@ -41,9 +46,7 @@ templ List(page Index) {
 					<a href="/catalog/imports" class="btn btn-ghost btn-sm min-h-11">Imports</a>
 				</div>
 				@kindFilter(page)
-				if page.Total() == 0 {
-					@emptyCatalog(page)
-				} else if len(page.Items) == 0 {
+				if len(page.Items) == 0 {
 					<div class="card card-border border-base-300 border-dashed bg-base-100">
 						<div class="card-body items-start gap-2 p-5">
 							<h2 class="text-base font-semibold">Aucune ligne ne correspond</h2>
