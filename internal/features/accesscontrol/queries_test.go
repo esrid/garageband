@@ -15,15 +15,15 @@ import (
 )
 
 func TestAssignmentAndCustomerGrantLifecycle(t *testing.T) {
-	database := dbtest.Open(t)
-	ownerID := createUser(t, database, "access-owner@example.com")
-	memberID := createUser(t, database, "access-member@example.com")
-	tenantID := createTenant(t, database, ownerID)
-	addMembership(t, database, tenantID, memberID, "member")
-	homeLocationID := createLocation(t, database, tenantID, "home")
-	receivingLocationID := createLocation(t, database, tenantID, "receiving")
-	customerID := createCustomer(t, database, tenantID, homeLocationID)
-	store := accesscontrol.NewStore(database)
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "access-owner@example.com")
+	memberID := createUser(t, fixtures, "access-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	homeLocationID := createLocation(t, fixtures, tenantID, "home")
+	receivingLocationID := createLocation(t, fixtures, tenantID, "receiving")
+	customerID := createCustomer(t, fixtures, tenantID, homeLocationID)
+	store := accesscontrol.NewStore(runtime)
 
 	assignment, err := store.AssignLocation(
 		t.Context(), tenantID, ownerID, memberID, receivingLocationID,
@@ -104,16 +104,16 @@ func TestAssignmentAndCustomerGrantLifecycle(t *testing.T) {
 }
 
 func TestTeamOverviewAndAtomicAssignmentReplacement(t *testing.T) {
-	database := dbtest.Open(t)
-	ownerID := createUser(t, database, "overview-owner@example.com")
-	memberID := createUser(t, database, "overview-member@example.com")
-	otherMemberID := createUser(t, database, "overview-other@example.com")
-	tenantID := createTenant(t, database, ownerID)
-	addMembership(t, database, tenantID, memberID, "manager")
-	addMembership(t, database, tenantID, otherMemberID, "member")
-	locationA := createLocation(t, database, tenantID, "overview-a")
-	locationB := createLocation(t, database, tenantID, "overview-b")
-	store := accesscontrol.NewStore(database)
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "overview-owner@example.com")
+	memberID := createUser(t, fixtures, "overview-member@example.com")
+	otherMemberID := createUser(t, fixtures, "overview-other@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "manager")
+	addMembership(t, fixtures, tenantID, otherMemberID, "member")
+	locationA := createLocation(t, fixtures, tenantID, "overview-a")
+	locationB := createLocation(t, fixtures, tenantID, "overview-b")
+	store := accesscontrol.NewStore(runtime)
 
 	if err := store.ReplaceLocationAssignments(
 		t.Context(), tenantID, ownerID, memberID,
@@ -264,13 +264,13 @@ func createCustomer(t *testing.T, database *db.DB, tenantID, locationID string) 
 // takes: enrol the mechanic by name alone, hand over a link, then take the
 // access back when they leave.
 func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
-	database := dbtest.Open(t)
-	ownerID := createUser(t, database, "invite-owner@example.com")
-	memberID := createUser(t, database, "invite-member@example.com")
-	tenantID := createTenant(t, database, ownerID)
-	addMembership(t, database, tenantID, memberID, "member")
-	locationID := createLocation(t, database, tenantID, "workshop")
-	store := accesscontrol.NewStore(database)
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "invite-owner@example.com")
+	memberID := createUser(t, fixtures, "invite-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	locationID := createLocation(t, fixtures, tenantID, "workshop")
+	store := accesscontrol.NewStore(runtime)
 
 	if _, err := store.InviteStaff(
 		t.Context(), tenantID, ownerID, "   ", []string{locationID},
@@ -295,7 +295,7 @@ func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
 
 	// The raw token must never be what the database holds.
 	var stored string
-	if err := database.QueryRow(t.Context(),
+	if err := fixtures.QueryRow(t.Context(),
 		`SELECT token_hash FROM staff_invites WHERE user_id = $1`, invite.UserID,
 	).Scan(&stored); err != nil {
 		t.Fatal(err)
@@ -329,8 +329,8 @@ func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
 	); !errors.Is(err, accesscontrol.ErrForbidden) {
 		t.Fatalf("self revoke = %v, want ErrForbidden", err)
 	}
-	adminID := createUser(t, database, "invite-admin@example.com")
-	addMembership(t, database, tenantID, adminID, "admin")
+	adminID := createUser(t, fixtures, "invite-admin@example.com")
+	addMembership(t, fixtures, tenantID, adminID, "admin")
 	if err := store.RevokeStaff(
 		t.Context(), tenantID, adminID, ownerID,
 	); !errors.Is(err, accesscontrol.ErrForbidden) {
@@ -351,7 +351,7 @@ func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
 
 	// The pending link must die with the membership, not outlive it.
 	var invitesLeft int
-	if err := database.QueryRow(t.Context(),
+	if err := fixtures.QueryRow(t.Context(),
 		`SELECT COUNT(*) FROM staff_invites WHERE user_id = $1`, invite.UserID,
 	).Scan(&invitesLeft); err != nil {
 		t.Fatal(err)
@@ -365,11 +365,11 @@ func TestStaffInviteAndRevokeLifecycle(t *testing.T) {
 // code short enough to read out loud, and a way to hand someone a new one when
 // they sit down at a second computer.
 func TestInviteCodeIsShortAndReissuable(t *testing.T) {
-	database := dbtest.Open(t)
-	ownerID := createUser(t, database, "code-owner@example.com")
-	tenantID := createTenant(t, database, ownerID)
-	locationID := createLocation(t, database, tenantID, "code-workshop")
-	store := accesscontrol.NewStore(database)
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "code-owner@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	locationID := createLocation(t, fixtures, tenantID, "code-workshop")
+	store := accesscontrol.NewStore(runtime)
 
 	first, err := store.InviteStaff(
 		t.Context(), tenantID, ownerID, "Sophie Accueil", []string{locationID},
@@ -409,7 +409,7 @@ func TestInviteCodeIsShortAndReissuable(t *testing.T) {
 	// Exactly one code is live at a time: the replaced one is gone, not merely
 	// superseded.
 	var live int
-	if err := database.QueryRow(t.Context(), `
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT COUNT(*) FROM staff_invites
 		WHERE user_id = $1 AND accepted_at IS NULL`, first.UserID,
 	).Scan(&live); err != nil {
@@ -419,7 +419,7 @@ func TestInviteCodeIsShortAndReissuable(t *testing.T) {
 		t.Fatalf("%d live codes after reissuing, want 1", live)
 	}
 	var survives bool
-	if err := database.QueryRow(t.Context(), `
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT EXISTS (SELECT 1 FROM staff_invites WHERE token_hash = $1)`,
 		accesscontrol.HashToken(first.Token),
 	).Scan(&survives); err != nil {
@@ -442,13 +442,13 @@ func TestInviteCodeIsShortAndReissuable(t *testing.T) {
 // mistake an owner makes most: a name typed wrong. It must not cost the person
 // their sites, their code, or their session.
 func TestRenameStaffFixesTyposWithoutCostingAccess(t *testing.T) {
-	database := dbtest.Open(t)
-	ownerID := createUser(t, database, "rename-owner@example.com")
-	memberID := createUser(t, database, "rename-member@example.com")
-	tenantID := createTenant(t, database, ownerID)
-	addMembership(t, database, tenantID, memberID, "member")
-	locationID := createLocation(t, database, tenantID, "rename-workshop")
-	store := accesscontrol.NewStore(database)
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "rename-owner@example.com")
+	memberID := createUser(t, fixtures, "rename-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	locationID := createLocation(t, fixtures, tenantID, "rename-workshop")
+	store := accesscontrol.NewStore(runtime)
 
 	invite, err := store.InviteStaff(
 		t.Context(), tenantID, ownerID, "acceuil", []string{locationID},
@@ -497,7 +497,7 @@ func TestRenameStaffFixesTyposWithoutCostingAccess(t *testing.T) {
 		t.Fatalf("invite state after rename = %q, want it still pending", renamed.InviteState)
 	}
 	var codeSurvives bool
-	if err := database.QueryRow(t.Context(), `
+	if err := fixtures.QueryRow(t.Context(), `
 		SELECT EXISTS (SELECT 1 FROM staff_invites WHERE token_hash = $1)`,
 		accesscontrol.HashToken(invite.Token),
 	).Scan(&codeSurvives); err != nil {

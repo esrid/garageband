@@ -158,12 +158,12 @@ func TestProviderFailure(t *testing.T) {
 }
 
 func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
-	database := dbtest.Open(t)
-	store := auth.NewStore(database)
-	owner := createTestUser(t, database, "owner@example.com")
-	other := createTestUser(t, database, "other@example.com")
-	ownedTenant := createWorkspace(t, database, owner, "owned-garage", "Owned Garage")
-	otherTenant := createWorkspace(t, database, other, "other-garage", "Other Garage")
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	store := auth.NewStore(runtime)
+	owner := createTestUser(t, fixtures, "owner@example.com")
+	other := createTestUser(t, fixtures, "other@example.com")
+	ownedTenant := createWorkspace(t, fixtures, owner, "owned-garage", "Owned Garage")
+	otherTenant := createWorkspace(t, fixtures, other, "other-garage", "Other Garage")
 
 	token, err := store.CreateSession(t.Context(), owner, "", time.Hour)
 	if err != nil {
@@ -235,7 +235,7 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	}
 
 	// PostgreSQL clears active_tenant_id when the backing membership disappears.
-	if err := database.WithinTenant(t.Context(), ownedTenant, func(tx pgx.Tx) error {
+	if err := fixtures.WithinTenant(t.Context(), ownedTenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(t.Context(), `
 			DELETE FROM tenant_memberships
 			WHERE tenant_id = $1 AND user_id = $2`, ownedTenant, owner)
@@ -253,12 +253,12 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 }
 
 func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
-	database := dbtest.Open(t)
-	store := auth.NewStore(database)
-	owner := createTestUser(t, database, "location-owner@example.com")
-	member := createTestUser(t, database, "location-member@example.com")
-	tenantID := createWorkspace(t, database, owner, "location-garage", "Location Garage")
-	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	store := auth.NewStore(runtime)
+	owner := createTestUser(t, fixtures, "location-owner@example.com")
+	member := createTestUser(t, fixtures, "location-member@example.com")
+	tenantID := createWorkspace(t, fixtures, owner, "location-garage", "Location Garage")
+	if err := fixtures.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'member')`, tenantID, member)
@@ -266,9 +266,9 @@ func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	assignedLocation := createTestLocation(t, database, tenantID, "assigned")
-	unassignedLocation := createTestLocation(t, database, tenantID, "unassigned")
-	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+	assignedLocation := createTestLocation(t, fixtures, tenantID, "assigned")
+	unassignedLocation := createTestLocation(t, fixtures, tenantID, "unassigned")
+	if err := fixtures.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(t.Context(), `
 			INSERT INTO user_location_assignments (tenant_id, user_id, location_id, assigned_by_user_id)
 			VALUES ($1, $2, $3, $2)`, tenantID, member, assignedLocation)
@@ -343,7 +343,7 @@ func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
 
 	// Switching the active tenant clears a stale active location, since a
 	// location belongs to exactly one tenant.
-	otherTenantID := createWorkspace(t, database, owner, "second-garage", "Second Garage")
+	otherTenantID := createWorkspace(t, fixtures, owner, "second-garage", "Second Garage")
 	if err := store.ActivateTenant(withIdentity(t, store, ownerToken), otherTenantID); err != nil {
 		t.Fatal(err)
 	}
@@ -435,12 +435,12 @@ func createWorkspace(t *testing.T, database *db.DB, userID, slug, name string) s
 // whole staff-onboarding story rests on: looking at a link must not spend it
 // (messengers fetch pasted URLs), and following it must spend it exactly once.
 func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
-	database := dbtest.Open(t)
-	store := auth.NewStore(database)
-	owner := createTestUser(t, database, "invitation-owner@example.com")
-	tenantID := createWorkspace(t, database, owner, "invitation-garage", "Garage Invitation")
-	employee := createTestUser(t, database, "")
-	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	store := auth.NewStore(runtime)
+	owner := createTestUser(t, fixtures, "invitation-owner@example.com")
+	tenantID := createWorkspace(t, fixtures, owner, "invitation-garage", "Garage Invitation")
+	employee := createTestUser(t, fixtures, "")
+	if err := fixtures.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(t.Context(), `
 			INSERT INTO tenant_memberships (tenant_id, user_id, role)
 			VALUES ($1, $2, 'member')`, tenantID, employee); err != nil {
