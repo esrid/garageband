@@ -461,12 +461,12 @@ func (s *Store) Save(
 	userID string,
 	appointmentID string,
 	input SaveInput,
-) (date string, err error) {
+) (id string, date string, err error) {
 	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) (err error) {
-		_, date, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
+		id, date, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
 		return err
 	})
-	return date, err
+	return id, date, err
 }
 
 // saveAppointment is Save's tx-scoped body, factored out so the assistant

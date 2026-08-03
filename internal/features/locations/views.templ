@@ -50,7 +50,7 @@ templ Index(page IndexPage) {
 				<ul class="grid gap-3">
 					for _, location := range page.Locations {
 						<li>
-							@locationCard(location, page.CanManage)
+							@locationCard(location, page.CanManage, location.ID == page.ActiveLocationID)
 						</li>
 					}
 				</ul>
@@ -70,7 +70,7 @@ templ Index(page IndexPage) {
 
 // locationCard leads with what identifies a site — its name, whether it is open
 // and where it is — and keeps the rest as quiet secondary text.
-templ locationCard(location Location, canManage bool) {
+templ locationCard(location Location, canManage bool, isActiveSite bool) {
 	<article
 		class={ "card card-border border-base-300",
 			templ.KV("bg-base-100", isActive(location)),
@@ -79,11 +79,16 @@ templ locationCard(location Location, canManage bool) {
 		<div class="card-body gap-3 p-5">
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<h2 class="text-base font-semibold">{ location.Name }</h2>
-				if isActive(location) {
-					<span class="badge badge-success badge-sm">Actif</span>
-				} else {
-					<span class="badge badge-sm">Inactif</span>
-				}
+				<div class="flex items-center gap-1">
+					if isActiveSite {
+						<span class="badge badge-outline badge-sm">Site actuel</span>
+					}
+					if isActive(location) {
+						<span class="badge badge-success badge-sm">Actif</span>
+					} else {
+						<span class="badge badge-sm">Inactif</span>
+					}
+				</div>
 			</div>
 			<p class="text-sm opacity-70">
 				if len(addressLines(location)) == 0 {
@@ -113,6 +118,13 @@ templ locationCard(location Location, canManage bool) {
 					<a href={ templ.URL("/locations/" + location.ID) } class="btn btn-sm min-h-11 sm:min-h-9">
 						Configurer<span class="sr-only">{ " " + location.Name }</span>
 					</a>
+					if !isActiveSite && isActive(location) {
+						<form method="post" action={ templ.URL("/locations/" + location.ID + "/activate") } data-pending-form>
+							<button type="submit" class="btn btn-ghost btn-sm min-h-11 w-full sm:min-h-9 sm:w-auto" data-pending-label="Sélection…">
+								Définir comme site actif<span class="sr-only">{ " " + location.Name }</span>
+							</button>
+						</form>
+					}
 					if isActive(location) {
 						<form method="post" action={ templ.URL("/locations/" + location.ID + "/deactivate") } data-pending-form>
 							<button type="submit" class="btn btn-ghost btn-sm min-h-11 w-full sm:min-h-9 sm:w-auto" data-pending-label="Désactivation…">

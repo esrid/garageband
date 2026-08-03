@@ -24,9 +24,10 @@ var (
 )
 
 type handler struct {
-	store     *Store
-	principal PrincipalResolver
-	calendar  CalendarConfig
+	store            *Store
+	principal        PrincipalResolver
+	calendar         CalendarConfig
+	activateLocation ActivateLocationFunc
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -53,10 +54,11 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		notice = Notice{Kind: NoticeSuccess, Message: "Le site est de nouveau actif."}
 	}
 	h.renderIndex(w, r, IndexPage{
-		Organization: overview.Organization,
-		Locations:    overview.Locations,
-		CanManage:    overview.CanManage,
-		Notice:       notice,
+		Organization:     overview.Organization,
+		Locations:        overview.Locations,
+		CanManage:        overview.CanManage,
+		Notice:           notice,
+		ActiveLocationID: principal.ActiveLocationID,
 	}, http.StatusOK)
 }
 
@@ -749,6 +751,18 @@ func (h *handler) setStatus(
 		return
 	}
 	http.Redirect(w, r, "/locations?saved="+result, http.StatusSeeOther)
+}
+
+func (h *handler) activate(w http.ResponseWriter, r *http.Request) {
+	principal, locationID, ok := h.locationRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := h.activateLocation(r.Context(), principal.TenantID, locationID); err != nil {
+		h.storeError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/locations", http.StatusSeeOther)
 }
 
 func (h *handler) resolve(w http.ResponseWriter, r *http.Request) (Principal, bool) {

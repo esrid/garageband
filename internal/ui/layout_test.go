@@ -41,14 +41,14 @@ func TestLayoutMarksTheCurrentSection(t *testing.T) {
 		Nav:   ui.Nav{Section: ui.SectionLocations, Workspace: "Garage Central", InWorkspace: true},
 	})
 	if !strings.Contains(locations, `href="/locations" aria-current="page"`) {
-		t.Error("the locations link should be marked as the current page")
+		t.Error("the Sites switcher should be marked as the current page")
 	}
 	if !strings.Contains(locations, `href="/" aria-current="false"`) {
 		t.Error("the dashboard link should be explicitly not current")
 	}
 	// Weight, not just the background colour, carries the current state.
-	if !strings.Contains(locations, "border-base-content font-semibold") {
-		t.Error("the current link should be emphasised beyond colour")
+	if !strings.Contains(locations, "btn-active font-semibold") {
+		t.Error("the current Sites switcher should be emphasised beyond colour")
 	}
 	if !strings.Contains(locations, "Garage Central") {
 		t.Error("the active workspace should be named in the shell")
@@ -60,6 +60,9 @@ func TestLayoutMarksTheCurrentSection(t *testing.T) {
 	})
 	if !strings.Contains(dashboard, `href="/" aria-current="page"`) {
 		t.Error("the dashboard link should be marked as the current page")
+	}
+	if !strings.Contains(dashboard, "menu-active font-semibold") {
+		t.Error("the current nav link should be emphasised beyond colour")
 	}
 }
 

@@ -20,12 +20,13 @@ import (
 const sessionTTL = 7 * 24 * time.Hour
 
 type User struct {
-	ID             string
-	Provider       string
-	Email          string
-	Name           string
-	ActiveTenantID string
-	CreatedAt      time.Time
+	ID               string
+	Provider         string
+	Email            string
+	Name             string
+	ActiveTenantID   string
+	ActiveLocationID string
+	CreatedAt        time.Time
 }
 
 type Workspace struct {
@@ -84,13 +85,14 @@ func (s *Store) UserByToken(ctx context.Context, token string) (User, error) {
 	var expires time.Time
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.provider, u.email, u.name,
-		       COALESCE(se.active_tenant_id::text, ''), u.created_at,
+		       COALESCE(se.active_tenant_id::text, ''),
+		       COALESCE(se.active_location_id::text, ''), u.created_at,
 		       se.expires_at
 		FROM sessions se JOIN users u ON u.id = se.user_id
 		WHERE se.token_hash = $1`, hashToken(token),
 	).Scan(
 		&u.ID, &u.Provider, &u.Email, &u.Name, &u.ActiveTenantID,
-		&u.CreatedAt, &expires,
+		&u.ActiveLocationID, &u.CreatedAt, &expires,
 	)
 	if err != nil {
 		return User{}, err
@@ -143,9 +145,48 @@ func (s *Store) ActivateTenant(ctx context.Context, tenantID string) error {
 		}
 		result, err := tx.Exec(ctx, `
 			UPDATE sessions
-			SET active_tenant_id = $1
+			SET active_tenant_id = $1, active_location_id = NULL
 			WHERE token_hash = $2 AND user_id = $3 AND expires_at > now()`,
 			tenantID, identity.tokenHash, identity.User.ID,
+		)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != 1 {
+			return sql.ErrNoRows
+		}
+		return nil
+	})
+}
+
+// ActivateLocation changes only the session represented by ctx, mirroring
+// ActivateTenant. Unlike a tenant, location access isn't one membership row
+// (it's owner/admin implicit access, or an explicit user_location_assignments
+// row), so the check goes through the same
+// app_current_user_can_access_location() function every other location read
+// already uses, instead of a composite foreign key.
+func (s *Store) ActivateLocation(ctx context.Context, tenantID, locationID string) error {
+	identity, ok := identityFrom(ctx)
+	if !ok {
+		return sql.ErrNoRows
+	}
+	return s.db.WithinTenantUser(ctx, tenantID, identity.User.ID, func(tx pgx.Tx) error {
+		var accessible bool
+		if err := tx.QueryRow(ctx, `
+			SELECT app_current_user_can_access_location($1)
+			  AND EXISTS (SELECT 1 FROM locations WHERE tenant_id = $2 AND id = $1)`,
+			locationID, tenantID,
+		).Scan(&accessible); err != nil {
+			return err
+		}
+		if !accessible {
+			return sql.ErrNoRows
+		}
+		result, err := tx.Exec(ctx, `
+			UPDATE sessions
+			SET active_location_id = $1
+			WHERE token_hash = $2 AND user_id = $3 AND expires_at > now()`,
+			locationID, identity.tokenHash, identity.User.ID,
 		)
 		if err != nil {
 			return err

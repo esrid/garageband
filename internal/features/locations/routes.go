@@ -10,9 +10,18 @@ type Middleware func(http.Handler) http.Handler
 type Principal struct {
 	UserID   string
 	TenantID string
+	// ActiveLocationID is the session's current site (empty until one has
+	// ever been picked).
+	ActiveLocationID string
 }
 
 type PrincipalResolver func(context.Context) (Principal, bool)
+
+// ActivateLocationFunc sets the session's active site, rejecting a location
+// the caller cannot access. Injected rather than imported: locations never
+// reaches into auth directly, the same reason onboarding takes an
+// activateTenant func instead of an *auth.Store.
+type ActivateLocationFunc func(ctx context.Context, tenantID, locationID string) error
 
 func Register(
 	mux *http.ServeMux,
@@ -20,8 +29,9 @@ func Register(
 	requireTenant Middleware,
 	principal PrincipalResolver,
 	calendar CalendarConfig,
+	activateLocation ActivateLocationFunc,
 ) {
-	h := &handler{store: store, principal: principal, calendar: calendar}
+	h := &handler{store: store, principal: principal, calendar: calendar, activateLocation: activateLocation}
 	mux.Handle("GET /locations", requireTenant(http.HandlerFunc(h.index)))
 	mux.Handle("GET /locations/new", requireTenant(http.HandlerFunc(h.showNew)))
 	mux.Handle("POST /locations", requireTenant(http.HandlerFunc(h.create)))
@@ -49,4 +59,5 @@ func Register(
 	mux.Handle("GET /locations/{locationID}/calendar/connect", requireTenant(http.HandlerFunc(h.connectCalendar)))
 	mux.Handle("GET /oauth/google-calendar/callback", requireTenant(http.HandlerFunc(h.calendarCallback)))
 	mux.Handle("POST /locations/{locationID}/calendar/disconnect", requireTenant(http.HandlerFunc(h.disconnectCalendar)))
+	mux.Handle("POST /locations/{locationID}/activate", requireTenant(http.HandlerFunc(h.activate)))
 }

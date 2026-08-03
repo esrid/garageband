@@ -23,6 +23,7 @@ var uuidPattern = regexp.MustCompile(
 type handler struct {
 	store     *Store
 	principal PrincipalResolver
+	calendar  CalendarConfig
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,9 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 	if locationID != "" && !uuidPattern.MatchString(locationID) {
 		http.NotFound(w, r)
 		return
+	}
+	if locationID == "" {
+		locationID = principal.ActiveLocationID
 	}
 	page, err := h.store.Day(
 		r.Context(), principal.TenantID, principal.UserID,
@@ -80,6 +84,9 @@ func (h *handler) form(
 		(locationID != "" && !uuidPattern.MatchString(locationID)) {
 		http.NotFound(w, r)
 		return
+	}
+	if locationID == "" {
+		locationID = principal.ActiveLocationID
 	}
 	page, err := h.store.Form(
 		r.Context(), principal.TenantID, principal.UserID,
@@ -205,7 +212,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 		)
 		return
 	}
-	date, err := h.store.Save(
+	id, date, err := h.store.Save(
 		r.Context(), principal.TenantID, principal.UserID, appointmentID, input,
 	)
 	if err != nil {
@@ -229,6 +236,11 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 			h.fail(w, "save appointment", err)
 		}
 		return
+	}
+	if pushErr := h.store.SyncAppointmentCalendar(
+		r.Context(), principal.TenantID, principal.UserID, id, h.calendar,
+	); pushErr != nil {
+		slog.Error("sync appointment calendar", "err", pushErr)
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda?%s=%s&%s=%s&saved=1", FieldLocation, input.LocationID, FieldDate, date,
@@ -258,6 +270,11 @@ func (h *handler) cancel(w http.ResponseWriter, r *http.Request) {
 			h.fail(w, "cancel appointment", err)
 		}
 		return
+	}
+	if pushErr := h.store.RemoveAppointmentCalendarEvent(
+		r.Context(), principal.TenantID, principal.UserID, appointmentID, h.calendar,
+	); pushErr != nil {
+		slog.Error("remove appointment calendar event", "err", pushErr)
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda?%s=%s&%s=%s&cancelled=1",
@@ -405,6 +422,10 @@ type Middleware func(http.Handler) http.Handler
 type Principal struct {
 	UserID   string
 	TenantID string
+	// ActiveLocationID is the session's current site (empty until one has
+	// ever been picked), used as the default when a page doesn't name one
+	// explicitly.
+	ActiveLocationID string
 }
 
 type PrincipalResolver func(context.Context) (Principal, bool)

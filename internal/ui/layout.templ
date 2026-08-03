@@ -96,50 +96,87 @@ templ Layout(page PageInfo) {
 		<body class="min-h-dvh bg-base-200">
 			<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:btn focus:btn-primary">Aller au contenu</a>
 			if page.Nav.visible() {
-				@shell(page.Nav)
+				@shell(page.Nav) {
+					{ children... }
+				}
 			} else {
 				<header class="border-b border-base-300 bg-base-100">
 					<div class="mx-auto flex min-h-14 max-w-2xl items-center px-4">
 						<span class="text-base font-semibold tracking-tight">Garageband</span>
 					</div>
 				</header>
+				<main id="main" class="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+					{ children... }
+				</main>
 			}
-			<main id="main" class="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-				{ children... }
-			</main>
 		</body>
 	</html>
 }
 
-// shell is the signed-in header: brand, which workspace you are in, the primary
-// navigation, and the way out. It only links to screens that exist.
+// shell is the signed-in application shell: a daisyUI drawer whose side panel
+// carries the brand, which workspace you are in, the site switcher, the
+// primary navigation, and the way out. It only links to screens that exist.
+// Verified against https://daisyui.com/components/drawer/ and
+// https://daisyui.com/components/menu/ 2026-08-03.
 templ shell(nav Nav) {
-	<header class="border-b border-base-300 bg-base-100">
-		<div class="mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
-			<a href="/" class="text-base font-semibold tracking-tight">Garageband</a>
-			if nav.Workspace != "" {
-				<span class="hidden text-sm opacity-60 sm:inline">{ nav.Workspace }</span>
-			}
-			<nav aria-label="Navigation principale" class="order-last w-full">
-				<ul class="menu menu-horizontal gap-1 p-0">
-					@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
-					if nav.InWorkspace {
-						@navLink("/locations", "Sites", nav.current(SectionLocations))
-						@navLink("/team", "Équipe", nav.current(SectionTeam))
-						@navLink("/customers", "Clients", nav.current(SectionCustomers))
-						@navLink("/agenda", "Agenda", nav.current(SectionAgenda))
-						@navLink("/calls", "Appels", nav.current(SectionCalls))
-						@navLink("/agents", "Agent IA", nav.current(SectionAgents))
-						@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
-						@navLink("/assistant", "Assistant", nav.current(SectionAssistant))
-					}
-				</ul>
-			</nav>
-			<form method="post" action="/logout" class="ml-auto">
-				<button type="submit" class="btn btn-ghost btn-sm min-h-11">Déconnexion</button>
-			</form>
+	<div class="drawer lg:drawer-open">
+		<input id="app-drawer" type="checkbox" class="drawer-toggle"/>
+		<div class="drawer-content flex min-h-dvh flex-col">
+			<div class="navbar border-b border-base-300 bg-base-100 lg:hidden">
+				<label for="app-drawer" aria-label="Ouvrir le menu" class="btn btn-square btn-ghost">
+					@hamburgerIcon()
+				</label>
+				<a href="/" class="px-2 text-base font-semibold tracking-tight">Garageband</a>
+			</div>
+			<main id="main" class="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:py-10">
+				{ children... }
+			</main>
 		</div>
-	</header>
+		<div class="drawer-side z-10">
+			<label for="app-drawer" aria-label="Fermer le menu" class="drawer-overlay"></label>
+			<aside class="flex min-h-full w-64 flex-col gap-1 border-r border-base-300 bg-base-100 p-4">
+				<a href="/" class="mb-1 text-base font-semibold tracking-tight">Garageband</a>
+				if nav.Workspace != "" {
+					<p class="mb-2 truncate text-sm opacity-60">{ nav.Workspace }</p>
+				}
+				if nav.InWorkspace {
+					<a
+						href="/locations"
+						aria-current={ nav.current(SectionLocations) }
+						class={ "btn btn-ghost btn-block mb-2 justify-start",
+							templ.KV("btn-active font-semibold", nav.Section == SectionLocations) }
+					>
+						Sites
+					</a>
+				}
+				<nav aria-label="Navigation principale" class="flex-1">
+					<ul class="menu w-full p-0">
+						@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
+						if nav.InWorkspace {
+							@navLink("/team", "Équipe", nav.current(SectionTeam))
+							@navLink("/customers", "Clients", nav.current(SectionCustomers))
+							@navLink("/agenda", "Agenda", nav.current(SectionAgenda))
+							@navLink("/calls", "Appels", nav.current(SectionCalls))
+							@navLink("/agents", "Agent IA", nav.current(SectionAgents))
+							@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
+							@navLink("/assistant", "Assistant", nav.current(SectionAssistant))
+						}
+					</ul>
+				</nav>
+				<form method="post" action="/logout">
+					<button type="submit" class="btn btn-ghost btn-sm btn-block">Déconnexion</button>
+				</form>
+			</aside>
+		</div>
+	</div>
+}
+
+// hamburgerIcon toggles the drawer on small screens; the drawer-toggle
+// checkbox does the actual work, this is only its visible label.
+templ hamburgerIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+	</svg>
 }
 
 // navLink marks the current page with aria-current and with weight, so the
@@ -149,9 +186,7 @@ templ navLink(href string, label string, current string) {
 		<a
 			href={ templ.URL(href) }
 			aria-current={ current }
-			class={ "min-h-11 items-center rounded-none border-b-2 bg-transparent",
-				templ.KV("border-base-content font-semibold", current == "page"),
-				templ.KV("border-transparent", current != "page") }
+			class={ templ.KV("menu-active font-semibold", current == "page") }
 		>
 			{ label }
 		</a>

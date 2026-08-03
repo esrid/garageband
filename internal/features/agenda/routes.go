@@ -7,8 +7,9 @@ func Register(
 	store *Store,
 	requireTenant Middleware,
 	principal PrincipalResolver,
+	calendar CalendarConfig,
 ) {
-	h := &handler{store: store, principal: principal}
+	h := &handler{store: store, principal: principal, calendar: calendar}
 	mux.Handle("GET /agenda", requireTenant(http.HandlerFunc(h.index)))
 	mux.Handle("GET /agenda/new", requireTenant(http.HandlerFunc(h.newAppointment)))
 	mux.Handle("POST /agenda", requireTenant(http.HandlerFunc(h.create)))

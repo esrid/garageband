@@ -136,7 +136,7 @@ func TestManualResourceServicesCanBeListedCheckedAndBooked(t *testing.T) {
 
 func TestFindAppointmentsToolListsWhatTheAgendaBooked(t *testing.T) {
 	fixture := newAgendaFixture(t)
-	if _, err := fixture.store.Save(
+	if _, _, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
 	); err != nil {
 		t.Fatal(err)
@@ -275,7 +275,7 @@ func TestBookAppointmentToolRejectsAnUnknownVehicle(t *testing.T) {
 func TestRescheduleAppointmentToolMovesTheSameBooking(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	autoAllocate(t, fixture)
-	date, err := fixture.store.Save(
+	_, date, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
 	)
 	if err != nil {
@@ -324,7 +324,7 @@ func TestRescheduleAppointmentToolMovesTheSameBooking(t *testing.T) {
 func TestCancelAppointmentToolIsIdempotent(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	autoAllocate(t, fixture)
-	date, err := fixture.store.Save(
+	_, date, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
 	)
 	if err != nil {

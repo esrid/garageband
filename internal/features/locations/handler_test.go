@@ -2,6 +2,7 @@ package locations_test
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -232,12 +233,59 @@ func TestLocationScheduleHTTPFlow(t *testing.T) {
 	}
 }
 
+func TestActivateLocationRouteDelegatesAndMapsErrors(t *testing.T) {
+	database := dbtest.Open(t)
+	ownerID := createUser(t, database, "activate-owner@example.com")
+	tenantID := createTenant(t, database, ownerID)
+	store := locations.NewStore(database)
+	created, err := store.Create(t.Context(), tenantID, ownerID, locations.Input{
+		Name: "Atelier Activation", CountryCode: "FR", Timezone: "Europe/Paris",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := locations.Principal{UserID: ownerID, TenantID: tenantID}
+
+	var calledTenantID, calledLocationID string
+	okHandler := locationHandlerWithActivation(store, principal, locations.CalendarConfig{},
+		func(_ context.Context, tenantID, locationID string) error {
+			calledTenantID, calledLocationID = tenantID, locationID
+			return nil
+		},
+	)
+	response := postLocationForm(okHandler, "/locations/"+created.ID+"/activate", nil)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/locations" {
+		t.Fatalf("activate = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+	if calledTenantID != tenantID || calledLocationID != created.ID {
+		t.Fatalf("activate delegated with (%q, %q), want (%q, %q)",
+			calledTenantID, calledLocationID, tenantID, created.ID)
+	}
+
+	rejectingHandler := locationHandlerWithActivation(store, principal, locations.CalendarConfig{},
+		func(context.Context, string, string) error { return sql.ErrNoRows },
+	)
+	response = postLocationForm(rejectingHandler, "/locations/"+created.ID+"/activate", nil)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("activate rejected = %d, want 404", response.Code)
+	}
+}
+
 func locationHandler(store *locations.Store, principal locations.Principal) http.Handler {
 	return locationHandlerWithCalendar(store, principal, locations.CalendarConfig{})
 }
 
 func locationHandlerWithCalendar(
 	store *locations.Store, principal locations.Principal, calendar locations.CalendarConfig,
+) http.Handler {
+	return locationHandlerWithActivation(store, principal, calendar, noopActivateLocation)
+}
+
+func noopActivateLocation(context.Context, string, string) error { return nil }
+
+func locationHandlerWithActivation(
+	store *locations.Store, principal locations.Principal, calendar locations.CalendarConfig,
+	activateLocation locations.ActivateLocationFunc,
 ) http.Handler {
 	mux := http.NewServeMux()
 	locations.Register(
@@ -246,6 +294,7 @@ func locationHandlerWithCalendar(
 		func(next http.Handler) http.Handler { return next },
 		func(context.Context) (locations.Principal, bool) { return principal, true },
 		calendar,
+		activateLocation,
 	)
 	return mux
 }

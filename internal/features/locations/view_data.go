@@ -69,6 +69,10 @@ type IndexPage struct {
 	Locations    []Location // store rows, already ordered by the query
 	CanManage    bool       // false renders the read-only presentation
 	Notice       Notice
+	// ActiveLocationID is the session's current site (empty until one has
+	// ever been picked), so the list can mark it and offer "activate" on the
+	// others instead.
+	ActiveLocationID string
 }
 
 func (p IndexPage) HasInactive() bool {

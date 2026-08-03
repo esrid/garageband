@@ -43,6 +43,15 @@ func TenantFrom(ctx context.Context) (string, bool) {
 	return user.ActiveTenantID, ok && user.ActiveTenantID != ""
 }
 
+// LocationFrom returns the session's active site, if one was ever selected.
+// Cleared automatically whenever the active tenant changes (a location
+// belongs to exactly one tenant), so callers never need to re-validate it
+// against the current tenant.
+func LocationFrom(ctx context.Context) (string, bool) {
+	user, ok := UserFrom(ctx)
+	return user.ActiveLocationID, ok && user.ActiveLocationID != ""
+}
+
 // RequireTenant protects tenant-owned feature routes. The active tenant is
 // guaranteed by the sessions-to-memberships foreign key, and stores must still
 // use db.WithinTenant for every tenant query.

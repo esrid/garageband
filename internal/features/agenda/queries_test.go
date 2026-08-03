@@ -34,7 +34,7 @@ type agendaFixture struct {
 func TestAgendaUsesLocationTimezoneAndReportsResourceConflict(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	input := fixture.input("2026-08-12", "09:00")
-	date, err := fixture.store.Save(
+	_, date, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "", input,
 	)
 	if err != nil {
@@ -60,7 +60,7 @@ func TestAgendaUsesLocationTimezoneAndReportsResourceConflict(t *testing.T) {
 		t.Fatalf("local interval = %s to %s", appointment.StartsAt, appointment.EndsAt)
 	}
 
-	_, err = fixture.store.Save(
+	_, _, err = fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-12", "09:30"),
 	)
@@ -99,7 +99,7 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 	input := fixture.input("2026-08-12", "09:00")
 	input.ResourceIDs = []string{fixture.resourceID, fixture.secondResourceID}
 	input.ResourceID = fixture.resourceID
-	if _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input); err != nil {
+	if _, _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input); err != nil {
 		t.Fatal(err)
 	}
 	var reservationCount int
@@ -161,7 +161,7 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 	conflicting := fixture.input("2026-08-12", "09:30")
 	conflicting.ResourceID = fixture.secondResourceID
 	conflicting.ResourceIDs = []string{fixture.secondResourceID}
-	_, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting)
+	_, _, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting)
 	var conflict *agenda.ConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(conflict.Resource, "Valise diagnostic") {
 		t.Fatalf("secondary-resource conflict = %#v, err %v", conflict, err)
@@ -169,7 +169,7 @@ func TestAppointmentReservesEverySelectedResource(t *testing.T) {
 	if _, _, err := fixture.store.Cancel(t.Context(), fixture.tenantID, fixture.userID, day.Appointments[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting); err != nil {
+	if _, _, err := fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", conflicting); err != nil {
 		t.Fatalf("resource stayed occupied after cancellation: %v", err)
 	}
 }
@@ -222,6 +222,7 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
+		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
@@ -250,7 +251,7 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 	input := fixture.input("2026-08-12", "09:30")
 	input.ResourceID = ""
 	input.ResourceIDs = nil
-	_, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input)
+	_, _, err = fixture.store.Save(t.Context(), fixture.tenantID, fixture.userID, "", input)
 	var conflict *agenda.ConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(conflict.Resource, "ensemble") {
 		t.Fatalf("automatic capacity conflict = %#v, err %v", conflict, err)
@@ -259,7 +260,7 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 
 func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 	fixture := newAgendaFixture(t)
-	if _, err := fixture.store.Save(
+	if _, _, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-12", "09:00"),
 	); err != nil {
@@ -273,6 +274,7 @@ func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
+		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation:  {fixture.locationID},
@@ -306,7 +308,7 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 		    tenant_id, location_id, starts_at, ends_at, reason, created_by_user_id
 		) VALUES ($1, $2, '2026-08-12 14:00:00+00', '2026-08-12 15:00:00+00', 'Réunion', $3)`,
 		fixture.tenantID, fixture.locationID, fixture.userID)
-	if _, err := fixture.store.Save(
+	if _, _, err := fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-12", "08:00"),
 	); err != nil {
@@ -327,7 +329,7 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 			t.Fatalf("busy or closed slot leaked: %#v", slot)
 		}
 	}
-	_, err = fixture.store.Save(
+	_, _, err = fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-12", "07:00"),
 	)
@@ -336,14 +338,14 @@ func TestAvailabilityUsesOpeningHoursClosuresAndExistingBookings(t *testing.T) {
 		!strings.Contains(fieldError.Message, "horaires") {
 		t.Fatalf("outside hours = %#v err %v", fieldError, err)
 	}
-	_, err = fixture.store.Save(
+	_, _, err = fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-12", "10:30"),
 	)
 	if !errors.As(err, &fieldError) || !strings.Contains(fieldError.Message, "fermé") {
 		t.Fatalf("closure booking = %#v err %v", fieldError, err)
 	}
-	_, err = fixture.store.Save(
+	_, _, err = fixture.store.Save(
 		t.Context(), fixture.tenantID, fixture.userID, "",
 		fixture.input("2026-08-13", "08:00"),
 	)
@@ -387,6 +389,7 @@ func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
+		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
@@ -407,6 +410,38 @@ func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
 	}
 	if appointments != 0 {
 		t.Fatalf("availability search created %d appointments", appointments)
+	}
+}
+
+// The fixture's own location ("Atelier Martinique") sorts after this one
+// alphabetically, so a request with no ?location= would default to it
+// instead unless the session's active site is honoured.
+func TestAgendaIndexDefaultsToTheActiveSiteOverAlphabeticalOrder(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO locations (tenant_id, slug, name, timezone)
+		VALUES ($1, 'alpha', 'Atelier Alpha', 'America/Martinique')`, fixture.tenantID)
+
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{
+				UserID: fixture.userID, TenantID: fixture.tenantID,
+				ActiveLocationID: fixture.locationID,
+			}, true
+		},
+		agenda.CalendarConfig{},
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/agenda", nil))
+	// "Atelier Alpha" legitimately appears too, as one of the <select>
+	// options; the summary line (name immediately followed by the "·"
+	// separator) is what proves which location the page actually loaded.
+	if response.Code != http.StatusOK ||
+		!strings.Contains(response.Body.String(), `Atelier Martinique <span class="opacity-50"`) {
+		t.Fatalf("agenda without ?location= = %d %q", response.Code, response.Body.String())
 	}
 }
 

@@ -75,10 +75,11 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 		},
 	)
 	locationStore := locations.NewStore(database)
-	calendarConfig := locations.CalendarConfig{Enabled: cfg.CalendarEnabled()}
-	if calendarConfig.Enabled {
-		calendarConfig.OAuth = cfg.GoogleCalendarOAuthConfig()
-		calendarConfig.Secure = cfg.CookieSecure
+	calendarEnabled := cfg.CalendarEnabled()
+	calendarConfig := locations.CalendarConfig{Enabled: calendarEnabled}
+	agendaCalendarConfig := agenda.CalendarConfig{Enabled: calendarEnabled}
+	if calendarEnabled {
+		oauthConfig := cfg.GoogleCalendarOAuthConfig()
 		secretStore, err := secrets.NewAESStore(cfg.EncryptionKey)
 		if err != nil {
 			// Unreachable in practice: Config already validated the key
@@ -86,7 +87,11 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			// calendar connections if that ever stops being true.
 			panic(err)
 		}
+		calendarConfig.OAuth = oauthConfig
+		calendarConfig.Secure = cfg.CookieSecure
 		calendarConfig.Secrets = secretStore
+		agendaCalendarConfig.OAuth = oauthConfig
+		agendaCalendarConfig.Secrets = secretStore
 	}
 	locations.Register(
 		mux,
@@ -96,10 +101,11 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return locations.Principal{
-				UserID: user.ID, TenantID: tenantID,
+				UserID: user.ID, TenantID: tenantID, ActiveLocationID: user.ActiveLocationID,
 			}, userOK && tenantOK
 		},
 		calendarConfig,
+		authStore.ActivateLocation,
 	)
 	assistantStore := assistant.NewStore(database)
 	catalogStore := catalog.NewStore(database)
@@ -142,9 +148,10 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return agenda.Principal{
-				UserID: user.ID, TenantID: tenantID,
+				UserID: user.ID, TenantID: tenantID, ActiveLocationID: user.ActiveLocationID,
 			}, userOK && tenantOK
 		},
+		agendaCalendarConfig,
 	)
 	calls.Register(
 		mux,

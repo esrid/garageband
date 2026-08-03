@@ -248,6 +248,143 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	}
 }
 
+func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
+	database := dbtest.Open(t)
+	store := auth.NewStore(database)
+	owner := createTestUser(t, database, "location-owner@example.com")
+	member := createTestUser(t, database, "location-member@example.com")
+	tenantID := createWorkspace(t, database, owner, "location-garage", "Location Garage")
+	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'member')`, tenantID, member)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assignedLocation := createTestLocation(t, database, tenantID, "assigned")
+	unassignedLocation := createTestLocation(t, database, tenantID, "unassigned")
+	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO user_location_assignments (tenant_id, user_id, location_id, assigned_by_user_id)
+			VALUES ($1, $2, $3, $2)`, tenantID, member, assignedLocation)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /activate-location/{locationID}", auth.RequireTenant(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			tenantID, _ := auth.TenantFrom(r.Context())
+			if err := store.ActivateLocation(r.Context(), tenantID, r.PathValue("locationID")); err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		},
+	)))
+	handler := store.WithUser(mux)
+
+	// The owner manages the tenant, so it can activate any location in it,
+	// no explicit assignment required.
+	ownerToken, err := store.CreateSession(t.Context(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ActivateTenant(withIdentity(t, store, ownerToken), tenantID); err != nil {
+		t.Fatal(err)
+	}
+	ownerSession := &http.Cookie{Name: "session", Value: ownerToken}
+	if response := post(handler, "/activate-location/"+unassignedLocation, ownerSession); response.Code != http.StatusOK {
+		t.Fatalf("owner activate unassigned location = %d", response.Code)
+	}
+	ownerUser, err := store.UserByToken(t.Context(), ownerToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownerUser.ActiveLocationID != unassignedLocation {
+		t.Fatalf("owner active location = %q, want %q", ownerUser.ActiveLocationID, unassignedLocation)
+	}
+
+	// A member can only activate a location it was explicitly assigned to.
+	memberToken, err := store.CreateSession(t.Context(), member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ActivateTenant(withIdentity(t, store, memberToken), tenantID); err != nil {
+		t.Fatal(err)
+	}
+	memberSession := &http.Cookie{Name: "session", Value: memberToken}
+	if response := post(handler, "/activate-location/"+unassignedLocation, memberSession); response.Code != http.StatusNotFound {
+		t.Fatalf("member activate unassigned location = %d, want 404", response.Code)
+	}
+	memberUser, err := store.UserByToken(t.Context(), memberToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if memberUser.ActiveLocationID != "" {
+		t.Fatalf("unassigned location became active for member: %s", memberUser.ActiveLocationID)
+	}
+	if response := post(handler, "/activate-location/"+assignedLocation, memberSession); response.Code != http.StatusOK {
+		t.Fatalf("member activate assigned location = %d", response.Code)
+	}
+	memberUser, err = store.UserByToken(t.Context(), memberToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if memberUser.ActiveLocationID != assignedLocation {
+		t.Fatalf("member active location = %q, want %q", memberUser.ActiveLocationID, assignedLocation)
+	}
+
+	// Switching the active tenant clears a stale active location, since a
+	// location belongs to exactly one tenant.
+	otherTenantID := createWorkspace(t, database, owner, "second-garage", "Second Garage")
+	if err := store.ActivateTenant(withIdentity(t, store, ownerToken), otherTenantID); err != nil {
+		t.Fatal(err)
+	}
+	ownerUser, err = store.UserByToken(t.Context(), ownerToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownerUser.ActiveLocationID != "" {
+		t.Fatalf("active location survived a tenant switch: %s", ownerUser.ActiveLocationID)
+	}
+}
+
+// withIdentity carries a session token's request identity into a bare
+// context, so ActivateTenant/ActivateLocation can be called outside of an
+// actual HTTP request in test setup.
+func withIdentity(t *testing.T, store *auth.Store, token string) context.Context {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, "/", nil)
+	request.AddCookie(&http.Cookie{Name: "session", Value: token})
+	var ctx context.Context
+	handler := store.WithUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx = r.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	if ctx == nil {
+		t.Fatal("session identity did not load into the request context")
+	}
+	return ctx
+}
+
+func createTestLocation(t *testing.T, database *db.DB, tenantID, slug string) string {
+	t.Helper()
+	var locationID string
+	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `
+			INSERT INTO locations (tenant_id, slug, name, timezone)
+			VALUES ($1, $2, $2, 'Europe/Paris') RETURNING id::text`,
+			tenantID, slug,
+		).Scan(&locationID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return locationID
+}
+
 func post(handler http.Handler, target string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, target, nil)
 	request.AddCookie(cookie)
