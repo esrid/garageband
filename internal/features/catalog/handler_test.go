@@ -44,7 +44,7 @@ func TestCatalogHTTPValidatesAndCreatesAnItem(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	mux.ServeHTTP(response, formRequest(http.MethodPost, "/catalog", valid))
-	if response.Code != http.StatusSeeOther || !strings.HasPrefix(response.Header().Get("Location"), "/catalog/") {
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/catalog?notice=saved" {
 		t.Fatalf("valid create = %d location %q body %q", response.Code, response.Header().Get("Location"), response.Body.String())
 	}
 	response = httptest.NewRecorder()

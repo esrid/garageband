@@ -78,12 +78,12 @@ func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, Form(page), http.StatusUnprocessableEntity)
 		return
 	}
-	created, err := h.store.Create(r.Context(), principal.TenantID, principal.UserID, input)
+	_, err = h.store.Create(r.Context(), principal.TenantID, principal.UserID, input)
 	if err != nil {
 		h.handleItemWriteError(w, r, "create catalog item", err, page)
 		return
 	}
-	http.Redirect(w, r, "/catalog/"+created.ID+"?notice=saved", http.StatusSeeOther)
+	http.Redirect(w, r, "/catalog?notice=saved", http.StatusSeeOther)
 }
 
 func (h *handler) editItem(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 		h.handleItemWriteError(w, r, "update catalog item", err, page)
 		return
 	}
-	http.Redirect(w, r, "/catalog/"+itemID+"?notice=saved", http.StatusSeeOther)
+	http.Redirect(w, r, "/catalog?notice=saved", http.StatusSeeOther)
 }
 
 func (h *handler) archive(w http.ResponseWriter, r *http.Request) {

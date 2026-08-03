@@ -36,7 +36,7 @@ templ List(page Index) {
 				<div class="flex flex-wrap items-center gap-2">
 					@searchForm(page)
 					if page.CanManage {
-						<a href="/catalog/new" class="btn btn-primary btn-sm min-h-11">Nouvelle ligne</a>
+						<a href="/catalog/new" up-layer="new" class="btn btn-primary btn-sm min-h-11">Nouvelle ligne</a>
 					}
 					<a href="/catalog/imports" class="btn btn-ghost btn-sm min-h-11">Imports</a>
 				</div>
@@ -135,7 +135,7 @@ templ emptyCatalog(page Index) {
 			if page.CanManage {
 				<div class="card-actions mt-1">
 					<a href="/catalog/imports/new" class="btn btn-primary min-h-11">Importer un fichier</a>
-					<a href="/catalog/new" class="btn min-h-11">Ajouter une ligne</a>
+					<a href="/catalog/new" up-layer="new" class="btn min-h-11">Ajouter une ligne</a>
 				</div>
 			} else {
 				<p class="text-sm opacity-70">
@@ -191,7 +191,7 @@ templ itemCard(item Item, now time.Time, canManage bool) {
 			}
 			if canManage {
 				<div class="card-actions">
-					<a href={ templ.URL(itemPath(item)) } class="btn btn-sm min-h-11">
+					<a href={ templ.URL(itemPath(item)) } up-layer="new" class="btn btn-sm min-h-11">
 						Modifier<span class="sr-only">{ " " + item.Name }</span>
 					</a>
 				</div>
@@ -231,7 +231,16 @@ templ Form(page FormPage) {
 					</span>
 				</div>
 			} else {
-				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+				<form
+					method="post"
+					action={ templ.URL(formActionPath(page)) }
+					class="grid gap-4"
+					data-pending-form
+					novalidate
+					up-submit
+					up-layer="parent"
+					up-target="#main"
+				>
 					<section class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<h2 class="text-base font-semibold">Ce que vous vendez</h2>

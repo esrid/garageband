@@ -79,7 +79,7 @@ func List(page Index) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if page.CanManage {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<a href=\"/catalog/new\" class=\"btn btn-primary btn-sm min-h-11\">Nouvelle ligne</a> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<a href=\"/catalog/new\" up-layer=\"new\" class=\"btn btn-primary btn-sm min-h-11\">Nouvelle ligne</a> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -448,7 +448,7 @@ func emptyCatalog(page Index) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if page.CanManage {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"card-actions mt-1\"><a href=\"/catalog/imports/new\" class=\"btn btn-primary min-h-11\">Importer un fichier</a> <a href=\"/catalog/new\" class=\"btn min-h-11\">Ajouter une ligne</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"card-actions mt-1\"><a href=\"/catalog/imports/new\" class=\"btn btn-primary min-h-11\">Importer un fichier</a> <a href=\"/catalog/new\" up-layer=\"new\" class=\"btn min-h-11\">Ajouter une ligne</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -730,7 +730,7 @@ func itemCard(item Item, now time.Time, canManage bool) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" class=\"btn btn-sm min-h-11\">Modifier<span class=\"sr-only\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" up-layer=\"new\" class=\"btn btn-sm min-h-11\">Modifier<span class=\"sr-only\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -839,13 +839,13 @@ func Form(page FormPage) templ.Component {
 				var templ_7745c5c3_Var43 templ.SafeURL
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(formActionPath(page)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 234, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 236, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\" class=\"grid gap-4\" data-pending-form novalidate><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4 p-5\"><h2 class=\"text-base font-semibold\">Ce que vous vendez</h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\" class=\"grid gap-4\" data-pending-form novalidate up-submit up-layer=\"parent\" up-target=\"#main\"><section class=\"card card-border border-base-300 bg-base-100\"><div class=\"card-body gap-4 p-5\"><h2 class=\"text-base font-semibold\">Ce que vous vendez</h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -873,7 +873,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldKind)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 240, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 249, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 					if templ_7745c5c3_Err != nil {
@@ -886,7 +886,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var47 string
 					templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldKind)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 241, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 250, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 					if templ_7745c5c3_Err != nil {
@@ -912,7 +912,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var49 string
 					templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldKind)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 243, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 252, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 					if templ_7745c5c3_Err != nil {
@@ -925,7 +925,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var50 string
 					templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldKind, false, page.HasError(FieldKind)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 244, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 253, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 					if templ_7745c5c3_Err != nil {
@@ -943,7 +943,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var51 string
 						templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.ResolveAttributeValue(kind)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 248, Col: 30}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 257, Col: 30}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 						if templ_7745c5c3_Err != nil {
@@ -966,7 +966,7 @@ func Form(page FormPage) templ.Component {
 						var templ_7745c5c3_Var52 string
 						templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(kindLabel(kind))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 248, Col: 89}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 257, Col: 89}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 						if templ_7745c5c3_Err != nil {
@@ -1011,7 +1011,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var55 string
 					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 254, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 263, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 					if templ_7745c5c3_Err != nil {
@@ -1024,7 +1024,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var56 string
 					templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 255, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 264, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 					if templ_7745c5c3_Err != nil {
@@ -1050,7 +1050,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 257, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 266, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var58)
 					if templ_7745c5c3_Err != nil {
@@ -1063,7 +1063,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var59 string
 					templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldName)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 258, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 267, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 					if templ_7745c5c3_Err != nil {
@@ -1076,7 +1076,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var60 string
 					templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldName, true, page.HasError(FieldName)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 259, Col: 82}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 268, Col: 82}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 					if templ_7745c5c3_Err != nil {
@@ -1116,7 +1116,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var63 string
 					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldReference)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 265, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 274, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 					if templ_7745c5c3_Err != nil {
@@ -1129,7 +1129,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldReference)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 266, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 275, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 					if templ_7745c5c3_Err != nil {
@@ -1155,7 +1155,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var66 string
 					templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.Reference)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 268, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 277, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 					if templ_7745c5c3_Err != nil {
@@ -1168,7 +1168,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var67 string
 					templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldReference)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 269, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 278, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var67)
 					if templ_7745c5c3_Err != nil {
@@ -1181,7 +1181,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var68 string
 					templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldReference, true, page.HasError(FieldReference)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 270, Col: 92}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 279, Col: 92}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 					if templ_7745c5c3_Err != nil {
@@ -1216,7 +1216,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var70 string
 					templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDescription)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 275, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 284, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 					if templ_7745c5c3_Err != nil {
@@ -1229,7 +1229,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var71 string
 					templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDescription)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 276, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 285, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 					if templ_7745c5c3_Err != nil {
@@ -1242,7 +1242,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var72 string
 					templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldDescription, true, false))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 279, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 288, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 					if templ_7745c5c3_Err != nil {
@@ -1255,7 +1255,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var73 string
 					templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(page.Values.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 280, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 289, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 					if templ_7745c5c3_Err != nil {
@@ -1295,7 +1295,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var76 string
 					templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDuration)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 284, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 293, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var76)
 					if templ_7745c5c3_Err != nil {
@@ -1308,7 +1308,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var77 string
 					templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldDuration)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 285, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 294, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 					if templ_7745c5c3_Err != nil {
@@ -1334,7 +1334,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var79 string
 					templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.Duration)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 291, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 300, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 					if templ_7745c5c3_Err != nil {
@@ -1347,7 +1347,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var80 string
 					templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldDuration)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 292, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 301, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var80)
 					if templ_7745c5c3_Err != nil {
@@ -1360,7 +1360,7 @@ func Form(page FormPage) templ.Component {
 					var templ_7745c5c3_Var81 string
 					templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldDuration, true, page.HasError(FieldDuration)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 293, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 302, Col: 90}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var81)
 					if templ_7745c5c3_Err != nil {
@@ -1478,7 +1478,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var84 string
 			templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldPriceKind)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 331, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 340, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var84)
 			if templ_7745c5c3_Err != nil {
@@ -1491,7 +1491,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var85 string
 			templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.ResolveAttributeValue(kind)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 332, Col: 19}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 341, Col: 19}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var85)
 			if templ_7745c5c3_Err != nil {
@@ -1514,7 +1514,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(priceKindLabel(kind))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 338, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 347, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 			if templ_7745c5c3_Err != nil {
@@ -1527,7 +1527,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var87 string
 			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(priceKindHint(kind))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 339, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 348, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 			if templ_7745c5c3_Err != nil {
@@ -1579,7 +1579,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var91 string
 			templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldAmount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 347, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 356, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 			if templ_7745c5c3_Err != nil {
@@ -1592,7 +1592,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var92 string
 			templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldAmount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 348, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 357, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 			if templ_7745c5c3_Err != nil {
@@ -1605,7 +1605,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var93 string
 			templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.Amount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 352, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 361, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var93)
 			if templ_7745c5c3_Err != nil {
@@ -1618,7 +1618,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var94 string
 			templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldAmount)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 353, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 362, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 			if templ_7745c5c3_Err != nil {
@@ -1631,7 +1631,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var95 string
 			templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldAmount, true, page.HasError(FieldAmount)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 354, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 363, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var95)
 			if templ_7745c5c3_Err != nil {
@@ -1684,7 +1684,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var99 string
 			templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldMaxAmount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 362, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 371, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 			if templ_7745c5c3_Err != nil {
@@ -1697,7 +1697,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var100 string
 			templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldMaxAmount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 363, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 372, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var100)
 			if templ_7745c5c3_Err != nil {
@@ -1710,7 +1710,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var101 string
 			templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.MaxAmount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 367, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 376, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 			if templ_7745c5c3_Err != nil {
@@ -1723,7 +1723,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var102 string
 			templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldMaxAmount)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 368, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 377, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 			if templ_7745c5c3_Err != nil {
@@ -1736,7 +1736,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var103 string
 			templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldMaxAmount, true, page.HasError(FieldMaxAmount)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 369, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 378, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 			if templ_7745c5c3_Err != nil {
@@ -1764,7 +1764,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var104 string
 			templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldTaxBasis)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 381, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 390, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var104)
 			if templ_7745c5c3_Err != nil {
@@ -1777,7 +1777,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var105 string
 			templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.ResolveAttributeValue(basis)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 382, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 391, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var105)
 			if templ_7745c5c3_Err != nil {
@@ -1800,7 +1800,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(taxBasisLabel(basis))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 386, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 395, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -1839,7 +1839,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldVATRate)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 397, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 406, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var109)
 			if templ_7745c5c3_Err != nil {
@@ -1852,7 +1852,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var110 string
 			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldVATRate)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 398, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 407, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var110)
 			if templ_7745c5c3_Err != nil {
@@ -1878,7 +1878,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var112 string
 			templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldVATRate)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 400, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 409, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var112)
 			if templ_7745c5c3_Err != nil {
@@ -1891,7 +1891,7 @@ func priceSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var113 string
 			templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldVATRate, false, page.HasError(FieldVATRate)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 401, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 410, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var113)
 			if templ_7745c5c3_Err != nil {
@@ -1909,7 +1909,7 @@ func priceSection(page FormPage) templ.Component {
 				var templ_7745c5c3_Var114 string
 				templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.ResolveAttributeValue(rate.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 405, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 414, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var114)
 				if templ_7745c5c3_Err != nil {
@@ -1932,7 +1932,7 @@ func priceSection(page FormPage) templ.Component {
 				var templ_7745c5c3_Var115 string
 				templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(rate.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 405, Col: 95}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 414, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 				if templ_7745c5c3_Err != nil {
@@ -2012,7 +2012,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var119 string
 			templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldFrom)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 428, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 437, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var119)
 			if templ_7745c5c3_Err != nil {
@@ -2025,7 +2025,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var120 string
 			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldFrom)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 429, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 438, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var120)
 			if templ_7745c5c3_Err != nil {
@@ -2051,7 +2051,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var122 string
 			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.From)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 432, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 441, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var122)
 			if templ_7745c5c3_Err != nil {
@@ -2064,7 +2064,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var123 string
 			templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldFrom)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 433, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 442, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var123)
 			if templ_7745c5c3_Err != nil {
@@ -2077,7 +2077,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var124 string
 			templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldFrom, true, page.HasError(FieldFrom)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 434, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 443, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var124)
 			if templ_7745c5c3_Err != nil {
@@ -2117,7 +2117,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var127 string
 			templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldTo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 439, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 448, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var127)
 			if templ_7745c5c3_Err != nil {
@@ -2130,7 +2130,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var128 string
 			templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldTo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 440, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 449, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var128)
 			if templ_7745c5c3_Err != nil {
@@ -2156,7 +2156,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var130 string
 			templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Values.To)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 443, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 452, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var130)
 			if templ_7745c5c3_Err != nil {
@@ -2169,7 +2169,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var131 string
 			templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldTo)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 444, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 453, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var131)
 			if templ_7745c5c3_Err != nil {
@@ -2182,7 +2182,7 @@ func periodSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var132 string
 			templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldTo, true, page.HasError(FieldTo)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 445, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 454, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var132)
 			if templ_7745c5c3_Err != nil {
@@ -2236,7 +2236,7 @@ func scopeSection(page FormPage) templ.Component {
 		var templ_7745c5c3_Var134 string
 		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldScope)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 464, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 473, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var134)
 		if templ_7745c5c3_Err != nil {
@@ -2249,7 +2249,7 @@ func scopeSection(page FormPage) templ.Component {
 		var templ_7745c5c3_Var135 string
 		templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.ResolveAttributeValue(ScopeAll)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 465, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 474, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var135)
 		if templ_7745c5c3_Err != nil {
@@ -2272,7 +2272,7 @@ func scopeSection(page FormPage) templ.Component {
 		var templ_7745c5c3_Var136 string
 		templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldScope)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 474, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 483, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var136)
 		if templ_7745c5c3_Err != nil {
@@ -2285,7 +2285,7 @@ func scopeSection(page FormPage) templ.Component {
 		var templ_7745c5c3_Var137 string
 		templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.ResolveAttributeValue(ScopeSelected)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 475, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 484, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var137)
 		if templ_7745c5c3_Err != nil {
@@ -2313,7 +2313,7 @@ func scopeSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var138 string
 			templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocations + "-error")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 485, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 494, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var138)
 			if templ_7745c5c3_Err != nil {
@@ -2326,7 +2326,7 @@ func scopeSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var139 string
 			templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinStringErrs(page.Error(FieldLocations))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 486, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 495, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 			if templ_7745c5c3_Err != nil {
@@ -2345,7 +2345,7 @@ func scopeSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var140 string
 			templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocations)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 493, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 502, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var140)
 			if templ_7745c5c3_Err != nil {
@@ -2358,7 +2358,7 @@ func scopeSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var141 string
 			templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.ResolveAttributeValue(location.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 494, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 503, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var141)
 			if templ_7745c5c3_Err != nil {
@@ -2381,7 +2381,7 @@ func scopeSection(page FormPage) templ.Component {
 			var templ_7745c5c3_Var142 string
 			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(location.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 499, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 508, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 			if templ_7745c5c3_Err != nil {
@@ -2440,7 +2440,7 @@ func deleteSection(page FormPage) templ.Component {
 		var templ_7745c5c3_Var144 templ.SafeURL
 		templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(deletePath(page)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 521, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 530, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 		if templ_7745c5c3_Err != nil {
@@ -2577,7 +2577,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 		var templ_7745c5c3_Var148 string
 		templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(imp.Filename)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 581, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 590, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 		if templ_7745c5c3_Err != nil {
@@ -2612,7 +2612,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 		var templ_7745c5c3_Var151 string
 		templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(importStatusLabel(imp.Status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 583, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 592, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
 		if templ_7745c5c3_Err != nil {
@@ -2625,7 +2625,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 		var templ_7745c5c3_Var152 string
 		templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(imp.LocationName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 587, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 596, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 		if templ_7745c5c3_Err != nil {
@@ -2639,7 +2639,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var153 string
 			templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(" · déposé par ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 589, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 598, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 			if templ_7745c5c3_Err != nil {
@@ -2648,7 +2648,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var154 string
 			templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(imp.UploadedBy)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 589, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 598, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 			if templ_7745c5c3_Err != nil {
@@ -2662,7 +2662,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 		var templ_7745c5c3_Var155 string
 		templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(" · ")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 591, Col: 12}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 600, Col: 12}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
 		if templ_7745c5c3_Err != nil {
@@ -2671,7 +2671,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 		var templ_7745c5c3_Var156 string
 		templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(formatDate(imp.UploadedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 591, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 600, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 		if templ_7745c5c3_Err != nil {
@@ -2689,7 +2689,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var157 string
 			templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(rejectionMessage(imp.Reason))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 594, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 603, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 			if templ_7745c5c3_Err != nil {
@@ -2712,7 +2712,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var158 string
 			templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(countsSentence(imp))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 598, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 607, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 			if templ_7745c5c3_Err != nil {
@@ -2730,7 +2730,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 				var templ_7745c5c3_Var159 string
 				templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(modeLabel(imp.Mode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 600, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 609, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 				if templ_7745c5c3_Err != nil {
@@ -2750,7 +2750,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var160 templ.SafeURL
 			templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(importPath(imp)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 605, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 614, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 			if templ_7745c5c3_Err != nil {
@@ -2778,7 +2778,7 @@ func importCard(imp Import, canManage bool) templ.Component {
 			var templ_7745c5c3_Var161 string
 			templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(" " + imp.Filename)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 611, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 620, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 			if templ_7745c5c3_Err != nil {
@@ -2839,7 +2839,7 @@ func UploadForm(page Upload) templ.Component {
 			var templ_7745c5c3_Var164 string
 			templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(" / ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 630, Col: 11}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 639, Col: 11}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 			if templ_7745c5c3_Err != nil {
@@ -2869,7 +2869,7 @@ func UploadForm(page Upload) templ.Component {
 				var templ_7745c5c3_Var165 string
 				templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(rejectionMessage(page.Reason))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 645, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 654, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 				if templ_7745c5c3_Err != nil {
@@ -2916,7 +2916,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var168 string
 					templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocation)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 666, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 675, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var168)
 					if templ_7745c5c3_Err != nil {
@@ -2929,7 +2929,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var169 string
 					templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldLocation)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 667, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 676, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var169)
 					if templ_7745c5c3_Err != nil {
@@ -2955,7 +2955,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var171 string
 					templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldLocation)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 669, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 678, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var171)
 					if templ_7745c5c3_Err != nil {
@@ -2968,7 +2968,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var172 string
 					templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldLocation, true, page.HasError(FieldLocation)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 670, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 679, Col: 90}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var172)
 					if templ_7745c5c3_Err != nil {
@@ -2986,7 +2986,7 @@ func UploadForm(page Upload) templ.Component {
 						var templ_7745c5c3_Var173 string
 						templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.ResolveAttributeValue(location.ID)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 675, Col: 37}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 684, Col: 37}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var173)
 						if templ_7745c5c3_Err != nil {
@@ -3009,7 +3009,7 @@ func UploadForm(page Upload) templ.Component {
 						var templ_7745c5c3_Var174 string
 						templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(location.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 675, Col: 98}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 684, Col: 98}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var174))
 						if templ_7745c5c3_Err != nil {
@@ -3054,7 +3054,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var177 string
 					templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldFile)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 681, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 690, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var177)
 					if templ_7745c5c3_Err != nil {
@@ -3067,7 +3067,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var178 string
 					templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldFile)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 682, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 691, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var178)
 					if templ_7745c5c3_Err != nil {
@@ -3093,7 +3093,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var180 string
 					templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.ResolveAttributeValue(ariaInvalid(page.HasError(FieldFile)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 686, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 695, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var180)
 					if templ_7745c5c3_Err != nil {
@@ -3106,7 +3106,7 @@ func UploadForm(page Upload) templ.Component {
 					var templ_7745c5c3_Var181 string
 					templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.ResolveAttributeValue(describedBy(FieldFile, true, page.HasError(FieldFile)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 687, Col: 82}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 696, Col: 82}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var181)
 					if templ_7745c5c3_Err != nil {
@@ -3209,7 +3209,7 @@ func PreviewPage(page Preview) templ.Component {
 			var templ_7745c5c3_Var185 string
 			templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(" / ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 733, Col: 11}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 742, Col: 11}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
 			if templ_7745c5c3_Err != nil {
@@ -3222,7 +3222,7 @@ func PreviewPage(page Preview) templ.Component {
 			var templ_7745c5c3_Var186 string
 			templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.JoinStringErrs(page.Import.Filename)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 738, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 747, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var186))
 			if templ_7745c5c3_Err != nil {
@@ -3257,7 +3257,7 @@ func PreviewPage(page Preview) templ.Component {
 			var templ_7745c5c3_Var189 string
 			templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinStringErrs(importStatusLabel(page.Import.Status))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 740, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 749, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var189))
 			if templ_7745c5c3_Err != nil {
@@ -3270,7 +3270,7 @@ func PreviewPage(page Preview) templ.Component {
 			var templ_7745c5c3_Var190 string
 			templ_7745c5c3_Var190, templ_7745c5c3_Err = templ.JoinStringErrs(page.Import.LocationName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 743, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 752, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var190))
 			if templ_7745c5c3_Err != nil {
@@ -3305,7 +3305,7 @@ func PreviewPage(page Preview) templ.Component {
 				var templ_7745c5c3_Var191 string
 				templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(rejectionMessage(page.Import.Reason))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 753, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 762, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
 				if templ_7745c5c3_Err != nil {
@@ -3331,7 +3331,7 @@ func PreviewPage(page Preview) templ.Component {
 				var templ_7745c5c3_Var192 string
 				templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinStringErrs(countsSentence(page.Import))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 765, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 774, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var192))
 				if templ_7745c5c3_Err != nil {
@@ -3344,7 +3344,7 @@ func PreviewPage(page Preview) templ.Component {
 				var templ_7745c5c3_Var193 string
 				templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(modeLabel(page.Import.Mode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 765, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 774, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
 				if templ_7745c5c3_Err != nil {
@@ -3479,7 +3479,7 @@ func analyzingCard(imp Import) templ.Component {
 		var templ_7745c5c3_Var196 templ.SafeURL
 		templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(importPath(imp)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 811, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 820, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var196))
 		if templ_7745c5c3_Err != nil {
@@ -3572,7 +3572,7 @@ func summaryCard(imp Import) templ.Component {
 			var templ_7745c5c3_Var199 string
 			templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(imp.Valid+imp.Ambiguous, "ligne sera importée", "lignes seront importées"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 839, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 848, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var199))
 			if templ_7745c5c3_Err != nil {
@@ -3585,7 +3585,7 @@ func summaryCard(imp Import) templ.Component {
 			var templ_7745c5c3_Var200 string
 			templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(imp.Rejected, "sera ignorée", "seront ignorées"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 840, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 849, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
 			if templ_7745c5c3_Err != nil {
@@ -3632,7 +3632,7 @@ func countBox(label string, count int, tone string) templ.Component {
 		var templ_7745c5c3_Var202 string
 		templ_7745c5c3_Var202, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 850, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 859, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var202))
 		if templ_7745c5c3_Err != nil {
@@ -3667,7 +3667,7 @@ func countBox(label string, count int, tone string) templ.Component {
 		var templ_7745c5c3_Var205 string
 		templ_7745c5c3_Var205, templ_7745c5c3_Err = templ.JoinStringErrs(intText(count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 851, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 860, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var205))
 		if templ_7745c5c3_Err != nil {
@@ -3744,7 +3744,7 @@ func rowTable(status string, rows []Row) templ.Component {
 		var templ_7745c5c3_Var208 string
 		templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.ResolveAttributeValue("rows-" + status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 866, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 875, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var208)
 		if templ_7745c5c3_Err != nil {
@@ -3757,7 +3757,7 @@ func rowTable(status string, rows []Row) templ.Component {
 		var templ_7745c5c3_Var209 string
 		templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.ResolveAttributeValue("rows-" + status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 868, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 877, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var209)
 		if templ_7745c5c3_Err != nil {
@@ -3770,7 +3770,7 @@ func rowTable(status string, rows []Row) templ.Component {
 		var templ_7745c5c3_Var210 string
 		templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(rowGroupTitle(status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 869, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 878, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 		if templ_7745c5c3_Err != nil {
@@ -3783,7 +3783,7 @@ func rowTable(status string, rows []Row) templ.Component {
 		var templ_7745c5c3_Var211 string
 		templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(intText(len(rows)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 869, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 878, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var211))
 		if templ_7745c5c3_Err != nil {
@@ -3796,7 +3796,7 @@ func rowTable(status string, rows []Row) templ.Component {
 		var templ_7745c5c3_Var212 string
 		templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinStringErrs(rowGroupHint(status))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 871, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 880, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
 		if templ_7745c5c3_Err != nil {
@@ -3824,7 +3824,7 @@ func rowTable(status string, rows []Row) templ.Component {
 			var templ_7745c5c3_Var213 string
 			templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(intText(row.Number))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 887, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 896, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var213))
 			if templ_7745c5c3_Err != nil {
@@ -3837,7 +3837,7 @@ func rowTable(status string, rows []Row) templ.Component {
 			var templ_7745c5c3_Var214 string
 			templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.JoinStringErrs(row.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 889, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 898, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var214))
 			if templ_7745c5c3_Err != nil {
@@ -3855,7 +3855,7 @@ func rowTable(status string, rows []Row) templ.Component {
 				var templ_7745c5c3_Var215 string
 				templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.JoinStringErrs(kindLabel(row.Kind))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 891, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 900, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var215))
 				if templ_7745c5c3_Err != nil {
@@ -3879,7 +3879,7 @@ func rowTable(status string, rows []Row) templ.Component {
 				var templ_7745c5c3_Var216 string
 				templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(priceLabel(row.Price))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 898, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 907, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 				if templ_7745c5c3_Err != nil {
@@ -3898,7 +3898,7 @@ func rowTable(status string, rows []Row) templ.Component {
 				var templ_7745c5c3_Var217 string
 				templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.JoinStringErrs(row.Issue)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 903, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 912, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var217))
 				if templ_7745c5c3_Err != nil {
@@ -3916,7 +3916,7 @@ func rowTable(status string, rows []Row) templ.Component {
 					var templ_7745c5c3_Var218 string
 					templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinStringErrs(row.Collides)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 905, Col: 86}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 914, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
 					if templ_7745c5c3_Err != nil {
@@ -4025,7 +4025,7 @@ func modeOption(page Preview, mode string, description string) templ.Component {
 		var templ_7745c5c3_Var222 templ.SafeURL
 		templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(modePath(page.Import, mode)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 942, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 951, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var222))
 		if templ_7745c5c3_Err != nil {
@@ -4038,7 +4038,7 @@ func modeOption(page Preview, mode string, description string) templ.Component {
 		var templ_7745c5c3_Var223 string
 		templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.ResolveAttributeValue(currentFilter(page.Mode == mode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 943, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 952, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var223)
 		if templ_7745c5c3_Err != nil {
@@ -4064,7 +4064,7 @@ func modeOption(page Preview, mode string, description string) templ.Component {
 		var templ_7745c5c3_Var225 string
 		templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(modeLabel(mode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 949, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 958, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 		if templ_7745c5c3_Err != nil {
@@ -4087,7 +4087,7 @@ func modeOption(page Preview, mode string, description string) templ.Component {
 		var templ_7745c5c3_Var226 string
 		templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 954, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 963, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var226))
 		if templ_7745c5c3_Err != nil {
@@ -4152,7 +4152,7 @@ func publishCard(page Preview) templ.Component {
 		var templ_7745c5c3_Var230 string
 		templ_7745c5c3_Var230, templ_7745c5c3_Err = templ.JoinStringErrs(modeLabel(page.Mode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 970, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 979, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var230))
 		if templ_7745c5c3_Err != nil {
@@ -4165,7 +4165,7 @@ func publishCard(page Preview) templ.Component {
 		var templ_7745c5c3_Var231 string
 		templ_7745c5c3_Var231, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(page.Plan.Create, "ligne ajoutée", "lignes ajoutées"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 973, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 982, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var231))
 		if templ_7745c5c3_Err != nil {
@@ -4178,7 +4178,7 @@ func publishCard(page Preview) templ.Component {
 		var templ_7745c5c3_Var232 string
 		templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(page.Plan.Update, "ligne mise à jour", "lignes mises à jour"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 974, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 983, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
 		if templ_7745c5c3_Err != nil {
@@ -4196,7 +4196,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var233 string
 			templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(page.Plan.Remove, "ligne supprimée", "lignes supprimées"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 977, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 986, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var233))
 			if templ_7745c5c3_Err != nil {
@@ -4215,7 +4215,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var234 string
 			templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(page.Plan.Skip, "ligne ignorée", "lignes ignorées"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 981, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 990, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var234))
 			if templ_7745c5c3_Err != nil {
@@ -4246,7 +4246,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var235 string
 			templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.JoinStringErrs(rowSummary(page.Plan.Remove, "ligne du catalogue de ce site sera supprimée", "lignes du catalogue de ce site seront supprimées"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 990, Col: 139}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 999, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var235))
 			if templ_7745c5c3_Err != nil {
@@ -4270,7 +4270,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var236 templ.SafeURL
 			templ_7745c5c3_Var236, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(publishPath(page.Import)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1002, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1011, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var236))
 			if templ_7745c5c3_Err != nil {
@@ -4283,7 +4283,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var237 string
 			templ_7745c5c3_Var237, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldMode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1003, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1012, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var237)
 			if templ_7745c5c3_Err != nil {
@@ -4296,7 +4296,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var238 string
 			templ_7745c5c3_Var238, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Mode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1003, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1012, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var238)
 			if templ_7745c5c3_Err != nil {
@@ -4309,7 +4309,7 @@ func publishCard(page Preview) templ.Component {
 			var templ_7745c5c3_Var239 string
 			templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.ResolveAttributeValue(FieldConfirm)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1005, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1014, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var239)
 			if templ_7745c5c3_Err != nil {
@@ -4393,7 +4393,7 @@ func cancelSection(page Preview) templ.Component {
 		var templ_7745c5c3_Var243 templ.SafeURL
 		templ_7745c5c3_Var243, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(cancelPath(page.Import)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1029, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1038, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var243))
 		if templ_7745c5c3_Err != nil {
@@ -4439,7 +4439,7 @@ func emptyCard(title string, body string, href string, action string) templ.Comp
 		var templ_7745c5c3_Var245 string
 		templ_7745c5c3_Var245, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1043, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1052, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var245))
 		if templ_7745c5c3_Err != nil {
@@ -4452,7 +4452,7 @@ func emptyCard(title string, body string, href string, action string) templ.Comp
 		var templ_7745c5c3_Var246 string
 		templ_7745c5c3_Var246, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1044, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1053, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var246))
 		if templ_7745c5c3_Err != nil {
@@ -4465,7 +4465,7 @@ func emptyCard(title string, body string, href string, action string) templ.Comp
 		var templ_7745c5c3_Var247 templ.SafeURL
 		templ_7745c5c3_Var247, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1045, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1054, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var247))
 		if templ_7745c5c3_Err != nil {
@@ -4478,7 +4478,7 @@ func emptyCard(title string, body string, href string, action string) templ.Comp
 		var templ_7745c5c3_Var248 string
 		templ_7745c5c3_Var248, templ_7745c5c3_Err = templ.JoinStringErrs(action)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1045, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1054, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var248))
 		if templ_7745c5c3_Err != nil {
@@ -4523,7 +4523,7 @@ func field(key string, label string, required bool, hint string, errText string)
 		var templ_7745c5c3_Var250 string
 		templ_7745c5c3_Var250, templ_7745c5c3_Err = templ.ResolveAttributeValue(key)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1055, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1064, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var250)
 		if templ_7745c5c3_Err != nil {
@@ -4536,7 +4536,7 @@ func field(key string, label string, required bool, hint string, errText string)
 		var templ_7745c5c3_Var251 string
 		templ_7745c5c3_Var251, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1056, Col: 10}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1065, Col: 10}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var251))
 		if templ_7745c5c3_Err != nil {
@@ -4573,7 +4573,7 @@ func field(key string, label string, required bool, hint string, errText string)
 			var templ_7745c5c3_Var252 string
 			templ_7745c5c3_Var252, templ_7745c5c3_Err = templ.ResolveAttributeValue(key + "-hint")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1065, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1074, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var252)
 			if templ_7745c5c3_Err != nil {
@@ -4586,7 +4586,7 @@ func field(key string, label string, required bool, hint string, errText string)
 			var templ_7745c5c3_Var253 string
 			templ_7745c5c3_Var253, templ_7745c5c3_Err = templ.JoinStringErrs(hint)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1065, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1074, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var253))
 			if templ_7745c5c3_Err != nil {
@@ -4605,7 +4605,7 @@ func field(key string, label string, required bool, hint string, errText string)
 			var templ_7745c5c3_Var254 string
 			templ_7745c5c3_Var254, templ_7745c5c3_Err = templ.ResolveAttributeValue(key + "-error")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1068, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1077, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var254)
 			if templ_7745c5c3_Err != nil {
@@ -4618,7 +4618,7 @@ func field(key string, label string, required bool, hint string, errText string)
 			var templ_7745c5c3_Var255 string
 			templ_7745c5c3_Var255, templ_7745c5c3_Err = templ.JoinStringErrs(errText)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1069, Col: 13}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1078, Col: 13}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var255))
 			if templ_7745c5c3_Err != nil {
@@ -4701,7 +4701,7 @@ func notice(n Notice) templ.Component {
 			var templ_7745c5c3_Var259 string
 			templ_7745c5c3_Var259, templ_7745c5c3_Err = templ.JoinStringErrs(noticeTitle(n.Kind))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1086, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1095, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var259))
 			if templ_7745c5c3_Err != nil {
@@ -4714,7 +4714,7 @@ func notice(n Notice) templ.Component {
 			var templ_7745c5c3_Var260 string
 			templ_7745c5c3_Var260, templ_7745c5c3_Err = templ.JoinStringErrs(n.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1087, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/features/catalog/views.templ`, Line: 1096, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var260))
 			if templ_7745c5c3_Err != nil {
