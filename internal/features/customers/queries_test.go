@@ -309,6 +309,109 @@ func TestCustomerShareAndOffboardHTTPRoutes(t *testing.T) {
 	}
 }
 
+func TestCreateCustomer(t *testing.T) {
+	fixture := newCustomerFixture(t)
+
+	id, err := fixture.store.Create(t.Context(), fixture.tenantID, fixture.homeStaffID, customers.CreateInput{
+		HomeLocationID: fixture.homeLocationID,
+		FirstName:      "Jean",
+		LastName:       "Dupont",
+		Phone:          "+33698765432",
+		Plate:          "BB456BB",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id == "" {
+		t.Fatal("Create returned an empty id")
+	}
+
+	page, err := fixture.store.Search(t.Context(), fixture.tenantID, fixture.homeStaffID, "0698765432")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Customers) != 1 || page.Customers[0].ID != id {
+		t.Fatalf("search for new customer by phone = %#v", page.Customers)
+	}
+	created := page.Customers[0]
+	if created.Phone == "" || len(created.Vehicles) != 1 || created.Vehicles[0].Plate != "BB456BB" {
+		t.Fatalf("created customer = %#v", created)
+	}
+
+	_, err = fixture.store.Create(t.Context(), fixture.tenantID, fixture.homeStaffID, customers.CreateInput{
+		HomeLocationID: fixture.homeLocationID,
+		LastName:       "Autre",
+		Phone:          "+33698765432",
+		Plate:          "CC789CC",
+	})
+	var fieldError *customers.FieldError
+	if !errors.As(err, &fieldError) || fieldError.Field != customers.FieldNewPhone {
+		t.Fatalf("duplicate phone create = %v, want a %s FieldError", err, customers.FieldNewPhone)
+	}
+
+	_, err = fixture.store.Create(t.Context(), fixture.tenantID, fixture.homeStaffID, customers.CreateInput{
+		HomeLocationID: fixture.homeLocationID,
+		LastName:       "Autre",
+		Phone:          "+33611112222",
+		Plate:          "BB456BB",
+	})
+	if !errors.As(err, &fieldError) || fieldError.Field != customers.FieldNewPlate {
+		t.Fatalf("duplicate plate create = %v, want a %s FieldError", err, customers.FieldNewPlate)
+	}
+
+	// receivingStaffID is only assigned to receivingLocation, not
+	// homeLocationID: the customer_insert RLS policy must reject this write
+	// rather than silently handing a dossier to a site that has no business
+	// owning it.
+	if _, err := fixture.store.Create(t.Context(), fixture.tenantID, fixture.receivingStaffID, customers.CreateInput{
+		HomeLocationID: fixture.homeLocationID,
+		LastName:       "Interdit",
+		Plate:          "DD012DD",
+	}); err == nil {
+		t.Fatal("create at an inaccessible home location succeeded, want an error")
+	}
+}
+
+func TestCreateCustomerHTTPRoute(t *testing.T) {
+	fixture := newCustomerFixture(t)
+	handler := customerHandler(fixture.store, customers.Principal{
+		UserID: fixture.homeStaffID, TenantID: fixture.tenantID,
+		ActiveLocationID: fixture.homeLocationID,
+	})
+
+	response := postForm(handler, "/customers", url.Values{
+		customers.FieldNewLastName:  {"Durand"},
+		customers.FieldNewFirstName: {"Paul"},
+		customers.FieldNewPhone:     {"06 11 22 33 44"},
+		customers.FieldNewPlate:     {"EE-345-EE"},
+		customers.FieldNext:         {"/agenda/new?location_id=" + fixture.homeLocationID},
+	})
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("create over http = %d %q", response.Code, response.Body.String())
+	}
+	location := response.Header().Get("Location")
+	if !strings.HasPrefix(location, "/agenda/new?location_id="+fixture.homeLocationID) ||
+		!strings.Contains(location, "customer_id=") {
+		t.Fatalf("create redirect with next = %q", location)
+	}
+
+	response = postForm(handler, "/customers", url.Values{
+		customers.FieldNewLastName: {"Sans Plaque"},
+	})
+	if response.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(response.Body.String(), "Plaque d&#39;immatriculation invalide.") {
+		t.Fatalf("create with missing plate = %d %q", response.Code, response.Body.String())
+	}
+
+	response = postForm(handler, "/customers", url.Values{
+		customers.FieldNewLastName: {"Sans Next"},
+		customers.FieldNewPlate:    {"FF678FF"},
+	})
+	if response.Code != http.StatusSeeOther || !strings.HasPrefix(response.Header().Get("Location"), "/customers/") {
+		t.Fatalf("create redirect without next = %d %q", response.Code, response.Header().Get("Location"))
+	}
+}
+
 func newCustomerFixture(t *testing.T) customerFixture {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)

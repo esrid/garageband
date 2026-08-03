@@ -1,4 +1,4 @@
-.PHONY: dev build test migrate generate templ css vet
+.PHONY: dev build test migrate generate templ css vet vendor-unpoly
 
 # Tailwind CSS 4 + daisyUI 5 via the standalone CLI: no Node, no package.json.
 # The tools live in the gitignored bin/ and are fetched once, on demand.
@@ -10,6 +10,11 @@ TAILWIND_DIR := bin/tailwind
 TAILWIND := $(TAILWIND_DIR)/tailwindcss
 TAILWIND_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')
 TAILWIND_ARCH := $(shell uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/')
+
+# Unpoly: progressive-enhancement layer for links/forms (modals, in-place
+# swaps). Vendored and committed to web/static/, same treatment as app.css.
+# Verified against docs.unpoly.com 2026-08-03. Bump deliberately.
+UNPOLY_VERSION := 3.14.3
 
 generate: templ css
 
@@ -24,6 +29,10 @@ $(TAILWIND):
 
 css: $(TAILWIND)
 	$(TAILWIND) -i web/css/app.css -o web/static/app.css --minify
+
+vendor-unpoly:
+	curl -sSfL -o web/static/unpoly.min.js https://cdn.jsdelivr.net/npm/unpoly@$(UNPOLY_VERSION)/unpoly.min.js
+	curl -sSfL -o web/static/unpoly.min.css https://cdn.jsdelivr.net/npm/unpoly@$(UNPOLY_VERSION)/unpoly.min.css
 
 migrate:
 	go run ./cmd/migrate

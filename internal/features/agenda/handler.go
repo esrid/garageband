@@ -80,6 +80,12 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.URL.Query().Get("saved") == "1":
+		// Shared with the day view's own "saved=1": a booking made or edited
+		// from the week grid now redirects here too (see save()'s view
+		// branching), so this must read as a generic confirmation, not
+		// "moved" - that word is reserved for the drag-and-drop flag below.
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est enregistré."}
+	case r.URL.Query().Get("moved") == "1":
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous a été déplacé."}
 	case r.URL.Query().Get("moveError") == NoticeConflict:
 		page.Notice = Notice{Kind: NoticeConflict, Message: "Ce créneau est déjà pris ; le rendez-vous n'a pas été déplacé."}
@@ -94,6 +100,7 @@ func (h *handler) week(w http.ResponseWriter, r *http.Request) {
 func (h *handler) newAppointment(w http.ResponseWriter, r *http.Request) {
 	h.form(w, r, "", r.URL.Query().Get(FieldCustomer), r.URL.Query().Get(FieldLocation),
 		r.URL.Query().Get(FieldDate), r.URL.Query().Get(FieldStartTime),
+		returnView(r.URL.Query().Get(FieldView)),
 	)
 }
 
@@ -103,7 +110,17 @@ func (h *handler) editAppointment(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.form(w, r, appointmentID, "", "", "", "")
+	h.form(w, r, appointmentID, "", "", "", "", "")
+}
+
+// returnView narrows the "view" query/form value to the one screen it is
+// allowed to name - same allowlist-of-one spirit as every other loosely
+// typed input this handler parses.
+func returnView(value string) string {
+	if value == "week" {
+		return "week"
+	}
+	return ""
 }
 
 func (h *handler) form(
@@ -114,6 +131,7 @@ func (h *handler) form(
 	locationID string,
 	date string,
 	startTime string,
+	view string,
 ) {
 	principal, ok := h.resolve(w, r)
 	if !ok {
@@ -144,6 +162,7 @@ func (h *handler) form(
 		if _, err := time.Parse("15:04", startTime); err == nil {
 			page.Values.StartTime = startTime
 		}
+		page.ReturnView = view
 	}
 	h.render(w, r, Form(page), http.StatusOK)
 }
@@ -183,6 +202,7 @@ func (h *handler) availability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Values = FormValues{Date: input.Date, StartTime: input.StartTime, VehicleID: input.VehicleID, ServiceID: input.ServiceID, ResourceID: input.ResourceID, ResourceIDs: input.ResourceIDs, Note: input.Note}
+	page.ReturnView = returnView(r.FormValue(FieldView))
 	page.AvailabilitySearched = true
 	if !uuidPattern.MatchString(input.ServiceID) ||
 		(len(input.ResourceIDs) != 0 && !validResourceIDs(input.ResourceIDs)) || input.Date == "" {
@@ -253,9 +273,10 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 		Note:        strings.TrimSpace(r.FormValue(FieldNote)),
 	}
 	input.ResourceID = firstResourceID(input.ResourceIDs)
+	view := returnView(r.FormValue(FieldView))
 	fieldErrors := validateInput(input)
 	if len(fieldErrors) != 0 {
-		h.renderSubmitted(w, r, principal, appointmentID, input, fieldErrors,
+		h.renderSubmitted(w, r, principal, appointmentID, input, view, fieldErrors,
 			Notice{Kind: NoticeInvalid, Message: "Corrigez les champs signalés."},
 			http.StatusUnprocessableEntity,
 		)
@@ -269,13 +290,13 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 		var conflict *ConflictError
 		switch {
 		case errors.As(err, &fieldError):
-			h.renderSubmitted(w, r, principal, appointmentID, input,
+			h.renderSubmitted(w, r, principal, appointmentID, input, view,
 				map[string]string{fieldError.Field: fieldError.Message},
 				Notice{Kind: NoticeInvalid, Message: "Corrigez les champs signalés."},
 				http.StatusUnprocessableEntity,
 			)
 		case errors.As(err, &conflict):
-			h.renderSubmitted(w, r, principal, appointmentID, input, nil,
+			h.renderSubmitted(w, r, principal, appointmentID, input, view, nil,
 				Notice{Kind: NoticeConflict, Message: conflictMessage(conflict)},
 				http.StatusConflict,
 			)
@@ -291,9 +312,10 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 	); pushErr != nil {
 		slog.Error("sync appointment calendar", "err", pushErr)
 	}
-	http.Redirect(w, r, fmt.Sprintf(
-		"/agenda?%s=%s&%s=%s&saved=1", FieldLocation, input.LocationID, FieldDate, date,
-	), http.StatusSeeOther)
+	http.Redirect(w, r,
+		agendaViewPath(view, input.LocationID, date)+"&saved=1",
+		http.StatusSeeOther,
+	)
 }
 
 // move is the week grid's drag-and-drop target: only date/start_time change,
@@ -349,7 +371,7 @@ func (h *handler) move(w http.ResponseWriter, r *http.Request) {
 		slog.Error("sync appointment calendar", "err", pushErr)
 	}
 	http.Redirect(w, r, fmt.Sprintf(
-		"/agenda/week?%s=%s&%s=%s&saved=1", FieldLocation, locationID, FieldDate, newDate,
+		"/agenda/week?%s=%s&%s=%s&moved=1", FieldLocation, locationID, FieldDate, newDate,
 	), http.StatusSeeOther)
 }
 
@@ -394,6 +416,7 @@ func (h *handler) renderSubmitted(
 	principal Principal,
 	appointmentID string,
 	input SaveInput,
+	view string,
 	fieldErrors map[string]string,
 	notice Notice,
 	status int,
@@ -411,6 +434,7 @@ func (h *handler) renderSubmitted(
 		ServiceID: input.ServiceID, ResourceID: input.ResourceID,
 		ResourceIDs: input.ResourceIDs, Note: input.Note,
 	}
+	page.ReturnView = view
 	page.FieldErrors = fieldErrors
 	page.Notice = notice
 	h.render(w, r, Form(page), status)

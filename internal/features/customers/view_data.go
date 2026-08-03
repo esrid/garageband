@@ -19,6 +19,20 @@ const FieldQuery = "q"
 // sharing form.
 const FieldReceivingLocation = "receiving_location_id"
 
+// FieldNext is a same-origin relative path to return to after picking or
+// creating a customer, carried through the search screen so a booking flow
+// (or any other caller) can land back where it started with a customer_id
+// appended, instead of always landing on this customer's own dossier.
+const FieldNext = "next"
+
+// Quick-create form field names.
+const (
+	FieldNewFirstName = "first_name"
+	FieldNewLastName  = "last_name"
+	FieldNewPhone     = "phone"
+	FieldNewPlate     = "plate"
+)
+
 // Notice kinds. The view derives the heading from the kind, so French copy
 // stays in the view layer instead of leaking into handlers.
 const (
@@ -102,6 +116,60 @@ type Page struct {
 	Query        string // what was searched; empty means nothing was asked yet
 	Customers    []Customer
 	Notice       Notice
+	// Next is where picking or creating a customer should lead instead of
+	// this customer's own dossier - empty outside a booking-style flow.
+	Next string
+	// CreateValues/CreateErrors/CreateOpen back the quick-create form; Open
+	// keeps the <details> disclosure expanded after a failed submission.
+	CreateValues CreateFormValues
+	CreateErrors map[string]string
+	CreateOpen   bool
+}
+
+// CreateFormValues holds the quick-create form's editable fields, keyed like
+// the POST body.
+type CreateFormValues struct {
+	FirstName string
+	LastName  string
+	Phone     string
+	Plate     string
+}
+
+func (p Page) HasCreateError(field string) bool { return p.CreateErrors[field] != "" }
+
+func (p Page) CreateError(field string) string { return p.CreateErrors[field] }
+
+// ariaInvalid renders the attribute value; "false" is the ARIA-defined way to
+// say a control is currently valid.
+func ariaInvalid(hasError bool) string {
+	if hasError {
+		return "true"
+	}
+	return "false"
+}
+
+// NextTarget is where a chosen (or newly created) customer should send the
+// visitor: Next with customer_id appended when a booking flow set it,
+// otherwise the customer's own dossier - today's standalone behaviour.
+func NextTarget(next, customerID string) string {
+	if next == "" {
+		return "/customers/" + customerID
+	}
+	separator := "?"
+	if strings.Contains(next, "?") {
+		separator = "&"
+	}
+	return next + separator + "customer_id=" + customerID
+}
+
+// SafeNext validates that a next value is a same-origin relative path, never
+// a scheme-relative or absolute URL - the only shape that keeps NextTarget
+// from becoming an open redirect.
+func SafeNext(next string) string {
+	if strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") {
+		return next
+	}
+	return ""
 }
 
 // Searched reports whether the visitor actually asked something, which is what

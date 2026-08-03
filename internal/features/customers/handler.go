@@ -43,7 +43,103 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Notice = noticeFromQuery(r.URL.Query().Get("notice"))
+	page.Next = SafeNext(strings.TrimSpace(r.URL.Query().Get(FieldNext)))
 	h.render(w, r, Index(page), http.StatusOK)
+}
+
+// create is the quick-create form's target: a customer with just enough on
+// them to book an appointment (a name, an optional phone, and a plate - the
+// booking form's vehicle picker needs at least one option). On success it
+// lands wherever the caller asked via "next", or the new dossier otherwise.
+func (h *handler) create(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulaire invalide.", http.StatusBadRequest)
+		return
+	}
+	query := strings.TrimSpace(r.FormValue(FieldQuery))
+	next := SafeNext(strings.TrimSpace(r.FormValue(FieldNext)))
+	values := CreateFormValues{
+		FirstName: strings.TrimSpace(r.FormValue(FieldNewFirstName)),
+		LastName:  strings.TrimSpace(r.FormValue(FieldNewLastName)),
+		Phone:     strings.TrimSpace(r.FormValue(FieldNewPhone)),
+		Plate:     strings.TrimSpace(r.FormValue(FieldNewPlate)),
+	}
+	fieldErrors, input := validateCreateInput(principal.ActiveLocationID, values)
+	if len(fieldErrors) != 0 {
+		h.renderCreateFailure(w, r, principal, query, next, values, fieldErrors,
+			Notice{Kind: NoticeError, Message: "Corrigez les champs signalés."})
+		return
+	}
+	id, err := h.store.Create(r.Context(), principal.TenantID, principal.UserID, input)
+	if err != nil {
+		var fieldError *FieldError
+		if errors.As(err, &fieldError) {
+			h.renderCreateFailure(w, r, principal, query, next, values,
+				map[string]string{fieldError.Field: fieldError.Message},
+				Notice{Kind: NoticeError, Message: "Corrigez les champs signalés."},
+			)
+			return
+		}
+		h.fail(w, "create customer", err)
+		return
+	}
+	http.Redirect(w, r, NextTarget(next, id), http.StatusSeeOther)
+}
+
+func (h *handler) renderCreateFailure(
+	w http.ResponseWriter,
+	r *http.Request,
+	principal Principal,
+	query string,
+	next string,
+	values CreateFormValues,
+	fieldErrors map[string]string,
+	notice Notice,
+) {
+	page, err := h.store.Search(r.Context(), principal.TenantID, principal.UserID, query)
+	if err != nil {
+		h.fail(w, "reload customers after failed create", err)
+		return
+	}
+	page.Next = next
+	page.CreateValues = values
+	page.CreateErrors = fieldErrors
+	page.CreateOpen = true
+	page.Notice = notice
+	h.render(w, r, Index(page), http.StatusUnprocessableEntity)
+}
+
+// validateCreateInput checks the quick-create form before it ever reaches
+// the database: a last name (matches customers_identity_present), a plate
+// that normalizes to something the vehicles_plate_normalized CHECK accepts,
+// and - if given at all - a phone that normalizes to something real.
+func validateCreateInput(homeLocationID string, values CreateFormValues) (map[string]string, CreateInput) {
+	fieldErrors := make(map[string]string)
+	if values.LastName == "" {
+		fieldErrors[FieldNewLastName] = "Le nom est requis."
+	}
+	var phone string
+	if values.Phone != "" {
+		phone = normalizePhoneSearch(values.Phone)
+		if phone == "" {
+			fieldErrors[FieldNewPhone] = "Numéro de téléphone invalide."
+		}
+	}
+	plate := normalizePlateSearch(values.Plate)
+	if len(plate) < 2 || len(plate) > 16 {
+		fieldErrors[FieldNewPlate] = "Plaque d'immatriculation invalide."
+	}
+	return fieldErrors, CreateInput{
+		HomeLocationID: homeLocationID,
+		FirstName:      values.FirstName,
+		LastName:       values.LastName,
+		Phone:          phone,
+		Plate:          plate,
+	}
 }
 
 func (h *handler) show(w http.ResponseWriter, r *http.Request) {

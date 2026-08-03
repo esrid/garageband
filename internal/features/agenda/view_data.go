@@ -11,6 +11,7 @@
 package agenda
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +31,10 @@ const (
 	FieldService   = "service_id"
 	FieldResource  = "resource_id"
 	FieldNote      = "note"
+	// FieldView carries which agenda screen a booking started from ("week"
+	// or "", meaning the day view), so a save can return there instead of
+	// always landing on the day view - see FormPage.ReturnView.
+	FieldView = "view"
 )
 
 // Notice kinds. The view derives the heading from the kind, so French copy
@@ -164,11 +169,13 @@ func (w Week) DayViewPath() string {
 	return "/agenda?location_id=" + w.LocationID
 }
 
+// NewPath sends a fresh booking to the week view on save (view=week) - the
+// day view's own NewPath below stays the long-standing default instead.
 func (w Week) NewPath() string {
 	if w.LocationID == "" {
-		return "/agenda/new"
+		return "/agenda/new?" + FieldView + "=week"
 	}
-	return "/agenda/new?location_id=" + w.LocationID
+	return "/agenda/new?" + FieldLocation + "=" + w.LocationID + "&" + FieldView + "=week"
 }
 
 // Days is the week's seven dates, Monday first.
@@ -256,15 +263,8 @@ func pad2(n int) string {
 // /time already filled in; the customer still has to be chosen, same as
 // every other entry point into this form.
 func (w Week) NewPathAt(day time.Time, startTime string) string {
-	return w.NewPath() + newPathSeparator(w.LocationID) +
-		FieldDate + "=" + day.Format(DateLayout) + "&" + FieldStartTime + "=" + startTime
-}
-
-func newPathSeparator(locationID string) string {
-	if locationID == "" {
-		return "?"
-	}
-	return "&"
+	return w.NewPath() + "&" + FieldDate + "=" + day.Format(DateLayout) +
+		"&" + FieldStartTime + "=" + startTime
 }
 
 // MovePath is where a dragged appointment's new date/time is submitted.
@@ -351,6 +351,10 @@ type FormPage struct {
 	// Cancellable is false for an appointment already cancelled or finished:
 	// there is nothing left to call off.
 	Cancellable bool
+	// ReturnView is "week" when this booking started from the week grid, ""
+	// for the day view (the default). It round-trips through the form as a
+	// hidden field so a save lands back on the screen it started from.
+	ReturnView string
 }
 
 func (p FormPage) IsNew() bool { return strings.TrimSpace(p.ID) == "" }
@@ -379,18 +383,45 @@ func formActionPath(p FormPage) string {
 }
 
 func agendaPath(p FormPage) string {
-	path := "/agenda"
-	if p.LocationID != "" {
-		path += "?location_id=" + p.LocationID
+	return agendaViewPath(p.ReturnView, p.LocationID, p.Values.Date)
+}
+
+// agendaViewPath builds the day or week screen's URL - "week" only when
+// view says so, day otherwise (today's long-standing default). Shared by
+// agendaPath (the breadcrumb/cancel links) and the handler's post-save
+// redirect, so both agree on where a booking that started in the week grid
+// returns to.
+func agendaViewPath(view, locationID, date string) string {
+	base := "/agenda"
+	if view == "week" {
+		base = "/agenda/week"
 	}
-	if p.Values.Date != "" {
+	path := base
+	if locationID != "" {
+		path += "?" + FieldLocation + "=" + locationID
+	}
+	if date != "" {
 		separator := "?"
-		if p.LocationID != "" {
+		if locationID != "" {
 			separator = "&"
 		}
-		path += separator + "date=" + p.Values.Date
+		path += separator + FieldDate + "=" + date
 	}
 	return path
+}
+
+// CustomerPickerPath sends a booking with no customer chosen yet to the
+// customer search, carrying enough in "next" to re-enter this exact booking
+// attempt (site, date, time, and which screen to return to) once a customer
+// is picked or created. Customers never imports agenda - this is why the
+// hand-off travels as a URL instead of a Go call.
+func (p FormPage) CustomerPickerPath() string {
+	next := "/agenda/new?" + FieldLocation + "=" + p.LocationID +
+		"&" + FieldDate + "=" + p.Values.Date + "&" + FieldStartTime + "=" + p.Values.StartTime
+	if p.ReturnView != "" {
+		next += "&" + FieldView + "=" + p.ReturnView
+	}
+	return "/customers?next=" + url.QueryEscape(next)
 }
 
 func cancelPath(p FormPage) string { return "/agenda/" + p.ID + "/cancel" }

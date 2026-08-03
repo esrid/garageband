@@ -136,7 +136,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return customers.Principal{
-				UserID: user.ID, TenantID: tenantID,
+				UserID: user.ID, TenantID: tenantID, ActiveLocationID: user.ActiveLocationID,
 			}, userOK && tenantOK
 		},
 	)

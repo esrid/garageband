@@ -20,7 +20,8 @@ templ Index(page Page) {
 			</header>
 			@notice(page.Notice)
 			<search>
-				<form method="get" action="/customers" class="flex flex-col gap-2 sm:flex-row" data-pending-form>
+				<form method="get" action="/customers" class="flex flex-col gap-2 sm:flex-row" data-pending-form up-submit>
+					<input type="hidden" name={ FieldNext } value={ page.Next }/>
 					<div class="grid flex-1 gap-1">
 						<label class="sr-only" for={ FieldQuery }>Rechercher un client</label>
 						<input
@@ -42,6 +43,7 @@ templ Index(page Page) {
 					Une plaque se cherche avec ou sans tirets.
 				</p>
 			</search>
+			@createDisclosure(page)
 			if !page.Searched() {
 				<div class="card card-border border-base-300 bg-base-100">
 					<div class="card-body items-start gap-2 p-5">
@@ -68,7 +70,7 @@ templ Index(page Page) {
 					<ul class="grid gap-3">
 						for _, customer := range page.Customers {
 							<li>
-								@customerCard(customer)
+								@customerCard(customer, page.Next)
 							</li>
 						}
 					</ul>
@@ -79,16 +81,93 @@ templ Index(page Page) {
 	}
 }
 
+// createDisclosure is the quick-create form, collapsed by default behind a
+// native <details> - no JS needed for the show/hide itself. It stays open
+// after a failed submission so the visitor doesn't lose what they typed.
+templ createDisclosure(page Page) {
+	<details class="card card-border border-base-300 bg-base-100" open?={ page.CreateOpen }>
+		<summary class="cursor-pointer p-5 text-sm font-semibold">+ Nouveau client</summary>
+		<div class="card-body gap-4 p-5 pt-0">
+			<form method="post" action="/customers" class="grid gap-4 sm:grid-cols-2" data-pending-form up-submit>
+				<input type="hidden" name={ FieldQuery } value={ page.Query }/>
+				<input type="hidden" name={ FieldNext } value={ page.Next }/>
+				<div class="grid gap-1">
+					<label class="label font-medium text-base-content" for={ FieldNewLastName }>Nom</label>
+					<input
+						id={ FieldNewLastName }
+						name={ FieldNewLastName }
+						class={ "input min-h-11 w-full", templ.KV("input-error", page.HasCreateError(FieldNewLastName)) }
+						value={ page.CreateValues.LastName }
+						aria-invalid={ ariaInvalid(page.HasCreateError(FieldNewLastName)) }
+						required
+					/>
+					if page.HasCreateError(FieldNewLastName) {
+						<p role="alert" class="label text-xs font-medium text-error">{ page.CreateError(FieldNewLastName) }</p>
+					}
+				</div>
+				<div class="grid gap-1">
+					<label class="label font-medium text-base-content" for={ FieldNewFirstName }>Prénom</label>
+					<input
+						id={ FieldNewFirstName }
+						name={ FieldNewFirstName }
+						class="input min-h-11 w-full"
+						value={ page.CreateValues.FirstName }
+					/>
+				</div>
+				<div class="grid gap-1">
+					<label class="label font-medium text-base-content" for={ FieldNewPhone }>Téléphone</label>
+					<input
+						id={ FieldNewPhone }
+						name={ FieldNewPhone }
+						type="tel"
+						class={ "input min-h-11 w-full", templ.KV("input-error", page.HasCreateError(FieldNewPhone)) }
+						value={ page.CreateValues.Phone }
+						aria-invalid={ ariaInvalid(page.HasCreateError(FieldNewPhone)) }
+					/>
+					if page.HasCreateError(FieldNewPhone) {
+						<p role="alert" class="label text-xs font-medium text-error">{ page.CreateError(FieldNewPhone) }</p>
+					}
+				</div>
+				<div class="grid gap-1">
+					<label class="label font-medium text-base-content" for={ FieldNewPlate }>Plaque d'immatriculation</label>
+					<input
+						id={ FieldNewPlate }
+						name={ FieldNewPlate }
+						class={ "input min-h-11 w-full", templ.KV("input-error", page.HasCreateError(FieldNewPlate)) }
+						value={ page.CreateValues.Plate }
+						aria-invalid={ ariaInvalid(page.HasCreateError(FieldNewPlate)) }
+						required
+					/>
+					if page.HasCreateError(FieldNewPlate) {
+						<p role="alert" class="label text-xs font-medium text-error">{ page.CreateError(FieldNewPlate) }</p>
+					}
+				</div>
+				<div class="sm:col-span-2">
+					<button type="submit" class="btn btn-primary min-h-11" data-pending-label="Création…">Créer le client</button>
+				</div>
+			</form>
+		</div>
+	</details>
+}
+
 // customerCard leads with the name, then the way to reach them, then what they
-// drive — the order a garage actually needs when the phone is ringing.
-templ customerCard(customer Customer) {
+// drive — the order a garage actually needs when the phone is ringing. In a
+// booking flow (next != "") the name jumps back into it with this customer
+// chosen, instead of opening their dossier.
+templ customerCard(customer Customer, next string) {
 	<article class="card card-border border-base-300 bg-base-100">
 		<div class="card-body gap-2 p-5">
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<h2 class="text-base font-semibold">
-					<a href={ templ.URL(customerPath(customer)) } class="link-hover link">
-						{ customer.Label() }
-					</a>
+					if next != "" {
+						<a href={ templ.URL(NextTarget(next, customer.ID)) } up-follow class="link-hover link">
+							{ customer.Label() }
+						</a>
+					} else {
+						<a href={ templ.URL(customerPath(customer)) } class="link-hover link">
+							{ customer.Label() }
+						</a>
+					}
 				</h2>
 				if customer.Shared {
 					<span class="badge badge-sm shrink-0">Partagé avec vous</span>

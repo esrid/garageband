@@ -61,7 +61,7 @@ templ Show(page Day) {
 					<button type="submit" class="btn btn-sm min-h-11">Aller</button>
 				</form>
 				if page.CanManage {
-					<a href={ templ.URL(page.NewPath()) } class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
+					<a href={ templ.URL(page.NewPath()) } up-layer="new" class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
 						Nouveau rendez-vous
 					</a>
 				}
@@ -134,7 +134,7 @@ templ ShowWeek(page Week) {
 				</a>
 				<a href={ templ.URL(page.DayViewPath()) } class="btn btn-ghost btn-sm min-h-11">Vue jour</a>
 				if page.CanManage {
-					<a href={ templ.URL(page.NewPath()) } class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
+					<a href={ templ.URL(page.NewPath()) } up-layer="new" class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
 						Nouveau rendez-vous
 					</a>
 				}
@@ -180,6 +180,7 @@ templ weekGrid(page Week) {
 			for slotIndex, slotTime := range page.SlotStartTimes() {
 				<a
 					href={ templ.URL(page.NewPathAt(day, slotTime)) }
+					up-layer="new"
 					class="agenda-slot bg-base-100 transition-colors hover:bg-base-200"
 					data-date={ day.Format(DateLayout) }
 					data-start-time={ slotTime }
@@ -343,16 +344,26 @@ templ Form(page FormPage) {
 					<div class="card-body items-start gap-2 p-5">
 						<h2 class="text-base font-semibold">Choisissez d'abord un client</h2>
 						<p class="text-sm opacity-70">
-							Un rendez-vous se prend pour quelqu'un. Trouvez le client, puis
-							revenez ici depuis sa fiche.
+							Un rendez-vous se prend pour quelqu'un. Trouvez le client, ou
+							créez-le, puis revenez ici.
 						</p>
-						<a href="/customers" class="btn btn-primary mt-1 min-h-11">Chercher un client</a>
+						<a href={ templ.URL(page.CustomerPickerPath()) } up-follow class="btn btn-primary mt-1 min-h-11">Chercher un client</a>
 					</div>
 				</div>
 			} else {
-				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
+				<form
+					method="post"
+					action={ templ.URL(formActionPath(page)) }
+					class="grid gap-4"
+					data-pending-form
+					novalidate
+					up-submit
+					up-layer="parent"
+					up-target="#main"
+				>
 					<input type="hidden" name={ FieldLocation } value={ page.LocationID }/>
 					<input type="hidden" name={ FieldCustomer } value={ page.Customer.ID }/>
+					<input type="hidden" name={ FieldView } value={ page.ReturnView }/>
 					<section class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<div class="grid gap-1">

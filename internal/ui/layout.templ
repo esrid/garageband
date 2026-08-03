@@ -103,6 +103,8 @@ templ Layout(page PageInfo) {
 				<meta name="twitter:card" content="summary_large_image"/>
 			}
 			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="stylesheet" href="/static/unpoly.min.css"/>
+			<script src="/static/unpoly.min.js"></script>
 		</head>
 		<body class="min-h-dvh bg-base-200">
 			<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:btn focus:btn-primary">Aller au contenu</a>
@@ -116,7 +118,7 @@ templ Layout(page PageInfo) {
 						<span class="text-base font-semibold tracking-tight">Garageband</span>
 					</div>
 				</header>
-				<main id="main" class={ "mx-auto w-full px-4 py-6 sm:py-10", page.mainWidth() }>
+				<main id="main" up-main class={ "mx-auto w-full px-4 py-6 sm:py-10", page.mainWidth() }>
 					{ children... }
 				</main>
 			}
@@ -139,7 +141,7 @@ templ shell(nav Nav, mainWidth string) {
 				</label>
 				<a href="/" class="px-2 text-base font-semibold tracking-tight">Garageband</a>
 			</div>
-			<main id="main" class={ "mx-auto w-full flex-1 px-4 py-6 sm:py-10", mainWidth }>
+			<main id="main" up-main class={ "mx-auto w-full flex-1 px-4 py-6 sm:py-10", mainWidth }>
 				{ children... }
 			</main>
 		</div>

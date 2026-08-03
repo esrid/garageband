@@ -357,7 +357,7 @@ func TestMoveAppointmentHTTPRedirectsOnSuccessAndSnapsBackOnConflict(t *testing.
 	response = postAgendaForm(mux, "/agenda/"+movingID+"/move", free)
 	if response.Code != http.StatusSeeOther ||
 		!strings.Contains(response.Header().Get("Location"), "/agenda/week") ||
-		!strings.Contains(response.Header().Get("Location"), "saved=1") {
+		!strings.Contains(response.Header().Get("Location"), "moved=1") {
 		t.Fatalf("free move = %d location %q", response.Code, response.Header().Get("Location"))
 	}
 	movedDay, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-13")
@@ -366,6 +366,56 @@ func TestMoveAppointmentHTTPRedirectsOnSuccessAndSnapsBackOnConflict(t *testing.
 	}
 	if len(movedDay.Appointments) != 1 || movedDay.Appointments[0].ID != movingID {
 		t.Fatalf("moved day = %#v", movedDay.Appointments)
+	}
+}
+
+// TestSaveHTTPRedirectsToTheRequestedReturnView locks in the "view" round
+// trip a week-grid booking (opened in a modal overlay) relies on: without it
+// the overlay would close onto the day view even though the week grid is
+// what's showing behind it.
+func TestSaveHTTPRedirectsToTheRequestedReturnView(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
+		},
+		agenda.CalendarConfig{},
+	)
+
+	weekForm := url.Values{
+		agenda.FieldLocation:  {fixture.locationID},
+		agenda.FieldCustomer:  {fixture.customerID},
+		agenda.FieldVehicle:   {fixture.vehicleID},
+		agenda.FieldService:   {fixture.serviceID},
+		agenda.FieldResource:  {fixture.resourceID},
+		agenda.FieldDate:      {"2026-08-12"},
+		agenda.FieldStartTime: {"09:00"},
+		agenda.FieldView:      {"week"},
+	}
+	response := postAgendaForm(mux, "/agenda", weekForm)
+	location := response.Header().Get("Location")
+	if response.Code != http.StatusSeeOther || !strings.HasPrefix(location, "/agenda/week?") ||
+		!strings.Contains(location, "saved=1") {
+		t.Fatalf("view=week save = %d location %q", response.Code, location)
+	}
+
+	dayForm := url.Values{
+		agenda.FieldLocation:  {fixture.locationID},
+		agenda.FieldCustomer:  {fixture.customerID},
+		agenda.FieldVehicle:   {fixture.vehicleID},
+		agenda.FieldService:   {fixture.serviceID},
+		agenda.FieldResource:  {fixture.resourceID},
+		agenda.FieldDate:      {"2026-08-13"},
+		agenda.FieldStartTime: {"09:00"},
+	}
+	response = postAgendaForm(mux, "/agenda", dayForm)
+	location = response.Header().Get("Location")
+	if response.Code != http.StatusSeeOther || !strings.HasPrefix(location, "/agenda?") ||
+		strings.HasPrefix(location, "/agenda/week") {
+		t.Fatalf("view-absent save = %d location %q, want the day view", response.Code, location)
 	}
 }
 

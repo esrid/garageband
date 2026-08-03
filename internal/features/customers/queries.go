@@ -19,6 +19,16 @@ const searchLimit = 50
 // manage sharing or offboard a customer, regardless of location access.
 var ErrForbidden = errors.New("customer management is forbidden")
 
+// FieldError names one quick-create field that failed validation or hit a
+// database constraint, so the handler can attach it to the right input
+// instead of a page-level notice.
+type FieldError struct {
+	Field   string
+	Message string
+}
+
+func (e *FieldError) Error() string { return e.Message }
+
 var nonPhoneCharacters = regexp.MustCompile(`[^0-9+]`)
 var nonPlateCharacters = regexp.MustCompile(`[-[:space:]]`)
 var vinPattern = regexp.MustCompile(`^[A-HJ-NPR-Z0-9]{17}$`)
@@ -431,6 +441,76 @@ func (s *Store) Offboard(ctx context.Context, tenantID, userID, customerID strin
 			tenantID, customerID)
 		return err
 	})
+}
+
+// CreateInput books a brand new customer plus, in the same write, their
+// first vehicle - the booking form's vehicle picker has nothing to offer
+// without one, and there is no separate "add a vehicle" step today.
+// FirstName/LastName/Phone/Plate arrive already trimmed and normalized
+// (the handler validates field-by-field before this ever runs, same split
+// as agenda.validateInput before agenda.Store.Save).
+type CreateInput struct {
+	HomeLocationID string
+	FirstName      string
+	LastName       string
+	Phone          string // normalized E.164, or ""
+	Plate          string // normalized (uppercase, no space/dash)
+}
+
+// Create inserts the customer, an optional primary phone contact, and a
+// vehicle, in one transaction. home_location_id must be a site the caller
+// can access - the customer_insert RLS policy enforces that, so a bad
+// HomeLocationID surfaces as a 42501 here rather than a silent write to a
+// site the actor has no business owning a dossier at.
+func (s *Store) Create(
+	ctx context.Context, tenantID, userID string, input CreateInput,
+) (id string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
+			VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))
+			RETURNING id`,
+			tenantID, input.HomeLocationID, input.FirstName, input.LastName,
+		).Scan(&id); err != nil {
+			return mapCreateError(err)
+		}
+		if input.Phone != "" {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO customer_contacts (tenant_id, customer_id, kind, value, normalized_value, is_primary)
+				VALUES ($1, $2, 'phone', $3, $3, true)`,
+				tenantID, id, input.Phone,
+			); err != nil {
+				return mapCreateError(err)
+			}
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO vehicles (tenant_id, customer_id, location_id, registration_plate)
+			VALUES ($1, $2, $3, $4)`,
+			tenantID, id, input.HomeLocationID, input.Plate,
+		); err != nil {
+			return mapCreateError(err)
+		}
+		return nil
+	})
+	return id, err
+}
+
+// mapCreateError turns a constraint violation into a *FieldError the
+// quick-create form can attach to the right input, the same way agenda maps
+// its own write conflicts. Anything else (including a rejected RLS write)
+// passes through unchanged for the handler's generic failure path.
+func mapCreateError(err error) error {
+	pgErr, ok := db.PgError(err)
+	if !ok || pgErr.Code != "23505" {
+		return err
+	}
+	switch pgErr.ConstraintName {
+	case "customer_contacts_active_value_unique":
+		return &FieldError{Field: FieldNewPhone, Message: "Ce téléphone est déjà utilisé par un autre client."}
+	case "vehicles_active_plate_unique":
+		return &FieldError{Field: FieldNewPlate, Message: "Cette plaque est déjà utilisée par un autre véhicule."}
+	}
+	return err
 }
 
 func scanSearchCustomer(row pgx.CollectableRow) (Customer, error) {
