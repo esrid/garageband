@@ -58,7 +58,11 @@ func TestOwnerAccessIsShownButNotEditable(t *testing.T) {
 		"Propriétaire", "Tous les sites, par son rôle", "changez le rôle",
 	)
 	// Offering checkboxes to a role that reaches everything would be a lie.
-	mustNotContain(t, page, "Modifier ses sites", `name="location_ids"`)
+	// The assertion names this member's own form: the page also carries the
+	// invitation form, whose site checkboxes are about someone else entirely.
+	mustNotContain(t, page, "Modifier ses sites", `action="/team/u1/locations"`)
+	// Nor is the owner someone this screen offers to remove.
+	mustNotContain(t, page, `action="/team/u1/revoke"`)
 }
 
 func TestManagerAssignmentsArePreCheckedAndPostable(t *testing.T) {

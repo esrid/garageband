@@ -123,11 +123,17 @@ func teamHandler(load team.PageLoader, replace team.AssignmentReplacer) http.Han
 	team.Register(
 		mux,
 		func(next http.Handler) http.Handler { return next },
-		func(context.Context) (team.Principal, bool) {
-			return team.Principal{UserID: actorID, TenantID: tenantID}, true
+		team.Deps{
+			Principal: func(context.Context) (team.Principal, bool) {
+				return team.Principal{UserID: actorID, TenantID: tenantID}, true
+			},
+			LoadPage:           load,
+			ReplaceAssignments: replace,
+			InviteStaff: func(context.Context, team.Principal, string, []string) (string, error) {
+				return "", nil
+			},
+			RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
 		},
-		load,
-		replace,
 	)
 	return mux
 }
@@ -142,4 +148,100 @@ func request(handler http.Handler, method, target string, form url.Values) *http
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+// TestTeamInviteRendersLinkOnce pins the one thing this screen must never get
+// wrong: the invitation link exists only in the response that created it.
+func TestTeamInviteRendersLinkOnce(t *testing.T) {
+	var gotName string
+	var gotLocations []string
+	mux := http.NewServeMux()
+	team.Register(mux, func(next http.Handler) http.Handler { return next }, team.Deps{
+		Principal: func(context.Context) (team.Principal, bool) {
+			return team.Principal{UserID: actorID, TenantID: tenantID}, true
+		},
+		LoadPage: func(context.Context, team.Principal) (team.Page, error) {
+			return team.Page{Organization: "Garage Central", CanManage: true}, nil
+		},
+		ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
+		InviteStaff: func(_ context.Context, _ team.Principal, name string, locations []string) (string, error) {
+			gotName = name
+			gotLocations = slices.Clone(locations)
+			return "https://app.example/rejoindre/secret-token", nil
+		},
+		RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
+	})
+
+	form := url.Values{
+		team.FieldName:      {"  Karim Mécano  "},
+		team.FieldLocations: {locationA},
+	}
+	response := request(mux, http.MethodPost, "/team/invite", form)
+	if response.Code != http.StatusOK {
+		t.Fatalf("POST /team/invite = %d, want 200", response.Code)
+	}
+	if gotName != "Karim Mécano" || !slices.Equal(gotLocations, []string{locationA}) {
+		t.Fatalf("invite = name %q locations %v", gotName, gotLocations)
+	}
+	if !strings.Contains(response.Body.String(), "https://app.example/rejoindre/secret-token") {
+		t.Fatal("the invitation link is missing from the page that minted it")
+	}
+
+	// A later view of the screen cannot show it again: it was never stored.
+	response = request(mux, http.MethodGet, "/team", nil)
+	if strings.Contains(response.Body.String(), "secret-token") {
+		t.Fatal("the invitation link came back on a later page load")
+	}
+
+	// A nameless employee is rejected without ever reaching the store.
+	gotName = "unchanged"
+	response = request(mux, http.MethodPost, "/team/invite", url.Values{team.FieldName: {"   "}})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank name = %d, want 422", response.Code)
+	}
+	if gotName != "unchanged" {
+		t.Fatal("the store was called with a blank name")
+	}
+}
+
+// TestTeamRevokeRoundTrip covers removal, including the refusals the store
+// reports for the owner and for someone who no longer exists.
+func TestTeamRevokeRoundTrip(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		removeErr  error
+		wantStatus int
+	}{
+		{name: "removed", wantStatus: http.StatusSeeOther},
+		{name: "forbidden", removeErr: team.ErrForbidden, wantStatus: http.StatusForbidden},
+		{name: "unknown", removeErr: sql.ErrNoRows, wantStatus: http.StatusNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var gotTarget string
+			mux := http.NewServeMux()
+			team.Register(mux, func(next http.Handler) http.Handler { return next }, team.Deps{
+				Principal: func(context.Context) (team.Principal, bool) {
+					return team.Principal{UserID: actorID, TenantID: tenantID}, true
+				},
+				LoadPage: func(context.Context, team.Principal) (team.Page, error) {
+					return team.Page{}, nil
+				},
+				ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
+				InviteStaff: func(context.Context, team.Principal, string, []string) (string, error) {
+					return "", nil
+				},
+				RemoveStaff: func(_ context.Context, _ team.Principal, target string) error {
+					gotTarget = target
+					return test.removeErr
+				},
+			})
+			response := request(mux, http.MethodPost, "/team/"+memberID+"/revoke", nil)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			if gotTarget != memberID {
+				t.Fatalf("target = %q, want %q", gotTarget, memberID)
+			}
+		})
+	}
 }

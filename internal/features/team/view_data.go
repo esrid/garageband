@@ -42,6 +42,12 @@ type LocationRef struct {
 	Active bool
 }
 
+// Invite states shown next to a member who has never signed in.
+const (
+	InvitePending = "pending"
+	InvitePendingExpired = "expired"
+)
+
 // Member is one person in the organization and the sites they reach.
 type Member struct {
 	UserID string
@@ -51,7 +57,20 @@ type Member struct {
 	// LocationIDs are the sites explicitly assigned to this member. It stays
 	// empty for owners and admins, who reach every site by their role.
 	LocationIDs []string
+	// InviteState is empty once the person has followed their link.
+	InviteState string
 }
+
+// Invited reports someone the owner enrolled who has not joined yet.
+func (m Member) Invited() bool { return m.InviteState != "" }
+
+// InviteExpired reports a link that ran out before it was used, which needs a
+// new one rather than patience.
+func (m Member) InviteExpired() bool { return m.InviteState == InvitePendingExpired }
+
+// Removable keeps the owner and the admins out of the remove button. They run
+// the organization, and removing one of them is not a routine staff change.
+func (m Member) Removable() bool { return !m.ReachesEveryLocation() }
 
 // Label is what to call this person on screen.
 func (m Member) Label() string {
@@ -89,6 +108,13 @@ type Page struct {
 	Locations    []LocationRef // every site of the organization, active or not
 	CanManage    bool          // false renders the read-only presentation
 	Notice       Notice
+	// InviteLink is set for exactly one render: the response to creating an
+	// invitation. The database keeps only the token's hash, so a page that
+	// does not show it here can never show it again.
+	InviteLink string
+	// InvitedName names who InviteLink belongs to, so an owner enrolling three
+	// people in a row cannot hand the wrong link to the wrong person.
+	InvitedName string
 }
 
 // UnassignedCount drives the summary line at the top of the screen.
@@ -105,6 +131,22 @@ func (p Page) UnassignedCount() int {
 // FieldLocations is the checkbox name the assignment form posts, repeated once
 // per selected site. It is the single source of truth for both sides.
 const FieldLocations = "location_ids"
+
+// FieldName is the invitation form's text input.
+const FieldName = "name"
+
+// revokePath is where one member's removal form posts.
+func revokePath(member Member) string {
+	return "/team/" + member.UserID + "/revoke"
+}
+
+// inviteStateLabel says where someone stands before they have ever signed in.
+func inviteStateLabel(member Member) string {
+	if member.InviteExpired() {
+		return "Lien expiré"
+	}
+	return "Invitation en attente"
+}
 
 // roleLabel is the French name of a membership role.
 func roleLabel(role string) string {

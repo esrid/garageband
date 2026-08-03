@@ -1695,7 +1695,7 @@ func Show(page Profile) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "\" class=\"self-start\"><button type=\"submit\" class=\"btn btn-sm btn-error btn-outline\">Ce client est parti</button></form></div></div></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 166, "\" class=\"self-start\"><button type=\"submit\" class=\"btn btn-sm btn-error\">Ce client est parti</button></form></div></div></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

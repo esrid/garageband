@@ -2,10 +2,14 @@ package accesscontrol
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,7 +17,10 @@ import (
 	"github.com/esrid/garageband/internal/platform/db"
 )
 
-var ErrForbidden = errors.New("access control operation is forbidden")
+var (
+	ErrForbidden    = errors.New("access control operation is forbidden")
+	ErrNameRequired = errors.New("staff member name is required")
+)
 
 type LocationAssignment struct {
 	ID         string       `db:"id"`
@@ -50,7 +57,29 @@ type TeamMember struct {
 	Email       string
 	Role        string
 	LocationIDs []string
+	// InviteState is "" for someone who has signed in at least once, "pending"
+	// while their link is still valid, "expired" once it is not.
+	InviteState string
 }
+
+// Invite states, as shown next to a member on the team screen.
+const (
+	InvitePending = "pending"
+	InviteExpired = "expired"
+)
+
+// StaffInvite is a freshly minted invitation. Token holds the only copy of the
+// raw value that will ever exist: the database keeps its hash, so the link can
+// be shown once and never recovered.
+type StaffInvite struct {
+	UserID    string
+	Token     string
+	ExpiresAt time.Time
+}
+
+// inviteTTL bounds how long a link handed out on a phone screen stays usable.
+// ponytail: re-inviting from the team screen mints a new one.
+const inviteTTL = 7 * 24 * time.Hour
 
 type TeamOverview struct {
 	Organization string
@@ -99,17 +128,27 @@ func (s *Store) TeamOverview(
 			SELECT membership.user_id, user_account.name, user_account.email,
 			       membership.role,
 			       COALESCE(jsonb_agg(assignment.location_id::text)
-			           FILTER (WHERE assignment.id IS NOT NULL), '[]'::JSONB)
+			           FILTER (WHERE assignment.id IS NOT NULL), '[]'::JSONB),
+			       CASE
+			           WHEN invite.id IS NULL THEN ''
+			           WHEN invite.expires_at > now() THEN 'pending'
+			           ELSE 'expired'
+			       END
 			FROM tenant_memberships membership
 			JOIN users user_account ON user_account.id = membership.user_id
 			LEFT JOIN user_location_assignments assignment
 			  ON assignment.tenant_id = membership.tenant_id
 			 AND assignment.user_id = membership.user_id
 			 AND assignment.revoked_at IS NULL
+			LEFT JOIN staff_invites invite
+			  ON invite.tenant_id = membership.tenant_id
+			 AND invite.user_id = membership.user_id
+			 AND invite.accepted_at IS NULL
 			WHERE membership.tenant_id = $1
 			  AND ($2 OR membership.user_id = $3)
 			GROUP BY membership.user_id, user_account.name, user_account.email,
-			         membership.role, membership.created_at
+			         membership.role, membership.created_at,
+			         invite.id, invite.expires_at
 			ORDER BY membership.created_at, membership.user_id`,
 			tenantID, overview.CanManage, actorUserID)
 		if err != nil {
@@ -121,7 +160,7 @@ func (s *Store) TeamOverview(
 			var locationIDsJSON []byte
 			if err := memberRows.Scan(
 				&member.UserID, &member.Name, &member.Email,
-				&member.Role, &locationIDsJSON,
+				&member.Role, &locationIDsJSON, &member.InviteState,
 			); err != nil {
 				return err
 			}
@@ -157,7 +196,24 @@ func (s *Store) ReplaceLocationAssignments(
 		if targetRole == "owner" || targetRole == "admin" {
 			return ErrForbidden
 		}
+		return syncLocationAssignments(
+			ctx, tx, tenantID, actorUserID, targetUserID, desiredLocationIDs,
+		)
+	})
+}
 
+// syncLocationAssignments makes the target's live assignments match desired
+// exactly, revoking what is dropped rather than deleting it so the audit trail
+// survives. The caller has already authorized the change.
+func syncLocationAssignments(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	actorUserID string,
+	targetUserID string,
+	desiredLocationIDs []string,
+) error {
+	{
 		desired := make(map[string]struct{}, len(desiredLocationIDs))
 		for _, locationID := range desiredLocationIDs {
 			if _, duplicate := desired[locationID]; duplicate {
@@ -232,7 +288,126 @@ func (s *Store) ReplaceLocationAssignments(
 			}
 		}
 		return nil
+	}
+}
+
+// InviteStaff enrols an employee the owner names, and returns the single-use
+// link they will follow. The employee gets an account without ever owning an
+// email address or a password: everything they need is in the token.
+//
+// The whole enrolment is one transaction under the owner's identity, so the
+// policies from migration 0029 are what authorize it — a member running the
+// same statements is refused by PostgreSQL, not by this function.
+func (s *Store) InviteStaff(
+	ctx context.Context,
+	tenantID string,
+	actorUserID string,
+	name string,
+	locationIDs []string,
+) (invite StaffInvite, err error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return StaffInvite{}, ErrNameRequired
+	}
+	err = s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
+		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
+			return err
+		}
+		// provider_id is random rather than derived: an invited employee has no
+		// external identity to key on, and users is unique on (provider,
+		// provider_id). The empty email keeps them out of the unique email
+		// index until they ever have one.
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO users (provider, provider_id, email, name)
+			VALUES ('invite', $1, '', $2)
+			RETURNING id`, rand.Text(), name,
+		).Scan(&invite.UserID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'member')`, tenantID, invite.UserID,
+		); err != nil {
+			return err
+		}
+		if err := syncLocationAssignments(
+			ctx, tx, tenantID, actorUserID, invite.UserID, locationIDs,
+		); err != nil {
+			return err
+		}
+		invite.Token = rand.Text() + rand.Text()
+		invite.ExpiresAt = time.Now().UTC().Add(inviteTTL)
+		_, err := tx.Exec(ctx, `
+			INSERT INTO staff_invites (
+				tenant_id, user_id, token_hash, created_by_user_id, expires_at
+			) VALUES ($1, $2, $3, $4, $5)`,
+			tenantID, invite.UserID, HashToken(invite.Token), actorUserID,
+			invite.ExpiresAt,
+		)
+		return err
 	})
+	if err != nil {
+		return StaffInvite{}, err
+	}
+	return invite, nil
+}
+
+// RevokeStaff removes someone from the organization. Their pending invitation
+// goes with the membership through the foreign key, and their sessions are
+// dropped back to "no workspace" rather than deleted, so revoking someone here
+// cannot sign them out of another garage they legitimately belong to.
+func (s *Store) RevokeStaff(
+	ctx context.Context,
+	tenantID string,
+	actorUserID string,
+	targetUserID string,
+) error {
+	// Refusing this here as well as in RLS is not belt and braces for its own
+	// sake: the policy reports a blocked delete as zero rows, which reads as
+	// "no such member", and a request to remove yourself deserves a clearer
+	// answer than a 404.
+	if targetUserID == actorUserID {
+		return ErrForbidden
+	}
+	return s.db.WithinTenantUser(ctx, tenantID, actorUserID, func(tx pgx.Tx) error {
+		if err := requireAdministrator(ctx, tx, tenantID, actorUserID); err != nil {
+			return err
+		}
+		// Owners and admins run the organization; taking one out is not the
+		// routine staff change this screen offers, so it is refused rather than
+		// half-answered. The team screen hides the button for them too.
+		var targetRole string
+		if err := tx.QueryRow(ctx, `
+			SELECT role FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, targetUserID,
+		).Scan(&targetRole); err != nil {
+			return err
+		}
+		if targetRole == "owner" || targetRole == "admin" {
+			return ErrForbidden
+		}
+		result, err := tx.Exec(ctx, `
+			DELETE FROM tenant_memberships
+			WHERE tenant_id = $1 AND user_id = $2`, tenantID, targetUserID)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != 1 {
+			return sql.ErrNoRows
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE sessions
+			SET active_tenant_id = NULL, active_location_id = NULL
+			WHERE user_id = $1 AND active_tenant_id = $2`, targetUserID, tenantID)
+		return err
+	})
+}
+
+// HashToken is how an invitation token is stored and looked up. Whoever accepts
+// the invitation hashes the value from the URL the same way.
+func HashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *Store) AssignLocation(

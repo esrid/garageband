@@ -190,17 +190,15 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 		},
 	)
 	accessStore := accesscontrol.NewStore(database)
-	team.Register(
-		mux,
-		auth.RequireTenant,
-		func(ctx context.Context) (team.Principal, bool) {
+	team.Register(mux, auth.RequireTenant, team.Deps{
+		Principal: func(ctx context.Context) (team.Principal, bool) {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return team.Principal{
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
 		},
-		func(ctx context.Context, principal team.Principal) (team.Page, error) {
+		LoadPage: func(ctx context.Context, principal team.Principal) (team.Page, error) {
 			overview, err := accessStore.TeamOverview(
 				ctx, principal.TenantID, principal.UserID,
 			)
@@ -222,30 +220,63 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 				page.Members = append(page.Members, team.Member{
 					UserID: member.UserID, Name: member.Name, Email: member.Email,
 					Role: member.Role, LocationIDs: member.LocationIDs,
+					InviteState: member.InviteState,
 				})
 			}
 			return page, nil
 		},
-		func(
+		ReplaceAssignments: func(
 			ctx context.Context,
 			principal team.Principal,
 			targetUserID string,
 			locationIDs []string,
 		) error {
-			err := accessStore.ReplaceLocationAssignments(
+			return teamError(accessStore.ReplaceLocationAssignments(
 				ctx, principal.TenantID, principal.UserID,
 				targetUserID, locationIDs,
-			)
-			if errors.Is(err, accesscontrol.ErrForbidden) {
-				return team.ErrForbidden
-			}
-			return err
+			))
 		},
-	)
+		InviteStaff: func(
+			ctx context.Context,
+			principal team.Principal,
+			name string,
+			locationIDs []string,
+		) (string, error) {
+			invite, err := accessStore.InviteStaff(
+				ctx, principal.TenantID, principal.UserID, name, locationIDs,
+			)
+			if err != nil {
+				return "", teamError(err)
+			}
+			return cfg.BaseURL + "/rejoindre/" + invite.Token, nil
+		},
+		RemoveStaff: func(
+			ctx context.Context,
+			principal team.Principal,
+			targetUserID string,
+		) error {
+			return teamError(accessStore.RevokeStaff(
+				ctx, principal.TenantID, principal.UserID, targetUserID,
+			))
+		},
+	})
 
 	// Stdlib CSRF protection (Go 1.25+): blocks cross-origin non-safe methods
 	// via Sec-Fetch-Site/Origin; requests without those headers pass.
 	csrf := http.NewCrossOriginProtection()
 
 	return withRecover(withLogging(csrf.Handler(authStore.WithUser(mux))))
+}
+
+// teamError maps store refusals onto the team screen's own errors, so the
+// feature never has to know which package rejected it.
+func teamError(err error) error {
+	switch {
+	case errors.Is(err, accesscontrol.ErrForbidden):
+		return team.ErrForbidden
+	case errors.Is(err, accesscontrol.ErrNameRequired):
+		return team.ErrNameRequired
+	default:
+		return err
+	}
 }

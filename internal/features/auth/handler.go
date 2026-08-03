@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/esrid/garageband/internal/platform/oauth"
 )
 
@@ -91,7 +93,7 @@ func (h *handler) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Fresh token on every login (OWASP: no session fixation).
-	token, err := h.store.CreateSession(r.Context(), user.ID)
+	token, err := h.store.CreateSession(r.Context(), user.ID, "", sessionTTL)
 	if err != nil {
 		h.fail(w, err)
 		return
@@ -106,6 +108,52 @@ func (h *handler) callback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// invitationPage previews an invitation. Read-only on purpose: see
+// InvitationPage for why looking must not consume the link.
+func (h *handler) invitationPage(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	invitation, err := h.store.InvitationByToken(r.Context(), token)
+	if err != nil {
+		h.renderInvitationDeadEnd(w, r, err)
+		return
+	}
+	if err := InvitationPage(invitation, token).Render(r.Context(), w); err != nil {
+		slog.Error("render invitation page", "err", err)
+	}
+}
+
+func (h *handler) acceptInvitation(w http.ResponseWriter, r *http.Request) {
+	token, err := h.store.AcceptInvitation(r.Context(), r.PathValue("token"))
+	if err != nil {
+		h.renderInvitationDeadEnd(w, r, err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(staffSessionTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   h.secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// renderInvitationDeadEnd tells consumed, expired and unknown tokens apart in
+// the logs but never on screen, so the page cannot be used to probe which
+// tokens exist.
+func (h *handler) renderInvitationDeadEnd(w http.ResponseWriter, r *http.Request, err error) {
+	if !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, sql.ErrNoRows) {
+		h.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNotFound)
+	if err := InvitationExpiredPage().Render(r.Context(), w); err != nil {
+		slog.Error("render expired invitation page", "err", err)
+	}
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {

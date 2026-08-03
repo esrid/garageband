@@ -2,11 +2,15 @@ package auth_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -161,11 +165,11 @@ func TestWorkspaceActivationIsSessionScopedAndMembershipBound(t *testing.T) {
 	ownedTenant := createWorkspace(t, database, owner, "owned-garage", "Owned Garage")
 	otherTenant := createWorkspace(t, database, other, "other-garage", "Other Garage")
 
-	token, err := store.CreateSession(t.Context(), owner)
+	token, err := store.CreateSession(t.Context(), owner, "", time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
-	otherSessionToken, err := store.CreateSession(t.Context(), owner)
+	otherSessionToken, err := store.CreateSession(t.Context(), owner, "", time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +292,7 @@ func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
 
 	// The owner manages the tenant, so it can activate any location in it,
 	// no explicit assignment required.
-	ownerToken, err := store.CreateSession(t.Context(), owner)
+	ownerToken, err := store.CreateSession(t.Context(), owner, "", time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +312,7 @@ func TestActivateLocationIsSessionScopedAndAccessBound(t *testing.T) {
 	}
 
 	// A member can only activate a location it was explicitly assigned to.
-	memberToken, err := store.CreateSession(t.Context(), member)
+	memberToken, err := store.CreateSession(t.Context(), member, "", time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,4 +429,73 @@ func createWorkspace(t *testing.T, database *db.DB, userID, slug, name string) s
 		t.Fatal(err)
 	}
 	return tenantID
+}
+
+// TestInvitationIsPreviewableOnceAndConsumedOnce covers the two properties the
+// whole staff-onboarding story rests on: looking at a link must not spend it
+// (messengers fetch pasted URLs), and following it must spend it exactly once.
+func TestInvitationIsPreviewableOnceAndConsumedOnce(t *testing.T) {
+	database := dbtest.Open(t)
+	store := auth.NewStore(database)
+	owner := createTestUser(t, database, "invitation-owner@example.com")
+	tenantID := createWorkspace(t, database, owner, "invitation-garage", "Garage Invitation")
+	employee := createTestUser(t, database, "")
+	if err := database.WithinTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(t.Context(), `
+			INSERT INTO tenant_memberships (tenant_id, user_id, role)
+			VALUES ($1, $2, 'member')`, tenantID, employee); err != nil {
+			return err
+		}
+		_, err := tx.Exec(t.Context(), `
+			INSERT INTO staff_invites (
+				tenant_id, user_id, token_hash, created_by_user_id, expires_at
+			) VALUES ($1, $2, $3, $4, now() + interval '7 days')`,
+			tenantID, employee, sha256Hex("staff-token"), owner)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Previewing twice still leaves the link usable.
+	for attempt := range 2 {
+		invitation, err := store.InvitationByToken(t.Context(), "staff-token")
+		if err != nil {
+			t.Fatalf("preview %d: %v", attempt, err)
+		}
+		if invitation.Organization != "Garage Invitation" {
+			t.Fatalf("preview %d organization = %q", attempt, invitation.Organization)
+		}
+	}
+
+	sessionToken, err := store.AcceptInvitation(t.Context(), "staff-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := store.UserByToken(t.Context(), sessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.ID != employee {
+		t.Fatalf("session belongs to %q, want %q", user.ID, employee)
+	}
+	// The employee lands inside the garage, not on a workspace picker they
+	// have no way to understand.
+	if user.ActiveTenantID != tenantID {
+		t.Fatalf("active tenant = %q, want %q", user.ActiveTenantID, tenantID)
+	}
+
+	if _, err := store.AcceptInvitation(t.Context(), "staff-token"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("second acceptance = %v, want pgx.ErrNoRows", err)
+	}
+	if _, err := store.InvitationByToken(t.Context(), "staff-token"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("preview after acceptance = %v, want pgx.ErrNoRows", err)
+	}
+	if _, err := store.InvitationByToken(t.Context(), "never-issued"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("unknown token = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+func sha256Hex(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

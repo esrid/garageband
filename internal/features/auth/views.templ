@@ -4,6 +4,51 @@ import "github.com/esrid/garageband/internal/ui"
 
 // Interface copy is French; identifiers and comments stay English.
 
+// InvitationPage is the only screen an invited employee sees before working.
+// It exists so that following the link is a deliberate act: messengers fetch
+// pasted URLs to build previews, and a single-use invitation consumed by a
+// preview bot would leave the employee locked out with no way to ask for
+// another one.
+templ InvitationPage(invitation Invitation, token string) {
+	@ui.Layout(ui.PageInfo{Title: "Rejoindre l'équipe", NoIndex: true}) {
+		<div class="card card-border mx-auto max-w-sm border-base-300 bg-base-100">
+			<div class="card-body gap-4">
+				<h1 class="card-title text-xl">Bonjour { invitation.Name }</h1>
+				<p class="text-sm opacity-70">
+					{ invitation.Organization } vous ouvre l'accès à son garage. Aucun mot de
+					passe, aucune adresse e-mail : cet appareil vous connectera.
+				</p>
+				<form method="post" action={ templ.URL("/rejoindre/" + token) }>
+					<button type="submit" class="btn btn-primary btn-block min-h-11">
+						Rejoindre { invitation.Organization }
+					</button>
+				</form>
+				<p class="text-xs opacity-60">
+					Ce lien ne fonctionne qu'une fois. Gardez cet appareil pour vous
+					reconnecter ; en cas de perte, demandez un nouveau lien.
+				</p>
+			</div>
+		</div>
+	}
+}
+
+// InvitationExpiredPage covers every dead end the same way: consumed, expired,
+// or never valid. It deliberately says nothing about which, and points at the
+// only person who can fix it.
+templ InvitationExpiredPage() {
+	@ui.Layout(ui.PageInfo{Title: "Lien expiré", NoIndex: true}) {
+		<div class="card card-border mx-auto max-w-sm border-base-300 bg-base-100">
+			<div class="card-body gap-4">
+				<h1 class="card-title text-xl">Ce lien n'est plus valable</h1>
+				<p class="text-sm opacity-70">
+					Il a déjà servi, ou il a expiré. Demandez à votre responsable de vous
+					en générer un nouveau depuis l'écran Équipe.
+				</p>
+			</div>
+		</div>
+	}
+}
+
 templ LoginPage(providers []string) {
 	@ui.Layout(ui.PageInfo{Title: "Connexion", NoIndex: true}) {
 		<div class="card card-border mx-auto max-w-sm border-base-300 bg-base-100">

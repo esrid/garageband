@@ -46,6 +46,10 @@ templ Index(page Page) {
 					</div>
 				</div>
 			}
+			@inviteLink(page)
+			if page.CanManage && len(page.Locations) > 0 {
+				@inviteForm(page)
+			}
 			if len(page.Locations) == 0 {
 				<div class="card card-border border-base-300 bg-base-100">
 					<div class="card-body items-start gap-2 p-5">
@@ -81,6 +85,83 @@ templ Index(page Page) {
 	}
 }
 
+// inviteLink shows a freshly minted link exactly once. It is deliberately loud:
+// the owner has one chance to hand it over, and nothing can recover it after
+// this render.
+templ inviteLink(page Page) {
+	if page.InviteLink != "" {
+		<div role="alert" class="alert alert-success items-start text-left">
+			@successIcon()
+			<div class="grid w-full gap-2">
+				<span class="font-semibold">{ page.InvitedName + " est ajouté" }</span>
+				<span class="text-sm">
+					Montrez-lui ce lien, ou envoyez-le-lui. Il ouvre l'accès une seule fois,
+					et ne sera plus affiché ici.
+				</span>
+				<input
+					type="text"
+					class="input input-bordered w-full font-mono text-xs"
+					value={ page.InviteLink }
+					readonly
+					aria-label={ "Lien d'invitation de " + page.InvitedName }
+					onfocus="this.select()"
+				/>
+			</div>
+		</div>
+	}
+}
+
+// inviteForm enrols someone by name alone. No email, no password, no role
+// picker: every employee is a member, and the owner changes nothing else.
+templ inviteForm(page Page) {
+	<details class="collapse-arrow collapse border border-base-300 bg-base-100">
+		<summary class="collapse-title min-h-11 py-3 font-medium">Ajouter un employé</summary>
+		<div class="collapse-content">
+			<form method="post" action="/team/invite" class="grid gap-3" data-pending-form>
+				<label class="floating-label">
+					<span>Prénom et nom</span>
+					<input
+						type="text"
+						name={ FieldName }
+						class="input input-bordered w-full"
+						placeholder="Prénom et nom"
+						required
+						maxlength="120"
+						autocomplete="off"
+					/>
+				</label>
+				<fieldset class="fieldset gap-2 p-0">
+					<legend class="fieldset-legend px-0 text-sm">Sites accessibles</legend>
+					for _, location := range page.Locations {
+						<label class="label min-h-11 cursor-pointer justify-start gap-3" for={ "invite-" + location.ID }>
+							<input
+								type="checkbox"
+								id={ "invite-" + location.ID }
+								name={ FieldLocations }
+								value={ location.ID }
+								class="checkbox"
+							/>
+							<span class="flex flex-wrap items-center gap-2 text-base-content">
+								{ location.Name }
+								if !location.Active {
+									<span class="badge badge-sm">Inactif</span>
+								}
+							</span>
+						</label>
+					}
+				</fieldset>
+				<p class="text-xs opacity-60">
+					Vous obtiendrez un lien à lui transmettre. Il n'a besoin ni d'adresse
+					e-mail, ni de mot de passe, ni de compte Google.
+				</p>
+				<button type="submit" class="btn btn-primary min-h-11 w-full sm:w-auto sm:justify-self-start" data-pending-label="Création…">
+					Créer son accès
+				</button>
+			</form>
+		</div>
+	</details>
+}
+
 // memberCard shows who someone is and what they reach, and — for the roles
 // where it is editable — folds the site checkboxes away until asked for.
 templ memberCard(member Member, page Page) {
@@ -88,7 +169,14 @@ templ memberCard(member Member, page Page) {
 		<div class="card-body gap-3 p-5">
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<h2 class="text-base font-semibold">{ member.Label() }</h2>
-				<span class="badge badge-sm shrink-0">{ roleLabel(member.Role) }</span>
+				<span class="flex shrink-0 flex-wrap items-center gap-2">
+					if member.Invited() {
+						<span class={ "badge badge-sm", templ.KV("badge-warning", member.InviteExpired()) }>
+							{ inviteStateLabel(member) }
+						</span>
+					}
+					<span class="badge badge-sm">{ roleLabel(member.Role) }</span>
+				</span>
 			</div>
 			if member.Name != "" && member.Email != "" {
 				<p class="text-xs opacity-60">{ member.Email }</p>
@@ -146,6 +234,13 @@ templ memberCard(member Member, page Page) {
 						</form>
 					</div>
 				</details>
+			}
+			if page.CanManage && member.Removable() {
+				<form method="post" action={ templ.URL(revokePath(member)) } class="justify-self-start" data-pending-form>
+					<button type="submit" class="btn btn-error btn-sm min-h-11" data-pending-label="Retrait…">
+						Retirer de l'équipe<span class="sr-only">{ " " + member.Label() }</span>
+					</button>
+				</form>
 			}
 		</div>
 	</article>

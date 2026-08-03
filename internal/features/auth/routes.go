@@ -16,6 +16,8 @@ func Register(mux *http.ServeMux, store *Store, providers []oauth.Provider, secu
 	mux.HandleFunc("GET /login", h.loginPage)
 	mux.HandleFunc("GET /auth/{provider}", h.start)
 	mux.HandleFunc("GET /auth/{provider}/callback", h.callback)
+	mux.HandleFunc("GET /rejoindre/{token}", h.invitationPage)
+	mux.HandleFunc("POST /rejoindre/{token}", h.acceptInvitation)
 	mux.HandleFunc("POST /logout", h.logout)
 	mux.Handle("POST /workspaces/{tenantID}/activate", RequireUser(http.HandlerFunc(h.activateWorkspace)))
 }
