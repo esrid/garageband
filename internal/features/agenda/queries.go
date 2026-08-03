@@ -250,9 +250,126 @@ func (s *Store) Day(
 		start := page.Date
 		end := start.AddDate(0, 0, 1)
 		page.Appointments, err = loadAppointments(ctx, tx, tenantID, location.ID, start, end, location.Timezone)
+		if err != nil {
+			return err
+		}
+		page.RemindersDue, err = loadReminderCandidates(ctx, tx, tenantID, location.ID, location.Timezone)
 		return err
 	})
 	return page, err
+}
+
+// reminderWindow is how far ahead an appointment must start to show up on
+// the reminder list - long enough to actually reach the customer before the
+// slot, short enough that the list stays a working queue instead of
+// everything still unconfirmed on the books.
+// ponytail: fixed window, no per-tenant setting - add one if a garage asks.
+const reminderWindow = 48 * time.Hour
+
+// loadReminderCandidates finds appointments starting soon that nobody has
+// reminded the customer about yet. There is no telephony integration wired
+// up in this codebase (see internal/platform/telephony - defined, never
+// implemented), so this is a manual work queue: a staffer calls or texts
+// using the listed phone number, then marks it done.
+func loadReminderCandidates(
+	ctx context.Context, tx pgx.Tx, tenantID, locationID string, zone *time.Location,
+) ([]ReminderCandidate, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT appointment.id::text,
+		       COALESCE(
+		           NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
+		           NULLIF(btrim(customer.company_name), ''), 'Client'
+		       ),
+		       COALESCE((
+		           SELECT contact.value FROM customer_contacts contact
+		           WHERE contact.tenant_id = customer.tenant_id
+		             AND contact.customer_id = customer.id
+		             AND contact.kind = 'phone' AND contact.is_primary
+		             AND contact.deleted_at IS NULL
+		           ORDER BY contact.created_at, contact.id LIMIT 1
+		       ), ''),
+		       appointment.starts_at,
+		       COALESCE(service.name, '')
+		FROM appointments appointment
+		LEFT JOIN customers customer
+		  ON customer.tenant_id = appointment.tenant_id
+		 AND customer.id = appointment.customer_id
+		LEFT JOIN service_offerings service
+		  ON service.tenant_id = appointment.tenant_id
+		 AND service.id = appointment.service_id
+		WHERE appointment.tenant_id = $1
+		  AND appointment.location_id = $2
+		  AND appointment.reminder_sent_at IS NULL
+		  AND appointment.status IN ('pending', 'confirmed', 'in_progress')
+		  AND appointment.starts_at BETWEEN now() AND $3
+		ORDER BY appointment.starts_at`,
+		tenantID, locationID, time.Now().Add(reminderWindow),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var candidates []ReminderCandidate
+	for rows.Next() {
+		var candidate ReminderCandidate
+		var startsAt time.Time
+		if err := rows.Scan(
+			&candidate.AppointmentID, &candidate.CustomerName, &candidate.Phone,
+			&startsAt, &candidate.ServiceName,
+		); err != nil {
+			return nil, err
+		}
+		candidate.StartsAt = startsAt.In(zone)
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+// MarkReminded records that a staffer has reached out about this
+// appointment, dropping it off the reminder list. Returns the appointment's
+// own date and location so the handler can redirect back to that day.
+func (s *Store) MarkReminded(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	appointmentID string,
+) (date string, locationID string, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		var startsAt time.Time
+		var timezoneName string
+		if err := tx.QueryRow(ctx, `
+			SELECT appointment.starts_at, location.timezone, appointment.location_id::text
+			FROM appointments appointment
+			JOIN locations location
+			  ON location.tenant_id = appointment.tenant_id
+			 AND location.id = appointment.location_id
+			WHERE appointment.tenant_id = $1 AND appointment.id = $2
+			  AND app_current_user_can_access_location(appointment.location_id)`,
+			tenantID, appointmentID,
+		).Scan(&startsAt, &timezoneName, &locationID); err != nil {
+			return err
+		}
+		result, err := tx.Exec(ctx, `
+			UPDATE appointments SET reminder_sent_at = now()
+			WHERE tenant_id = $1 AND id = $2`, tenantID, appointmentID,
+		)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != 1 {
+			return sql.ErrNoRows
+		}
+		zone, err := time.LoadLocation(timezoneName)
+		if err != nil {
+			return err
+		}
+		date = startsAt.In(zone).Format(DateLayout)
+		return nil
+	})
+	return date, locationID, err
 }
 
 // Week backs the weekly grid screen: same location/timezone resolution as

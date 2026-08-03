@@ -77,9 +77,27 @@ type Day struct {
 	Locations    []Option
 	Date         time.Time
 	Appointments []Appointment
+	// RemindersDue is this location's appointments starting soon that
+	// nobody has reminded the customer about yet - see reminderWindow in
+	// queries.go. Independent of Date: it doesn't disappear when browsing
+	// to a different day.
+	RemindersDue []ReminderCandidate
 	CanManage    bool // false hides booking and editing
 	Notice       Notice
 }
+
+// ReminderCandidate is one appointment on the reminder work queue: a
+// staffer calls or texts the listed phone, then marks it done. There is no
+// telephony integration in this codebase to place the call automatically.
+type ReminderCandidate struct {
+	AppointmentID string
+	CustomerName  string
+	Phone         string
+	StartsAt      time.Time
+	ServiceName   string
+}
+
+func remindPath(appointmentID string) string { return "/agenda/" + appointmentID + "/remind" }
 
 // PreviousDate and NextDate drive the day navigation. They are computed here
 // so the template never does arithmetic.

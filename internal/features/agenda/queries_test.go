@@ -259,6 +259,67 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 	}
 }
 
+func TestDayListsAppointmentsDueAReminderAndMarkingOneDoneDropsIt(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO customer_contacts (tenant_id, customer_id, kind, value, normalized_value, is_primary)
+		VALUES ($1, $2, 'phone', '+33612345678', '+33612345678', true)`,
+		fixture.tenantID, fixture.customerID)
+
+	now := time.Now().UTC()
+	soonID := insertReturningID(t, fixture.fixtures, `
+		INSERT INTO appointments (
+		    tenant_id, location_id, customer_id, vehicle_id, service_id,
+		    resource_id, starts_at, ends_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dashboard') RETURNING id::text`,
+		fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+		fixture.serviceID, fixture.resourceID, now.Add(6*time.Hour), now.Add(7*time.Hour),
+	)
+	// Outside the reminder window: must not show up.
+	mustExec(t, fixture.fixtures, `
+		INSERT INTO appointments (
+		    tenant_id, location_id, customer_id, vehicle_id, service_id,
+		    resource_id, starts_at, ends_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dashboard')`,
+		fixture.tenantID, fixture.locationID, fixture.customerID, fixture.vehicleID,
+		fixture.serviceID, fixture.secondResourceID, now.AddDate(0, 0, 10), now.AddDate(0, 0, 10).Add(time.Hour),
+	)
+
+	page, err := fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.RemindersDue) != 1 {
+		t.Fatalf("reminders due = %d, want 1: %#v", len(page.RemindersDue), page.RemindersDue)
+	}
+	if page.RemindersDue[0].AppointmentID != soonID || page.RemindersDue[0].Phone != "+33612345678" {
+		t.Fatalf("reminder candidate = %#v", page.RemindersDue[0])
+	}
+
+	mux := http.NewServeMux()
+	agenda.Register(
+		mux, fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(_ context.Context) (agenda.Principal, bool) {
+			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
+		},
+		agenda.CalendarConfig{},
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/agenda/"+soonID+"/remind", nil))
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("remind = %d body %q", response.Code, response.Body.String())
+	}
+
+	page, err = fixture.store.Day(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.RemindersDue) != 0 {
+		t.Fatalf("reminders due after marking = %d, want 0: %#v", len(page.RemindersDue), page.RemindersDue)
+	}
+}
+
 func TestFormShowsCustomersOtherUpcomingAppointmentsCappedWithAnAccurateTotal(t *testing.T) {
 	fixture := newAgendaFixture(t)
 	base := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)

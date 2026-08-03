@@ -40,6 +40,7 @@ templ Show(page Day) {
 				}
 			</header>
 			@notice(page.Notice)
+			@remindersDue(page)
 			<nav aria-label="Changer de jour" class="flex flex-wrap items-center gap-2">
 				<a href={ templ.URL(page.Path(page.PreviousDate())) } class="btn btn-sm min-h-11">
 					<span aria-hidden="true">←</span> Veille
@@ -89,6 +90,52 @@ templ Show(page Day) {
 		@pendingHandle.Once() {
 			@pendingScript()
 		}
+	}
+}
+
+// remindersDue is the work queue of appointments starting soon that nobody
+// has reached out about yet - manual (no telephony integration exists in
+// this codebase), so each row is a phone number to call and a button to
+// mark done once it's been called.
+templ remindersDue(page Day) {
+	if len(page.RemindersDue) > 0 {
+		<section class="card card-border border-warning/50 bg-warning/10" aria-labelledby="reminders-heading">
+			<div class="card-body gap-3 p-5">
+				<h2 id="reminders-heading" class="text-base font-semibold">Rappels à faire</h2>
+				<p class="text-sm opacity-70">
+					Ces rendez-vous approchent et le client n'a pas encore été relancé.
+				</p>
+				<ul class="grid gap-2">
+					for _, reminder := range page.RemindersDue {
+						<li class="flex flex-wrap items-center justify-between gap-2 rounded-btn bg-base-100 p-3">
+							<div class="grid gap-0.5">
+								<p class="text-sm font-medium">
+									{ reminder.CustomerName }
+									<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+									{ ui.FormatDate(reminder.StartsAt) } à { ui.FormatTime(reminder.StartsAt) }
+								</p>
+								<p class="text-xs opacity-70">
+									if reminder.Phone != "" {
+										{ reminder.Phone }
+									} else {
+										Aucun téléphone enregistré
+									}
+									if reminder.ServiceName != "" {
+										<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+										{ reminder.ServiceName }
+									}
+								</p>
+							</div>
+							<form method="post" action={ templ.URL(remindPath(reminder.AppointmentID)) } data-pending-form>
+								<button type="submit" class="btn btn-sm min-h-11" data-pending-label="Enregistrement…">
+									Marquer comme rappelé
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			</div>
+		</section>
 	}
 }
 

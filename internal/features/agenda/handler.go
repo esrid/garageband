@@ -53,6 +53,8 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est enregistré."}
 	case r.URL.Query().Get("cancelled") == "1":
 		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rendez-vous est annulé."}
+	case r.URL.Query().Get("reminded") == "1":
+		page.Notice = Notice{Kind: NoticeSuccess, Message: "Le rappel est enregistré."}
 	}
 	h.render(w, r, Show(page), http.StatusOK)
 }
@@ -382,6 +384,36 @@ func (h *handler) move(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda/week?%s=%s&%s=%s&moved=1", FieldLocation, locationID, FieldDate, newDate,
+	), http.StatusSeeOther)
+}
+
+// remind marks an appointment on the reminder queue as reached out to. It
+// does not place a call or send anything itself - there is no telephony
+// integration wired up (see internal/platform/telephony) - it just records
+// that a staffer already did, so the appointment drops off the list.
+func (h *handler) remind(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	appointmentID := r.PathValue("appointmentID")
+	if !uuidPattern.MatchString(appointmentID) {
+		http.NotFound(w, r)
+		return
+	}
+	date, locationID, err := h.store.MarkReminded(
+		r.Context(), principal.TenantID, principal.UserID, appointmentID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		h.fail(w, "mark appointment reminded", err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf(
+		"/agenda?%s=%s&%s=%s&reminded=1", FieldLocation, locationID, FieldDate, date,
 	), http.StatusSeeOther)
 }
 
