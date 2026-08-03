@@ -56,6 +56,30 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, Show(page), http.StatusOK)
 }
 
+func (h *handler) week(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	locationID := r.URL.Query().Get(FieldLocation)
+	if locationID != "" && !uuidPattern.MatchString(locationID) {
+		http.NotFound(w, r)
+		return
+	}
+	if locationID == "" {
+		locationID = principal.ActiveLocationID
+	}
+	page, err := h.store.Week(
+		r.Context(), principal.TenantID, principal.UserID,
+		locationID, r.URL.Query().Get(FieldDate),
+	)
+	if err != nil {
+		h.handleReadError(w, r, "load agenda week", err)
+		return
+	}
+	h.render(w, r, ShowWeek(page), http.StatusOK)
+}
+
 func (h *handler) newAppointment(w http.ResponseWriter, r *http.Request) {
 	h.form(w, r, "", r.URL.Query().Get(FieldCustomer), r.URL.Query().Get(FieldLocation))
 }

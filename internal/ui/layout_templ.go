@@ -421,7 +421,7 @@ func shell(nav Nav) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = navLink("/agenda", "Agenda", nav.current(SectionAgenda)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = navLink("/agenda/week", "Agenda", nav.current(SectionAgenda)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

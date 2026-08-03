@@ -1,6 +1,10 @@
 package agenda
 
-import "github.com/esrid/garageband/internal/ui"
+import (
+	"strconv"
+
+	"github.com/esrid/garageband/internal/ui"
+)
 
 // Interface copy is French; identifiers and comments stay English.
 
@@ -43,6 +47,7 @@ templ Show(page Day) {
 				<a href={ templ.URL(page.Path(page.NextDate())) } class="btn btn-sm min-h-11">
 					Lendemain <span aria-hidden="true">→</span>
 				</a>
+				<a href={ templ.URL(page.WeekViewPath()) } class="btn btn-ghost btn-sm min-h-11">Vue semaine</a>
 				<form method="get" action="/agenda" class="flex items-center gap-2">
 					<input type="hidden" name={ FieldLocation } value={ page.LocationID }/>
 					<label class="sr-only" for="date-jump">Aller à une date</label>
@@ -85,6 +90,102 @@ templ Show(page Day) {
 			@pendingScript()
 		}
 	}
+}
+
+// ShowWeek is the workshop's week as a grid: days as columns, time of day as
+// rows — the overview a single day list can't give at a glance. Built with
+// plain CSS grid (native platform feature, no charting/scheduling
+// dependency): each appointment is one grid item, positioned by
+// Week.GridRowStyle.
+templ ShowWeek(page Week) {
+	@ui.Layout(ui.PageInfo{
+		Title:   "Agenda de la semaine",
+		NoIndex: true,
+		Nav:     ui.Nav{Section: ui.SectionAgenda, Workspace: page.Organization, InWorkspace: true},
+	}) {
+		<div class="grid gap-5">
+			<header class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+				<div class="grid gap-1">
+					<h1 class="text-xl font-semibold">
+						Semaine du { ui.FormatDate(page.WeekStart) } au { ui.FormatDate(page.Days()[6]) }
+					</h1>
+					<p class="text-sm opacity-70">{ page.LocationName }</p>
+				</div>
+				if len(page.Locations) > 1 {
+					<form method="get" action="/agenda/week" class="grid gap-1">
+						<label for="agenda-week-location" class="text-xs font-medium opacity-70">Établissement</label>
+						<input type="hidden" name="date" value={ page.WeekStart.Format(DateLayout) }/>
+						<select id="agenda-week-location" name={ FieldLocation } class="select select-sm min-h-11" onchange="this.form.submit()">
+							for _, option := range page.Locations {
+								<option value={ option.Value } selected?={ option.Value == page.LocationID }>{ option.Label }</option>
+							}
+						</select>
+					</form>
+				}
+			</header>
+			@notice(page.Notice)
+			<nav aria-label="Changer de semaine" class="flex flex-wrap items-center gap-2">
+				<a href={ templ.URL(page.Path(page.PreviousWeek())) } class="btn btn-sm min-h-11">
+					<span aria-hidden="true">←</span> Semaine précédente
+				</a>
+				<a href={ templ.URL(page.Path(page.NextWeek())) } class="btn btn-sm min-h-11">
+					Semaine suivante <span aria-hidden="true">→</span>
+				</a>
+				<a href={ templ.URL(page.DayViewPath()) } class="btn btn-ghost btn-sm min-h-11">Vue jour</a>
+				if page.CanManage {
+					<a href={ templ.URL(page.NewPath()) } class="btn btn-primary btn-sm min-h-11 sm:ml-auto">
+						Nouveau rendez-vous
+					</a>
+				}
+			</nav>
+			<div class="overflow-x-auto">
+				@weekGrid(page)
+			</div>
+		</div>
+		@pendingHandle.Once() {
+			@pendingScript()
+		}
+	}
+}
+
+templ weekGrid(page Week) {
+	{{ slotRows := "auto repeat(" + strconv.Itoa(page.SlotCount()) + ", 1.75rem)" }}
+	<div
+		class="grid min-w-[720px] gap-px rounded-box border border-base-300 bg-base-300"
+		style={ "grid-template-columns: 3.5rem repeat(7, 1fr); grid-template-rows: " + slotRows + ";" }
+	>
+		<div class="bg-base-100" style="grid-row: 1; grid-column: 1;"></div>
+		for dayIndex, day := range page.Days() {
+			<div class="bg-base-100 p-1 text-center text-xs font-medium" style={ "grid-row: 1; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }>
+				{ ui.FormatWeekdayShort(day) } { strconv.Itoa(day.Day()) }
+			</div>
+		}
+		for slotIndex, label := range page.HourLabels() {
+			<div
+				class="bg-base-100 pr-1 text-right text-[0.65rem] leading-none opacity-60"
+				style={ "grid-row: " + strconv.Itoa(slotIndex*2+2) + " / span 2; grid-column: 1;" }
+			>
+				{ label }
+			</div>
+		}
+		for dayIndex, day := range page.Days() {
+			<div class="bg-base-100" style={ "grid-row: 2 / span " + strconv.Itoa(page.SlotCount()) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }></div>
+			for _, appointment := range page.AppointmentsOn(day) {
+				<a
+					href={ templ.URL(appointmentPath(appointment)) }
+					class={ "m-px overflow-hidden rounded-sm px-1 py-0.5 text-left text-[0.65rem] leading-tight",
+						templ.KV("bg-primary text-primary-content", appointment.Occupies()),
+						templ.KV("bg-base-200 text-base-content/60 line-through", !appointment.Occupies()) }
+					style={ page.GridRowStyle(appointment) + "; grid-column: " + strconv.Itoa(dayIndex+2) + ";" }
+				>
+					<span class="block font-medium">{ ui.FormatTime(appointment.StartsAt) } { appointment.CustomerName }</span>
+					if appointment.ServiceName != "" {
+						<span class="block opacity-80">{ appointment.ServiceName }</span>
+					}
+				</a>
+			}
+		}
+	</div>
 }
 
 // appointmentRow puts the time first: on a day screen that is the column the

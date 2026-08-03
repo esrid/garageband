@@ -43,6 +43,16 @@ func FormatDayHeading(at time.Time) string {
 	return frenchWeekdays[int(at.Weekday())] + " " + FormatDate(at)
 }
 
+// FormatWeekdayShort writes "lun.", "mar.", … for a compact column header
+// where the full weekday name would wrap.
+func FormatWeekdayShort(at time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	name := frenchWeekdays[int(at.Weekday())]
+	return name[:3] + "."
+}
+
 // FormatTime writes "09:30", zero-padded so a column of times lines up.
 func FormatTime(at time.Time) string {
 	if at.IsZero() {

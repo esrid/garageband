@@ -445,6 +445,48 @@ func TestAgendaIndexDefaultsToTheActiveSiteOverAlphabeticalOrder(t *testing.T) {
 	}
 }
 
+// 2026-08-12 is a Wednesday; its Monday is 2026-08-10.
+func TestWeekGroupsAppointmentsByDayAndWidensTheGridForOutOfRangeBookings(t *testing.T) {
+	fixture := newAgendaFixture(t)
+	if _, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-10", "06:00"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := fixture.store.Save(
+		t.Context(), fixture.tenantID, fixture.userID, "", fixture.input("2026-08-12", "09:00"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := fixture.store.Week(t.Context(), fixture.tenantID, fixture.userID, fixture.locationID, "2026-08-12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.WeekStart.Format(agenda.DateLayout) != "2026-08-10" {
+		t.Fatalf("week start = %s, want 2026-08-10 (Monday)", page.WeekStart.Format(agenda.DateLayout))
+	}
+	if len(page.Appointments) != 2 {
+		t.Fatalf("week appointments = %d, want 2", len(page.Appointments))
+	}
+	days := page.Days()
+	if len(days) != 7 || days[0].Format(agenda.DateLayout) != "2026-08-10" ||
+		days[6].Format(agenda.DateLayout) != "2026-08-16" {
+		t.Fatalf("week days = %#v", days)
+	}
+	if len(page.AppointmentsOn(days[0])) != 1 {
+		t.Fatalf("Monday appointments = %d, want 1", len(page.AppointmentsOn(days[0])))
+	}
+	if len(page.AppointmentsOn(days[2])) != 1 {
+		t.Fatalf("Wednesday appointments = %d, want 1", len(page.AppointmentsOn(days[2])))
+	}
+	// The default grid starts at 07:00; a 06:00 booking must widen it rather
+	// than being clipped out of view.
+	if page.GridStartHour() != 6 {
+		t.Fatalf("grid start hour = %d, want 6", page.GridStartHour())
+	}
+}
+
 func (fixture agendaFixture) input(date string, start string) agenda.SaveInput {
 	return agenda.SaveInput{
 		LocationID: fixture.locationID,

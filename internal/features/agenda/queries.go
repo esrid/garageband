@@ -249,88 +249,137 @@ func (s *Store) Day(
 
 		start := page.Date
 		end := start.AddDate(0, 0, 1)
-		rows, err := tx.Query(ctx, `
-			SELECT appointment.id,
-			       appointment.starts_at,
-			       appointment.ends_at,
-			       CASE WHEN customer.id IS NULL THEN NULL
-			            ELSE appointment.customer_id END,
-			       COALESCE(
-			           NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
-			           NULLIF(btrim(customer.company_name), ''),
-			           NULLIF(btrim(concat_ws(' ',
-			               appointment.customer_snapshot->>'first_name',
-			               appointment.customer_snapshot->>'last_name'
-			           )), ''),
-			           NULLIF(btrim(appointment.customer_snapshot->>'company_name'), ''),
-			           'Client'
-			       ),
-			       COALESCE(
-			           NULLIF(btrim(concat_ws(' ', vehicle.registration_plate,
-			               vehicle.make, vehicle.model)), ''),
-			           NULLIF(btrim(concat_ws(' ',
-			               appointment.vehicle_snapshot->>'registration_plate',
-			               appointment.vehicle_snapshot->>'make',
-			               appointment.vehicle_snapshot->>'model'
-			           )), ''),
-			           ''
-			       ),
-			       COALESCE(service.name, ''),
-			       COALESCE((
-			           SELECT string_agg(reserved_resource.name, ', ' ORDER BY reserved_resource.name)
-			           FROM appointment_resource_reservations reservation
-			           JOIN bookable_resources reserved_resource
-			             ON reserved_resource.tenant_id = reservation.tenant_id
-			            AND reserved_resource.id = reservation.resource_id
-			           WHERE reservation.tenant_id = appointment.tenant_id
-			             AND reservation.appointment_id = appointment.id
-			       ), resource.name, ''),
-			       appointment.status,
-			       appointment.source,
-			       COALESCE(appointment.customer_note, '')
-			FROM appointments appointment
-			LEFT JOIN customers customer
-			  ON customer.tenant_id = appointment.tenant_id
-			 AND customer.id = appointment.customer_id
-			LEFT JOIN vehicles vehicle
-			  ON vehicle.tenant_id = appointment.tenant_id
-			 AND vehicle.id = appointment.vehicle_id
-			LEFT JOIN service_offerings service
-			  ON service.tenant_id = appointment.tenant_id
-			 AND service.id = appointment.service_id
-			LEFT JOIN bookable_resources resource
-			  ON resource.tenant_id = appointment.tenant_id
-			 AND resource.id = appointment.resource_id
-			WHERE appointment.tenant_id = $1
-			  AND appointment.location_id = $2
-			  AND appointment.starts_at >= $3
-			  AND appointment.starts_at < $4
-			ORDER BY appointment.starts_at, appointment.id`,
-			tenantID, location.ID, start, end,
+		page.Appointments, err = loadAppointments(ctx, tx, tenantID, location.ID, start, end, location.Timezone)
+		return err
+	})
+	return page, err
+}
+
+// Week backs the weekly grid screen: same location/timezone resolution as
+// Day, widened to a Monday-to-Sunday range.
+func (s *Store) Week(
+	ctx context.Context,
+	tenantID string,
+	userID string,
+	locationID string,
+	dateValue string,
+) (page Week, err error) {
+	err = s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		organization, locations, location, err := loadLocationContext(
+			ctx, tx, tenantID, locationID,
 		)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var appointment Appointment
-			var customerID sql.NullString
-			if err := rows.Scan(
-				&appointment.ID, &appointment.StartsAt, &appointment.EndsAt,
-				&customerID, &appointment.CustomerName, &appointment.VehicleLabel,
-				&appointment.ServiceName, &appointment.ResourceName,
-				&appointment.Status, &appointment.Source, &appointment.Note,
-			); err != nil {
-				return err
-			}
-			appointment.CustomerID = customerID.String
-			appointment.StartsAt = appointment.StartsAt.In(location.Timezone)
-			appointment.EndsAt = appointment.EndsAt.In(location.Timezone)
-			page.Appointments = append(page.Appointments, appointment)
-		}
-		return rows.Err()
+		page.Organization = organization
+		page.LocationID = location.ID
+		page.LocationName = location.Name
+		page.Locations = locations
+		page.CanManage = true
+		page.WeekStart = mondayOf(parseDay(dateValue, location.Timezone))
+
+		start := page.WeekStart
+		end := start.AddDate(0, 0, 7)
+		page.Appointments, err = loadAppointments(ctx, tx, tenantID, location.ID, start, end, location.Timezone)
+		return err
 	})
 	return page, err
+}
+
+// mondayOf is the ISO week's first day for date, in date's own timezone.
+func mondayOf(date time.Time) time.Time {
+	weekday := int(date.Weekday())
+	if weekday == 0 { // time.Sunday == 0; ISO weeks end on Sunday, not start
+		weekday = 7
+	}
+	return date.AddDate(0, 0, -(weekday - 1))
+}
+
+// loadAppointments is Day and Week's shared row query, over [start, end).
+func loadAppointments(
+	ctx context.Context, tx pgx.Tx, tenantID, locationID string, start, end time.Time, zone *time.Location,
+) ([]Appointment, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT appointment.id,
+		       appointment.starts_at,
+		       appointment.ends_at,
+		       CASE WHEN customer.id IS NULL THEN NULL
+		            ELSE appointment.customer_id END,
+		       COALESCE(
+		           NULLIF(btrim(concat_ws(' ', customer.first_name, customer.last_name)), ''),
+		           NULLIF(btrim(customer.company_name), ''),
+		           NULLIF(btrim(concat_ws(' ',
+		               appointment.customer_snapshot->>'first_name',
+		               appointment.customer_snapshot->>'last_name'
+		           )), ''),
+		           NULLIF(btrim(appointment.customer_snapshot->>'company_name'), ''),
+		           'Client'
+		       ),
+		       COALESCE(
+		           NULLIF(btrim(concat_ws(' ', vehicle.registration_plate,
+		               vehicle.make, vehicle.model)), ''),
+		           NULLIF(btrim(concat_ws(' ',
+		               appointment.vehicle_snapshot->>'registration_plate',
+		               appointment.vehicle_snapshot->>'make',
+		               appointment.vehicle_snapshot->>'model'
+		           )), ''),
+		           ''
+		       ),
+		       COALESCE(service.name, ''),
+		       COALESCE((
+		           SELECT string_agg(reserved_resource.name, ', ' ORDER BY reserved_resource.name)
+		           FROM appointment_resource_reservations reservation
+		           JOIN bookable_resources reserved_resource
+		             ON reserved_resource.tenant_id = reservation.tenant_id
+		            AND reserved_resource.id = reservation.resource_id
+		           WHERE reservation.tenant_id = appointment.tenant_id
+		             AND reservation.appointment_id = appointment.id
+		       ), resource.name, ''),
+		       appointment.status,
+		       appointment.source,
+		       COALESCE(appointment.customer_note, '')
+		FROM appointments appointment
+		LEFT JOIN customers customer
+		  ON customer.tenant_id = appointment.tenant_id
+		 AND customer.id = appointment.customer_id
+		LEFT JOIN vehicles vehicle
+		  ON vehicle.tenant_id = appointment.tenant_id
+		 AND vehicle.id = appointment.vehicle_id
+		LEFT JOIN service_offerings service
+		  ON service.tenant_id = appointment.tenant_id
+		 AND service.id = appointment.service_id
+		LEFT JOIN bookable_resources resource
+		  ON resource.tenant_id = appointment.tenant_id
+		 AND resource.id = appointment.resource_id
+		WHERE appointment.tenant_id = $1
+		  AND appointment.location_id = $2
+		  AND appointment.starts_at >= $3
+		  AND appointment.starts_at < $4
+		ORDER BY appointment.starts_at, appointment.id`,
+		tenantID, locationID, start, end,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var appointments []Appointment
+	for rows.Next() {
+		var appointment Appointment
+		var customerID sql.NullString
+		if err := rows.Scan(
+			&appointment.ID, &appointment.StartsAt, &appointment.EndsAt,
+			&customerID, &appointment.CustomerName, &appointment.VehicleLabel,
+			&appointment.ServiceName, &appointment.ResourceName,
+			&appointment.Status, &appointment.Source, &appointment.Note,
+		); err != nil {
+			return nil, err
+		}
+		appointment.CustomerID = customerID.String
+		appointment.StartsAt = appointment.StartsAt.In(zone)
+		appointment.EndsAt = appointment.EndsAt.In(zone)
+		appointments = append(appointments, appointment)
+	}
+	return appointments, rows.Err()
 }
 
 func (s *Store) Form(

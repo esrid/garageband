@@ -11,6 +11,7 @@ func Register(
 ) {
 	h := &handler{store: store, principal: principal, calendar: calendar}
 	mux.Handle("GET /agenda", requireTenant(http.HandlerFunc(h.index)))
+	mux.Handle("GET /agenda/week", requireTenant(http.HandlerFunc(h.week)))
 	mux.Handle("GET /agenda/new", requireTenant(http.HandlerFunc(h.newAppointment)))
 	mux.Handle("POST /agenda", requireTenant(http.HandlerFunc(h.create)))
 	mux.Handle("POST /agenda/availability", requireTenant(http.HandlerFunc(h.availability)))

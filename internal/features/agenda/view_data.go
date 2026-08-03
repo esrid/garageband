@@ -96,6 +96,13 @@ func (d Day) NewPath() string {
 	return "/agenda/new?location_id=" + d.LocationID
 }
 
+func (d Day) WeekViewPath() string {
+	if d.LocationID == "" {
+		return "/agenda/week?date=" + d.DateValue()
+	}
+	return "/agenda/week?location_id=" + d.LocationID + "&date=" + d.DateValue()
+}
+
 // Booked counts the appointments that still occupy the workshop. A cancelled
 // or no-show entry stays visible for the record but does not fill the day.
 func (d Day) Booked() int {
@@ -116,6 +123,130 @@ func (a Appointment) Occupies() bool {
 		return true
 	}
 	return false
+}
+
+// Week backs the weekly grid screen: the same appointments Day would list one
+// date at a time, laid out across a Monday-to-Sunday range instead.
+type Week struct {
+	Organization string
+	LocationID   string
+	LocationName string
+	Locations    []Option
+	WeekStart    time.Time // Monday, in the location's timezone
+	Appointments []Appointment
+	CanManage    bool
+	Notice       Notice
+}
+
+// weekGridDefaultStartHour and weekGridDefaultEndHour bound the grid when no
+// appointment falls outside them; a booking earlier or later widens the grid
+// instead of being clipped out of view.
+const (
+	weekGridDefaultStartHour = 7
+	weekGridDefaultEndHour   = 19
+	weekGridSlotMinutes      = 30
+)
+
+func (w Week) PreviousWeek() string { return w.WeekStart.AddDate(0, 0, -7).Format(DateLayout) }
+func (w Week) NextWeek() string     { return w.WeekStart.AddDate(0, 0, 7).Format(DateLayout) }
+
+func (w Week) Path(date string) string {
+	if w.LocationID == "" {
+		return "/agenda/week?date=" + date
+	}
+	return "/agenda/week?location_id=" + w.LocationID + "&date=" + date
+}
+
+func (w Week) DayViewPath() string {
+	if w.LocationID == "" {
+		return "/agenda"
+	}
+	return "/agenda?location_id=" + w.LocationID
+}
+
+func (w Week) NewPath() string {
+	if w.LocationID == "" {
+		return "/agenda/new"
+	}
+	return "/agenda/new?location_id=" + w.LocationID
+}
+
+// Days is the week's seven dates, Monday first.
+func (w Week) Days() []time.Time {
+	days := make([]time.Time, 7)
+	for i := range days {
+		days[i] = w.WeekStart.AddDate(0, 0, i)
+	}
+	return days
+}
+
+// AppointmentsOn returns one day's bookings, already in start-time order
+// (guaranteed by the query Week.Appointments came from).
+func (w Week) AppointmentsOn(day time.Time) []Appointment {
+	var dayAppointments []Appointment
+	for _, appointment := range w.Appointments {
+		y1, m1, d1 := appointment.StartsAt.Date()
+		y2, m2, d2 := day.Date()
+		if y1 == y2 && m1 == m2 && d1 == d2 {
+			dayAppointments = append(dayAppointments, appointment)
+		}
+	}
+	return dayAppointments
+}
+
+// GridStartHour and GridEndHour are the grid's visible bounds: the default
+// working window, widened to fit every appointment that falls outside it.
+func (w Week) GridStartHour() int {
+	hour := weekGridDefaultStartHour
+	for _, appointment := range w.Appointments {
+		if h := appointment.StartsAt.Hour(); h < hour {
+			hour = h
+		}
+	}
+	return hour
+}
+
+func (w Week) GridEndHour() int {
+	hour := weekGridDefaultEndHour
+	for _, appointment := range w.Appointments {
+		end := appointment.EndsAt
+		h := end.Hour()
+		if end.Minute() > 0 {
+			h++
+		}
+		if h > hour {
+			hour = h
+		}
+	}
+	return hour
+}
+
+// HourLabels are the grid gutter's row labels, one per hour, top to bottom.
+func (w Week) HourLabels() []string {
+	labels := make([]string, 0, w.GridEndHour()-w.GridStartHour())
+	for hour := w.GridStartHour(); hour < w.GridEndHour(); hour++ {
+		labels = append(labels, strconv.Itoa(hour)+":00")
+	}
+	return labels
+}
+
+// SlotCount is the grid's total number of half-hour rows.
+func (w Week) SlotCount() int {
+	return (w.GridEndHour() - w.GridStartHour()) * (60 / weekGridSlotMinutes)
+}
+
+// GridRowStyle is the CSS grid-row line range for one appointment, as an
+// inline style value ready for a templ style attribute. Grid lines are
+// 1-indexed and the header row occupies line 1, so slots start at line 2.
+func (w Week) GridRowStyle(a Appointment) string {
+	startMinutes := (a.StartsAt.Hour()-w.GridStartHour())*60 + a.StartsAt.Minute()
+	durationMinutes := int(a.EndsAt.Sub(a.StartsAt).Minutes())
+	startLine := startMinutes/weekGridSlotMinutes + 2
+	span := durationMinutes / weekGridSlotMinutes
+	if span < 1 {
+		span = 1
+	}
+	return "grid-row: " + strconv.Itoa(startLine) + " / " + strconv.Itoa(startLine+span)
 }
 
 // CustomerRef is the customer a booking is for, resolved before the form opens.
