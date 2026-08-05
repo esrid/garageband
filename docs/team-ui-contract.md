@@ -20,9 +20,17 @@ locations explicitly assigned to them. It is backed by
 | Method | Path | Effect |
 |---|---|---|
 | `GET` | `/team` | `Index(Page)` |
+| `POST` | `/team/invite` | enrol an employee, then **render the page** carrying their code |
 | `POST` | `/team/{userID}/locations` | atomically replace that member's assignments, then redirect to `/team?saved=1` |
+| `POST` | `/team/{userID}/name` | correct a name, then redirect to `/team?saved=renamed` |
+| `POST` | `/team/{userID}/code` | mint a fresh code, then **render the page** carrying it |
+| `POST` | `/team/{userID}/revoke` | remove the person, then redirect to `/team?saved=removed` |
 
-Both sit behind `auth.RequireTenant`; the workspace shell links to `/team`.
+All sit behind `auth.RequireTenant`; the workspace shell links to `/team`.
+
+The two that render instead of redirecting do so on purpose: the code they
+return exists nowhere else. `staff_invites` keeps only its SHA-256 hash, so a
+redirect would discard the one copy that can ever be shown.
 
 ## Filling Page
 
@@ -33,8 +41,15 @@ team.Page{
     Locations:    sites,     // every location, active and inactive
     CanManage:    role == "owner" || role == "admin",
     Notice:       team.Notice{},
+    Invite:       team.Invitation{}, // set on exactly one render, see below
+    InvitedName:  "",
 }
 ```
+
+`Member.InviteState` is `""` for someone who has signed in at least once,
+`"pending"` while their code is live, and `"expired"` once it is not. It comes
+from a `LEFT JOIN` on the one `staff_invites` row with `accepted_at IS NULL` —
+a partial unique index guarantees there is never more than one.
 
 `Member.LocationIDs` holds the **active** assignments only — rows of
 `user_location_assignments` where `revoked_at IS NULL`. Leave it empty for
@@ -72,13 +87,38 @@ allows re-assigning the same pair later.
 Reject a POST targeting an owner or an admin: their access comes from the role,
 and the screen never offers those checkboxes.
 
+## Handling the invitation POSTs
+
+`POST /team/invite` takes a name (`team.FieldName`) and the same repeated
+`location_ids` as the assignment form. Every employee is enrolled as `member`:
+the screen offers no role picker, because `manager` and `member` are
+indistinguishable to every policy in the schema, and `admin` would hand over
+the whole organization.
+
+`Page.Invite` carries the credential two ways — `Code` to type, `Link` to tap —
+and `Page.InvitedName` says whose it is, so an owner enrolling three people in
+a row cannot hand the wrong code to the wrong person. Set both only on the
+response that minted it; a later `GET /team` must not show them again.
+
+`POST /team/{userID}/code` retires the person's previous pending code before
+minting one. It is the answer to a second device or a lost code, and the only
+reason a member who has already signed in still needs this screen.
+
+Renaming and removal are refused for owners and admins, and the screen hides
+both controls for them (`Member.Removable()`). An owner's name is rewritten
+from their identity provider at every login, so editing it would quietly
+revert; removing one is not the routine staff change this screen offers.
+
 ## Notices
 
 `Notice.Kind` picks the styling and the French heading; the handler writes only
 the sentence.
 
-- `NoticeSuccess` — after assignments were saved.
-- `NoticeError` — the store failed, or the request was refused.
+- `NoticeSuccess` — after assignments were saved, a name corrected, or someone
+  removed. The `saved` query parameter picks the sentence.
+- `NoticeError` — the store failed, or the request was refused. A rejected
+  invitation form re-renders the screen carrying this rather than replacing it
+  with a bare error string.
 
 ## Permissions
 
@@ -88,5 +128,12 @@ hiding a form is not a check.
 
 ## Not covered here
 
-Inviting users, changing membership roles, and customer-to-location sharing
-grants are separate screens.
+Changing membership roles and customer-to-location sharing grants are separate
+concerns. Signing a staff device out without removing the person, and showing
+whether and when someone signed in, are unbuilt.
+
+Accepting an invitation belongs to `auth`, not here: `GET /rejoindre/{token}`
+previews without consuming (a messenger's preview fetch must not burn an
+employee's only way in), `POST /rejoindre/{token}` consumes it, and
+`GET`/`POST /rejoindre` is the typed-code way in for a machine nobody can send
+a link to.
