@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garageband — Décision fournisseurs</title>
+  <style>
+    :root { --ink:#17231f; --muted:#64716b; --paper:#f5f7f3; --card:#fff; --line:#dce5df; --green:#176b4d; --lime:#d9f27c; --orange:#f3a65a; --blue:#dcebf7; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font:16px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    main { max-width:1180px; margin:auto; padding:48px 24px 80px; }
+    .eyebrow { color:var(--green); font-size:.78rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    h1 { max-width:820px; margin:12px 0 18px; font-size:clamp(2.5rem,6vw,5rem); line-height:.98; letter-spacing:-.065em; }
+    h2 { margin:0 0 18px; font-size:1.65rem; letter-spacing:-.03em; }
+    h3 { margin:0 0 8px; font-size:1.05rem; }
+    p { max-width:760px; }
+    .lede { color:var(--muted); font-size:1.15rem; max-width:760px; }
+    .decision { margin:34px 0; padding:26px; border:1px solid #b8d7c6; border-radius:22px; background:var(--green); color:#fff; box-shadow:0 16px 40px #176b4d1c; }
+    .decision strong { color:var(--lime); }
+    .grid { display:grid; gap:16px; grid-template-columns:repeat(3,minmax(0,1fr)); margin:24px 0 48px; }
+    .card { padding:22px; border:1px solid var(--line); border-radius:18px; background:var(--card); }
+    .card.recommended { border:2px solid var(--green); }
+    .tag { display:inline-block; padding:4px 9px; border-radius:999px; background:var(--lime); color:#23452f; font-size:.75rem; font-weight:800; }
+    .price { margin:10px 0; font-size:1.7rem; font-weight:800; }
+    .muted { color:var(--muted); }
+    table { width:100%; border-collapse:collapse; margin:16px 0 42px; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+    th,td { padding:13px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background:#eaf0eb; font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
+    tr:last-child td { border-bottom:0; }
+    .yes { color:var(--green); font-weight:800; }
+    .warn { color:#9a5c17; font-weight:700; }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:20px 0 44px; }
+    .step { min-height:120px; padding:16px; border-radius:14px; background:var(--blue); }
+    .step b { display:block; margin-bottom:8px; color:var(--green); }
+    .sources { columns:2; padding-left:20px; }
+    a { color:var(--green); }
+    footer { margin-top:42px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    @media (max-width:800px) { .grid,.flow { grid-template-columns:1fr; } .sources { columns:1; } table { display:block; overflow:auto; white-space:normal; } main { padding:32px 16px 56px; } }
+    @media print { body { background:white; } .decision { color:#000; box-shadow:none; border:1px solid #777; } a { color:#000; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Garageband · décision fournisseurs · 03 août 2026</div>
+  <h1>La bonne architecture n’est pas un fournisseur unique.</h1>
+  <p class="lede">Le produit doit conserver le numéro fixe connu de l’entreprise, répondre avec un agent vocal, envoyer des confirmations WhatsApp et permettre la sortie ou la réattribution propre d’un numéro Garageband.</p>
+
+  <section class="decision">
+    <h2>Décision recommandée</h2>
+    <p><strong>Commencer avec Twilio + Retell.</strong> Twilio porte les numéros, le routage Voice, WhatsApp et la portabilité. Retell porte le runtime de l’agent vocal, les voix et la conversation. Chaque site conserve son propre numéro fixe et son propre routage vers un contexte Garageband distinct. WhatsApp peut être partagé ou séparé selon le niveau d'isolation souhaité.</p>
+  </section>
+
+  <h2>Pourquoi ce choix</h2>
+  <div class="grid">
+    <article class="card recommended"><span class="tag">Choix V1</span><h3>Twilio + Retell</h3><div class="price">Le meilleur compromis</div><p>Numéros, SIP/Voice, WhatsApp et portabilité chez Twilio ; agent prêt à déployer et choix de voix/LLM chez Retell.</p><p class="muted">Deux fournisseurs, mais chacun reste remplaçable derrière les ports Garageband.</p></article>
+    <article class="card"><span class="tag">Alternative</span><h3>Twilio + Vapi</h3><div class="price">Plus flexible</div><p>Meilleur si l’équipe veut contrôler le LLM, STT, TTS et les coûts. Plus de configuration et plus de responsabilités opérationnelles.</p></article>
+    <article class="card"><span class="tag">Plus tard</span><h3>Twilio ConversationRelay</h3><div class="price">Plus de contrôle</div><p>Bonne base pour internaliser l’orchestration, mais trop de développement pour le premier pilote.</p></article>
+  </div>
+
+  <h2>Comparaison vérifiée</h2>
+  <p class="muted">Les prix ci-dessous sont les prix publics trouvés ; ils ne sont pas tous comparables. Certains services sont des agents complets, d’autres uniquement des briques télécom ou vocales.</p>
+  <table>
+    <thead><tr><th>Fournisseur</th><th>Catégorie</th><th>Prix public repère</th><th>Verdict pour Garageband</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Twilio</strong></td><td>Numéros, Voice, WhatsApp, SIP</td><td>France : numéro local 1,35 $/mois et réception locale 0,0100 $/min ; WhatsApp : frais fournisseur + éventuels frais Meta</td><td class="yes">Socle recommandé pour les numéros et WhatsApp</td></tr>
+      <tr><td><strong>Retell</strong></td><td>Agent vocal</td><td>Environ 0,07–0,31 $/min selon la configuration ; numéro Retell 2 $/mois</td><td class="yes">Agent recommandé pour le pilote</td></tr>
+      <tr><td><strong>Vapi</strong></td><td>Orchestration vocale</td><td>Usage + fournisseurs choisis ; numéros configurés via téléphonie externe</td><td>Alternative flexible, plus technique</td></tr>
+      <tr><td><strong>Bland</strong></td><td>Agent vocal intégré</td><td>0,14 $/min Start ; 0,12 $/min + 299 $/mois Build ; carrier séparé</td><td>Simple, mais WhatsApp et lifecycle numéro restent à construire</td></tr>
+      <tr><td><strong>ElevenLabs Reception</strong></td><td>Réceptionniste vocal</td><td>99 $/mois pour 500 min ; 0,40 $/min supplémentaire</td><td>Très bon benchmark voix ; pas le socle télécom/WhatsApp</td></tr>
+      <tr><td><strong>Telnyx</strong></td><td>Numéros, SIP, Voice, WhatsApp</td><td>Usage et numéros selon pays ; porting API et port-out documentés</td><td>Alternative télécom à tester face à Twilio</td></tr>
+      <tr><td><strong>Tala</strong></td><td>Concurrent français, téléphone IA</td><td>29 € / 50 min ; 99 € / 800 min ; 249 € / 2 500 min ; 499 € / 9 000 min</td><td class="warn">Concurrent direct voice-only ; plafond de prix important</td></tr>
+      <tr><td><strong>MonAgent-IA</strong></td><td>Concurrent français, WhatsApp</td><td>49 / 99 / 199 € HT/mois selon les pages officielles</td><td class="warn">Concurrent direct WhatsApp ; pages tarifaires incohérentes à surveiller</td></tr>
+      <tr><td><strong>Numa</strong></td><td>Opérations service après-vente automobile</td><td>Prix non public</td><td>Benchmark produit, pas benchmark de prix France</td></tr>
+      <tr><td><strong>Clotilde.ai, Goodcall, Smith.ai</strong></td><td>Agents / réception générique</td><td>Prix ou périmètre non suffisamment comparable</td><td>Non retenus pour la V1 France/Martinique</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Gestion des numéros et sortie client</h2>
+  <div class="flow">
+    <div class="step"><b>1 · Appel</b>Le client appelle le fixe existant.</div>
+    <div class="step"><b>2 · Routage</b>001, 002 et 004 gardent chacun leur site et leur contexte.</div>
+    <div class="step"><b>3 · Agent</b>Retell répond avec les règles du site appelé.</div>
+    <div class="step"><b>4 · WhatsApp</b>Le sender dédié envoie les messages transactionnels.</div>
+    <div class="step"><b>5 · Sortie</b>On retire les routes, le sender et les secrets avant réattribution.</div>
+  </div>
+  <p><strong>Règle de propriété :</strong> un numéro fixe existant ou porté par le client reste au client et ne peut pas être revendu par Garageband. Un numéro nouvellement acheté par Garageband peut être transféré, libéré ou réattribué après nettoyage télécom et WhatsApp. La portabilité doit rester disponible pour le client.</p>
+
+  <h2>Offres commerciales proposées</h2>
+  <div class="grid">
+    <article class="card"><h3>Essentielle · 299 € HT/mois</h3><p>500 minutes · 1 000 messages WhatsApp · 100 SMS fallback · 1 site · 1 voix · transfert humain · support standard.</p></article>
+    <article class="card"><h3>Pro · 599 € HT/mois</h3><p>1 500 minutes partagées · jusqu’à 3 sites avec numéros et contextes séparés · 3 000 WhatsApp · 400 SMS fallback · scénarios avancés · support prioritaire.</p></article>
+    <article class="card"><h3>Règle WhatsApp</h3><p>Pas d’« illimité » littéral. Utilisation raisonnable, messages transactionnels inclus, campagnes marketing et dépassements facturés séparément.</p></article>
+  </div>
+
+  <article class="card" style="margin: -22px 0 42px; border-color:var(--orange)">
+    <span class="tag" style="background:var(--orange)">Réseau · 4 à 7 sites</span>
+    <h3>2 490 € HT/mois + dépassement</h3>
+    <p>Jusqu’à 7 sites avec numéros et contextes séparés · 2 500 minutes partagées · 5 000 messages WhatsApp · 1 000 SMS fallback · 0,35 €/minute supplémentaire · routage, support et supervision prioritaires.</p>
+    <p class="muted">À 5 000 minutes, la facture devient 3 365 € HT. Le dépassement protège la marge et évite de vendre un usage réellement illimité.</p>
+  </article>
+
+  <h2>Ce qui doit être testé avant contrat</h2>
+  <ol>
+    <li>Un numéro fixe en Martinique et un numéro fixe en métropole avec renvoi sur non-réponse.</li>
+    <li>Une voix française Retell avec transfert humain et transcription.</li>
+    <li>Un sender WhatsApp avec opt-in, template de confirmation et fallback SMS pour un client sans WhatsApp.</li>
+    <li>Le retrait complet du premier site, puis la réattribution du numéro Garageband à un second site sans fuite d’appels, de messages ni de données.</li>
+    <li>Le coût réel à 700 et 1 800 minutes, incluant téléphonie, LLM, TTS, stockage, support et frais Meta.</li>
+  </ol>
+
+  <h2>Sources principales</h2>
+  <ul class="sources">
+    <li><a href="https://www.twilio.com/en-us/voice/pricing/fr">Twilio Voice France</a></li>
+    <li><a href="https://www.twilio.com/fr-fr/voice/pricing/mq">Twilio Voice Martinique</a></li>
+    <li><a href="https://www.twilio.com/en-us/whatsapp/pricing?locale=en">Twilio WhatsApp pricing</a></li>
+    <li><a href="https://www.twilio.com/en-us/sms/pricing/fr">Twilio SMS France</a></li>
+    <li><a href="https://www.twilio.com/docs/numbers-and-senders/port-host">Twilio porting/hosting</a></li>
+    <li><a href="https://www.retellai.com/pricing">Retell pricing</a></li>
+    <li><a href="https://www.bland.ai/pricing">Bland pricing</a></li>
+    <li><a href="https://elevenlabs.io/docs/reception-ai/billing/plans-and-pricing">ElevenLabs Reception pricing</a></li>
+    <li><a href="https://docs.vapi.ai/phone-calling">Vapi phone calling</a></li>
+    <li><a href="https://telnyx.com/resources/how-to-port-phone-number">Telnyx porting</a></li>
+    <li><a href="https://www.tala-assistant.com/pricing">Tala pricing</a></li>
+    <li><a href="https://www.monagent-ia.fr/pricing">MonAgent-IA pricing</a></li>
+    <li><a href="https://www.arcep.fr/la-regulation/grands-dossiers-thematiques-transverses/la-numerotation/portabilite-numeros-telephone-fixes-et-mobiles.html">Arcep portabilité</a></li>
+  </ul>
+  <footer>Document de décision, non contractuel. Les prix et disponibilités doivent être revérifiés dans les comptes fournisseurs avant lancement.</footer>
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-05
 
 This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
@@ -10,8 +10,8 @@ the code and migrations remain the implementation source of truth.
 
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
-- The working tree is clean at `0ed3751`. Note that `main` is ahead of the
-  last pushed state recorded here (`0930a56`).
+- The working tree is clean at the tip of `main`, which is ahead of
+  `origin/main` (`771fc14`). Nothing since that push has left this machine.
 
 ## Row-level security is only real under an unprivileged role
 
@@ -151,9 +151,18 @@ absent.
 1. Build one end-to-end inbound telephone tracer bullet with webhook
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
-   catalog, and scheduling tools. **Needs a vendor decision first**: which
-   telephony provider (a real phone number, real cost) and which STT/TTS
-   provider, before any adapter code is worth writing against a live account.
+   catalog, and scheduling tools. **The vendor decision is made**:
+   [provider-decision.html](provider-decision.html) records Twilio for numbers,
+   voice routing, WhatsApp, and portability, with Retell for the voice-agent
+   runtime — each site keeping its own fixed number routed to its own
+   Garageband context. What remains before adapter code is an account and a
+   real French number, not another comparison. The same document lists what
+   must be proven on a live account before any contract: fixed numbers in
+   Martinique and metropolitan France with no-answer forwarding, a French
+   Retell voice with human transfer and transcription, a WhatsApp sender with
+   opt-in and SMS fallback, full removal of a site followed by reassignment of
+   a Garageband-owned number to another one with no call, message, or data
+   leakage, and the real cost at 700 and 1 800 minutes.
 2. Add the WhatsApp channel after the channel-neutral conversation/runtime
    foundation is proven. Preserve garage ownership of its Meta/WABA identity,
    use embedded onboarding where available, and keep provider-specific data out
@@ -165,9 +174,9 @@ absent.
    **Needs a vendor decision first**: this is a paid data provider choice
    with a contract, not a code decision.
 
-All three need a vendor or credential decision from the team before their
-adapter code is worth writing — none is a code decision this repo can make
-unilaterally.
+Slices 2 and 3 still need a credential or vendor decision from the team before
+their adapter code is worth writing — neither is a code decision this repo can
+make unilaterally. Slice 1 no longer does.
 
 ## Still planned, not yet implemented
 
@@ -184,6 +193,17 @@ unilaterally.
   organization, and showing an owner whether and when someone signed in.
   Today revoking is all-or-nothing and the team screen only distinguishes
   "invitation pending" from "has joined".
+- SMS fallback for short transactional notifications when a customer has no
+  WhatsApp sender or has not opted in. `PRODUCT_FEATURES.md` now commits to it
+  as a metered, recorded channel decision — consent, delivery status, country,
+  segment count, and the location's remaining allowance are all checked before
+  sending — and `pricing-model.md` prices per-plan SMS quotas. No code exists:
+  no channel decision record, no allowance counter, no sender.
+- The per-location number model the same revision describes: a public telephone
+  route per location, an optional shared or per-location WhatsApp sender,
+  explicit ownership of every number (customer-owned or Garageband-owned), and
+  the exit flow that must complete its telephony and WhatsApp cleanup before a
+  Garageband-owned number is released or reassigned.
 - Duplicate-customer detection and merge, communication consent management,
   billing/subscriptions, retention/export/erasure workflows, operational
   monitoring, and production security runbooks.
@@ -191,8 +211,10 @@ unilaterally.
   catalog path, including a review-first extraction workflow for unstructured
   documents.
 
-When work resumes, all four remaining slices need a vendor or credential
-decision from the team first (flagged inline) — none is buildable further
-without one. Keep each addition as a tested vertical slice. Do not connect a
+When work resumes, the telephone tracer bullet is the one slice whose vendors
+are settled; WhatsApp and vehicle data still wait on the team (flagged inline).
+The items above that touch neither — staff device sign-out and sign-in
+visibility, human transfer, duplicate merge — are buildable today.
+Keep each addition as a tested vertical slice. Do not connect a
 real model before its permitted tools, authorization, confirmation rules,
 and audits are complete.

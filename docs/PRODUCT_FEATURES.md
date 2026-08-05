@@ -80,12 +80,23 @@ interfaces.
 
 - WhatsApp is an optional post-onboarding capability and never blocks a garage
   from starting to use Garageband while provider or Meta approval is pending.
-- Each organization has one dedicated public AI number for both telephone calls
-  and WhatsApp when the selected number and provider support both capabilities.
-  The garage keeps any pre-existing WhatsApp Business number and application.
-- A multi-location organization shares this public number. Before answering a
-  location-dependent question about prices, services, availability, or booking,
-  the agent requires the customer to choose the relevant location.
+- Each location has a public telephone route and an optional WhatsApp sender.
+  The garage's existing fixed number may remain with its current carrier and
+  forward unanswered calls to the AI. A Garageband-owned AI/WhatsApp number
+  may be provisioned separately when the customer needs a clean sender.
+- Using one number for both telephone and WhatsApp is an opt-in advanced path,
+  subject to number eligibility, OTP verification, Meta onboarding, and whether
+  an existing WhatsApp Business App account must be migrated or can coexist.
+  It is not a V1 promise.
+- Number ownership is explicit: a customer-owned existing or ported number is
+  never silently reassigned. A Garageband-owned newly provisioned number may
+  be released, transferred, or reallocated only after the customer exit flow
+  completes its telephony and WhatsApp cleanup.
+- A multi-location organization may share one WhatsApp sender, while telephone
+  routes and Garageband-owned numbers remain location-scoped by default.
+  Before answering a location-dependent question about prices, services,
+  availability, or booking, the agent requires the customer to choose the
+  relevant location.
 - Customer-facing confirmations always identify the selected location and
   include its useful details, such as address and appointment time.
 - Automated WhatsApp replies are available 24 hours a day by default. An
@@ -93,8 +104,14 @@ interfaces.
   location, including outside opening hours.
 - The V1 supports inbound conversations and transactional outbound messages:
   appointment confirmations, reminders, changes, cancellations, requested
-  follow-ups, and information needed to complete those operations. Promotional
-  campaigns are out of scope for V1.
+  follow-ups, and information needed to complete those operations. If the
+  customer has no WhatsApp sender or has not opted in, the system may fall back
+  to SMS for short transactional notifications. Promotional campaigns are out
+  of scope for V1.
+- SMS fallback is explicit, metered, and recorded as a channel decision. It is
+  not an unlimited substitute for WhatsApp: the platform checks consent,
+  delivery status, country, segment count, and the location's remaining SMS
+  allowance before sending.
 - Outbound confirmations and reminders that require WhatsApp opt-in use an
   explicit, non-preselected consent. The consent text, response, source, and
   timestamp are retained as evidence, and opt-out is respected.
@@ -175,7 +192,34 @@ interfaces.
 - Multiple physical locations per organization.
 - Location contact details, timezone, lifecycle status, and opening hours.
 - Business enrichment audit records.
-- Forced RLS on all organization-owned tables.
+- Forced RLS on all organization-owned tables. It only applies when the
+  application connects as an unprivileged role — PostgreSQL exempts superusers
+  and `BYPASSRLS` — so `cmd/web` uses one and `cmd/migrate` keeps the
+  privileged role. See the README's "Database roles".
+
+### Staff access
+
+- A garage is rarely one person. The mechanic and the front desk work in the
+  app without owning an email account, a password, or a Google login: the owner
+  enrols them from the team screen by name and sites alone.
+- Enrolment mints a twelve-character base32 code — an alphabet with no `O`/`0`
+  or `I`/`1` to mishear when it is read out loud — of which the database keeps
+  only the SHA-256 hash. It is shown once and cannot be recovered.
+- The employee enters it at `/rejoindre` on any machine, in whatever case and
+  with whatever dashes they type, or taps the same secret as a link. Opening
+  the link only previews it; a separate POST consumes it, so a messenger's
+  link-preview fetch cannot burn an employee's only way in.
+- Codes are single-use and last seven days. Owners mint a fresh one per member
+  — retiring the previous one — for a second screen or a lost code.
+- Staff sessions last ninety days because the device is the credential, and the
+  owner revokes it from the team screen.
+- Owners correct a name without touching access, and remove someone: their
+  pending code goes with the membership through a foreign key, and their
+  workspace is cleared without signing them out of another garage they belong
+  to. Owners and admins are excluded from renaming and removal.
+- Every employee is enrolled as `member`. The screen offers no role picker:
+  `manager` and `member` are indistinguishable to every policy in the schema,
+  and `admin` grants the whole organization.
 
 ### Physical location management
 
@@ -485,10 +529,10 @@ These are database contracts and ports, not working provider integrations.
   in the V1 application tools.
 - Pause automation during human ownership and require an explicit release before
   the agent resumes the conversation.
-- Prove one real French tracer bullet before promising the combined number:
-  provision a dedicated number, receive voice and WhatsApp traffic, configure
-  the business profile, send a consented template, and verify the documented
-  provider-exit path.
+- Prove one real French tracer bullet before promising number reuse: provision
+  a Garageband-owned number, receive voice and WhatsApp traffic, configure the
+  business profile, send a consented template, remove the sender, and verify
+  reassignment to a second test business without message or call leakage.
 - Open provider questions include French number inventory and regulatory
   eligibility, combined voice/WhatsApp capability, Meta and provider approval
   lead times, pricing, sender migration, and number portability.
@@ -569,6 +613,6 @@ These are recommendations, not accepted scope:
 7. Implement one end-to-end telephone provider tracer bullet reusing the same
    customer, catalog, and scheduling tools with fake LLM and speech adapters.
 8. Add real voice/model providers only after call and tool contracts are proven.
-9. Add WhatsApp after a French-number provider tracer bullet proves combined
-   voice/messaging capability and sender portability; reuse the same customer,
-   catalog, scheduling, and authorized-action tools.
+9. Add WhatsApp after a French-number provider tracer bullet proves sender
+   onboarding, exit, and reassignment; reuse the same customer, catalog,
+   scheduling, and authorized-action tools.

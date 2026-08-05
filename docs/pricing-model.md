@@ -1,6 +1,6 @@
-# Pricing model — verified provider costs and launch offer
+# Pricing model — verified provider costs, competition, and launch offer
 
-Verified against official sources 2026-08-01. Re-verify before any contract
+Verified against official sources 2026-08-03. Re-verify before any contract
 or public price list. FX assumption: 1 EUR ≈ 1.07 USD.
 
 ## Per-minute call cost (cascaded pipeline: STT → LLM → TTS)
@@ -43,72 +43,115 @@ Target: ~3 000 €/month revenue from 5 clients → **~600 €/client/month**.
 profit — provider costs are not deductible, so gross margin matters doubly.)
 
 That figure is per *client*, not per site, and this is what makes the
-multi-site positioning work: at 249 €/site with an average of 3 sites, one
-client is ~747 €/month.
+multi-site positioning work: at 299 €/site with an average of 3 sites, one
+client is ~897 €/month before an upper-tier mix.
 
-| Clients (3 sites avg) | Revenue | Provider+infra | ~21% charges | Net |
-|---|---|---|---|---|
-| 5 | 3 735 € | ~480 € | ~784 € | **~2 470 €** |
-| 4 | 2 988 € | ~384 € | ~627 € | **~1 980 €** |
+| Scenario | Revenue | Provider+infra | 25.6% social charges | Net before income tax |
+|---|---:|---:|---:|---:|
+| 5 Essential, 1 site each | 1 495 € | ~415 € | ~383 € | **~697 €** |
+| 5 Pro organizations | 2 995 € | ~1 095 € | ~767 € | **~1 133 €** |
+| 5 groups, 3 sites each at 299 € / site | 4 485 € | ~1 150 € | ~1 148 € | **~2 187 €** |
 
-A single-site client at 249 € nets ~165 €/month after costs and charges —
+These are conservative full-allowance scenarios using the revised SMS quotas.
+They exclude income tax, insurance, payment fees, accounting, support time and
+VAT effects. Five customers only supports a livable founder income when the
+customers are multi-site groups billed per location; five single-site garages
+do not.
+
+### After income tax: Martinique reference case
+
+Reference assumption: one tax household, one part, no other income, resident in
+Martinique, micro-BNC without the optional versement libératoire. Micro-BNC
+taxable income uses the 34% forfaitary allowance, then the progressive income
+tax scale applies. On the five-group scenario above, the estimated income tax
+is approximately **2 675 €/year**, or **223 €/month**, after the 30% Martinique
+reduction capped at 2 450 €. The remaining amount is therefore approximately
+**1 960 €/month before personal living expenses**. This is an estimate, not a
+tax filing calculation; household income and dependants can change it
+substantially.
+
+A single-site client at 299 € nets roughly ~200 €/month after costs and charges —
 which is why solo garages are taken opportunistically but are not the pitch.
 This is the floor, not the ambition.
 
-## Launch offer (single price — tiers deferred until WhatsApp + catalog exist)
+## Launch offer — two managed tiers
 
 **Target: organizations with 2–6 locations.** Solo-garage deals are accepted
 opportunistically at the same price, but they are not what the pitch is built
 around — see the competitive landscape below for why.
 
-- **249 €/month per location**, 700 included minutes (~230 calls), overage
-  0.30 €/min, hard cap with auto-upgrade prompt.
+- **299 €/month per location**, 500 included minutes, 1 000 WhatsApp
+  transactional messages, 100 SMS fallback messages, overage 0.35 €/min,
+  hard cap with auto-upgrade prompt.
+- **599 €/month per organization**, 1 500 included minutes shared across up
+  to three locations, 3 000 WhatsApp transactional messages, 400 SMS fallback
+  messages, overage 0.25 €/min, separate telephone routes and site contexts,
+  and priority support.
+- **2 490 €/month per organization**, 4–7 locations, 2 500 shared minutes,
+  5 000 WhatsApp transactional messages, 1 000 SMS fallback messages, and
+  0.35 €/min above the included minutes. At 5 000 minutes, the billed amount
+  is 3 365 € HT.
+- WhatsApp is sold with a reasonable-use allowance, not literal unlimited
+  messaging. Marketing campaigns and usage above the allowance are billed at
+  cost plus a handling margin.
+- SMS is a separate metered allowance. Additional SMS are billed at provider
+  cost plus a handling margin because French outbound SMS rates are materially
+  higher than WhatsApp platform fees.
 - Design partners (first 5): **249 €/month locked 12 months**, setup free
   (390 € value), in exchange for weekly feedback and measured call data. The
   concession is the locked price and the free setup, not a lower rate — see
   design-partner-order-form.md, which is the contractual wording.
-- Cost at expected usage (~400 min) ≈ 24 € + infra ≈ **~32 € → ~87% gross
-  margin**. A fully saturated site (700 min ≈ 42 € + infra ≈ 48 €) still
-  holds **~81%**.
+- The allowances are deliberately generous for normal usage but are not
+  expected to be fully consumed by every customer. At full revised allowances,
+  Essential costs are roughly 70–85 €/month and Pro roughly 200–230 €/month,
+  before support and tax. SMS is the main variable risk.
 - Value anchor for the pitch: a part-time receptionist costs 1 200 €+/month
-  loaded; a human telesecretariat covers office hours only; 249 € buys 24/7
+  loaded; a human telesecretariat covers office hours only; 299 € buys 24/7
   answering + booking. One saved job per week pays for it
   (average garage invoice figure: [À VALIDER — ask in prospecting calls]).
-- Split into 3 tiers only when the differentiators (WhatsApp, catalog,
-  internal assistant) are implemented — see PRODUCT_FEATURES.md.
+- The lower tier is the launch default; the upper tier pays for higher call
+  volume, more locations, and support rather than an artificial feature wall.
+- A network plan must keep a usage overage. A flat price that absorbs 5 000
+  minutes at the most expensive voice configuration is not viable in the
+  micro-entreprise regime.
 
-## Competitive landscape (verified 2026-08-01, vendor list prices)
+## Competitive landscape (checked against official vendor pages 2026-08-03)
 
 | Competitor | Market | Garage-specific? | Price | Included |
 |---|---|---|---|---|
 | **Tala** (tala-assistant.com) | FR | ✅ vertical page: booking, plate lookup, repair status, recall campaigns, DMS connection | 29 € (50 min) / **99 € (800 min)** / 249 € (2 500 min) / 499 € (9 000 min) HT, sans engagement | minutes bundled |
-| **MonAgent-IA** | FR | ✅ WhatsApp chatbot garage | 79–149 €/mois, sur-mesure 500 €+ | — |
-| **Clotilde.ai** | FR | ✅ back-office agents (devis, rappels CT, pièces) — **no call answering** | opaque, bundle −20% | — |
-| Nerolia / Sylen (agencies) | FR | content marketing + custom builds | 80–350 €/mois cited | — |
-| **Numa** | US | ✅ dealerships/service depts | quote-only, ~$200–400/rooftop reported | pay-per-booked-appointment coming |
-| Goodcall / Smith.ai | US | generic receptionist | $79+ / $95+ (managed $500) | — |
+| **MonAgent-IA** | FR | ✅ WhatsApp chatbot, garage page | 49 / 99 / 199 € HT/mois | 1 000 / 5 000 / négocié ; les pages officielles ne sont pas parfaitement cohérentes |
+| **Clotilde.ai** | FR | back-office annoncé | prix non vérifié dans cette recherche | ne pas utiliser comme benchmark tarifaire |
+| **Numa** | US | ✅ service departments | prix non public | benchmark produit, pas tarif fiable |
+| **Goodcall / Smith.ai** | US | réception générique | non retenus pour la comparaison France/Martinique | numéros et WhatsApp non comparables |
 
-Market reality: a solo French garage can buy an AI phone agent for
-**99–249 €/month today**. This is what sets the ceiling: 249 € sits at Tala's
-Pro price point, so the offer never has to argue about being 2–6× the market
-on a V1 that does not yet ship its differentiators. Anything above that
-requires those differentiators to be live first.
+Les fournisseurs techniques évalués séparément sont Retell, Bland, ElevenLabs,
+Vapi, Twilio et Telnyx. Ils ne sont pas tous des concurrents directs : certains
+fournissent le moteur vocal, d'autres la téléphonie, les numéros ou WhatsApp.
+
+Market reality: a solo French garage can buy a voice-only AI receptionist for
+**99–249 €/month today**. The proposed 299 € and 599 € offers therefore need to
+sell managed multi-channel operations — configuration, WhatsApp, integration,
+number lifecycle, and support — rather than raw minutes alone.
 
 ### Differentiators competitors do NOT have (per PRODUCT_FEATURES.md)
 
 - Multi-location organizations: RLS isolation, per-site agents/numbers,
   cross-site customer dossier sharing with audit trail.
-- One public number for phone + WhatsApp with per-location routing.
+- Existing fixed number retained for calls, plus a lifecycle-managed
+  Garageband-owned AI/WhatsApp sender when needed.
 - Catalog-grounded price answers (never invents a price) + staged imports.
 - Structured agent memories with human review and provenance.
 
 These matter to **groupes/réseaux multi-sites**, not to the solo garage Tala
 serves. That is the whole reconciliation between the market price and the
-4–5 client goal: the same 249 € that is merely competitive for one garage
-becomes ~747 €/month once a client runs three of them. The offer above is
+4–5 client goal: the managed 299 € tier is above a voice-only receptionist
+because it includes multi-channel operations and lifecycle management. Three
+locations make one client worth ~897 €/month. The offer above is
 priced per location for that reason.
 
-**Billing unit: one location = one price.** A three-site group pays 3 × 249 €.
+**Billing unit: one location = one price.** A three-site group pays 3 × 299 €
+on the lower tier, with the upper tier available for higher-volume sites.
 Each site gets its own number, its own agent, and its own included minutes;
 minutes do not pool across sites in V1 (see the open item below).
 
