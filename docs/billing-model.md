@@ -118,6 +118,6 @@ everything else.
 ## Not covered here
 
 Dunning and failed payments, invoice branding, usage metering for overage
-minutes above the 700 included, annual prepayment, and per-location invoicing
-for groups that want their sites billed separately. All are phase 2 or later,
+minutes above a plan's included allowance, annual prepayment, and per-location
+invoicing for groups that want their sites billed separately. All are phase 2 or later,
 and none block the first client.

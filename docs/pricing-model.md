@@ -44,13 +44,14 @@ profit — provider costs are not deductible, so gross margin matters doubly.)
 
 That figure is per *client*, not per site, and this is what makes the
 multi-site positioning work: at 299 €/site with an average of 3 sites, one
-client is ~897 €/month before an upper-tier mix.
+client is ~897 €/month. The Pro tier lands on the same figure by design, so
+the two bottom rows below differ by ten euros rather than by a tier choice.
 
 | Scenario | Revenue | Provider+infra | 25.6% social charges | Net before income tax |
 |---|---:|---:|---:|---:|
 | 5 Essential, 1 site each | 1 495 € | ~415 € | ~383 € | **~697 €** |
-| 5 Pro organizations | 2 995 € | ~1 095 € | ~767 € | **~1 133 €** |
-| 5 groups, 3 sites each at 299 € / site | 4 485 € | ~1 150 € | ~1 148 € | **~2 187 €** |
+| 5 Pro organizations, 3 sites each, pooled | 4 495 € | ~1 095 € | ~1 151 € | **~2 249 €** |
+| 5 groups, 3 sites each billed per site | 4 485 € | ~1 150 € | ~1 148 € | **~2 187 €** |
 
 These are conservative full-allowance scenarios using the revised SMS quotas.
 They exclude income tax, insurance, payment fees, accounting, support time and
@@ -83,10 +84,14 @@ around — see the competitive landscape below for why.
 - **299 €/month per location**, 500 included minutes, 1 000 WhatsApp
   transactional messages, 100 SMS fallback messages, overage 0.35 €/min,
   hard cap with auto-upgrade prompt.
-- **599 €/month per organization**, 1 500 included minutes shared across up
+- **899 €/month per organization**, 1 500 included minutes shared across up
   to three locations, 3 000 WhatsApp transactional messages, 400 SMS fallback
   messages, overage 0.25 €/min, separate telephone routes and site contexts,
-  and priority support.
+  and priority support. That is exactly 3 × 299 €: the upper tier is never
+  cheaper than buying the same three locations one by one. What it adds at
+  the same price is pooling (a quiet site's unused minutes cover a busy one),
+  a lower overage rate, 100 extra SMS, and priority support — none of which
+  costs more to serve, because the provider bill is per minute, not per site.
 - **2 490 €/month per organization**, 4–7 locations, 2 500 shared minutes,
   5 000 WhatsApp transactional messages, 1 000 SMS fallback messages, and
   0.35 €/min above the included minutes. At 5 000 minutes, the billed amount
@@ -130,7 +135,7 @@ Vapi, Twilio et Telnyx. Ils ne sont pas tous des concurrents directs : certains
 fournissent le moteur vocal, d'autres la téléphonie, les numéros ou WhatsApp.
 
 Market reality: a solo French garage can buy a voice-only AI receptionist for
-**99–249 €/month today**. The proposed 299 € and 599 € offers therefore need to
+**99–249 €/month today**. The proposed 299 € and 899 € offers therefore need to
 sell managed multi-channel operations — configuration, WhatsApp, integration,
 number lifecycle, and support — rather than raw minutes alone.
 
@@ -151,9 +156,13 @@ locations make one client worth ~897 €/month. The offer above is
 priced per location for that reason.
 
 **Billing unit: one location = one price.** A three-site group pays 3 × 299 €
-on the lower tier, with the upper tier available for higher-volume sites.
-Each site gets its own number, its own agent, and its own included minutes;
-minutes do not pool across sites in V1 (see the open item below).
+on the lower tier or 899 € on Pro — the same money either way, deliberately.
+Every tier is anchored to 299 € per location so that no packaging is ever
+cheaper than buying the locations one at a time; a group that grows into Pro
+gains pooled minutes and support, never a discount. Each site keeps its own
+number, its own agent, and its own context in both cases. Pooling is the one
+thing Pro cannot deliver before usage metering exists, which is what the open
+item below is really gating.
 
 How that is actually collected — one Stripe subscription with a quantity, what
 triggers a quantity change, and when any of it is worth automating — is in
@@ -168,6 +177,13 @@ triggers a quantity change, and when any of it is worth automating — is in
 - [ ] Decide whether included minutes pool across a group's sites. Pooling is
       what a multi-site buyer will ask for first (a quiet site subsidising a
       busy one), and it costs nothing extra — the provider bill is per minute,
-      not per site. Deferred only until metering exists.
+      not per site. Deferred only until metering exists. Pro is sold on it, so
+      Pro cannot be sold before metering does.
 - [ ] Decide whether a group discount applies past ~4 sites. None today: the
-      price is flat per location, and a 6-site group pays 1 494 €/month.
+      price is flat per location, and a 6-site group pays 1 794 €/month.
+- [ ] The 2 490 € network tier is dominated by its own per-location price and
+      has to move. Seven sites bought one by one cost 2 093 € and carry 3 500
+      included minutes; the network tier asks 2 490 € for 2 500 shared minutes,
+      so it is both dearer and smaller at every site count in its 4–7 range.
+      Either anchor it to 299 €/site like the others (1 196–2 093 €) or raise
+      what it includes until the premium buys something. Not decided here.
