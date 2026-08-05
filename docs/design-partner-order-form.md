@@ -54,9 +54,16 @@ taxes**, la TVA s'ajoute au taux légal dès que le Prestataire y est assujetti
   Si la mise en service n'est pas intervenue au [date + marge], le Client
   peut annuler la réservation sans frais ni pénalité.
 
-## 4. Durée et résiliation
+## 4. Durée, suspension et résiliation
 
 - Période pilote : **3 mois** à compter de la mise en service.
+- **Site suspendu : facturé au tarif plein.** Le Client peut demander la
+  suspension du service sur un site ; son numéro reste alors réservé à son
+  nom et sa configuration (horaires, catalogue, ressources, agent) est
+  conservée en l'état, de sorte que la reprise est immédiate. C'est cette
+  réservation qui est facturée, non les minutes. Pour cesser d'être facturé,
+  le Client retire le site, ce qui libère définitivement son numéro : le
+  Prestataire ne peut pas garantir de le récupérer ensuite.
 - Résiliable par le Client **à tout moment, sans préavis ni pénalité**
   pendant la période pilote ; ensuite préavis de 30 jours.
 - Le tarif de l'article 2 reste garanti 12 mois quelle que soit

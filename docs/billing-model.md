@@ -100,11 +100,14 @@ everything else.
 
 ## Open decisions
 
-- [ ] A location paused with its number retained: still billed, or credited?
-      Keeping the number costs 1.35 $/month; releasing it means the client
-      loses it and cannot get it back. Retaining it and billing in full is the
-      defensible answer, but it must be written into the order form before it
-      is charged to anyone.
+- [x] A paused location keeps being billed in full. What the price buys during
+      a pause is the number staying reserved and the site's configuration
+      staying intact for an immediate restart — not the minutes. A client who
+      wants to stop paying removes the site, which releases the number for
+      good. Written into the order form's article 4, so it is agreed before it
+      is charged. Nothing to model in Stripe either: with no standby price, a
+      paused site is still one unit of subscription quantity, and only removing
+      it changes the invoice.
 - [x] Included minutes pool across a group's sites — Pro and Network are sold
       on it. Costs nothing, since the provider bill is per minute, not per
       site, but it cannot be invoiced before usage metering exists. Also
