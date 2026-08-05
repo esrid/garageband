@@ -191,11 +191,12 @@ triggers a quantity change, and when any of it is worth automating — is in
 - [ ] Verify Twilio Media Streams price in the Twilio console.
 - [ ] Measure real average call duration on tracer bullet; recalc.
 - [ ] Willingness-to-pay: 5 garage owner conversations (see prospecting script).
-- [ ] Decide whether included minutes pool across a group's sites. Pooling is
-      what a multi-site buyer will ask for first (a quiet site subsidising a
-      busy one), and it costs nothing extra — the provider bill is per minute,
-      not per site. Deferred only until metering exists. Pro is sold on it, so
-      Pro cannot be sold before metering does.
+- [x] Included minutes pool across a group's sites. It is what a multi-site
+      buyer asks for first (a quiet site subsidising a busy one) and it costs
+      nothing extra, because the provider bill is per minute, not per site.
+      Pro and Network are sold on it, so neither can be sold before usage
+      metering exists — that is now an implementation dependency, not an open
+      question.
 - [ ] Decide whether a group discount applies past ~4 sites. None today: the
       price is flat per location, and a 6-site group pays 1 794 €/month.
 - [x] The network tier was a flat 2 490 € for 4–7 locations, which its own

@@ -105,9 +105,9 @@ everything else.
       loses it and cannot get it back. Retaining it and billing in full is the
       defensible answer, but it must be written into the order form before it
       is charged to anyone.
-- [ ] Do included minutes pool across a group's sites? Pooling is the first
-      thing a multi-site buyer asks for and costs nothing — the provider bill
-      is per minute, not per site. Blocked only on metering existing. Also
+- [x] Included minutes pool across a group's sites — Pro and Network are sold
+      on it. Costs nothing, since the provider bill is per minute, not per
+      site, but it cannot be invoiced before usage metering exists. Also
       tracked in `pricing-model.md`.
 - [ ] VAT. The order form says franchise en base (art. 293 B) marked
       À VALIDER. It changes what the client actually pays and how Stripe Tax is
