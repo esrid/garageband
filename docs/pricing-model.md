@@ -182,11 +182,12 @@ triggers a quantity change, and when any of it is worth automating — is in
       form stops being true at 41 250 € of annual turnover, which this offer
       reaches at roughly a dozen single-site customers — the sourced reading is
       in `billing-model.md`. Every figure on this page is stated excluding tax.
-- [ ] The design-partner order form promises 700 minutes/site at 0.30 €/min
-      overage, against 500 minutes at 0.35 € on Essential. Either it is a
-      deliberate design-partner concession — which contradicts "the concession
-      is the locked price and the free setup, not a lower rate" above — or it
-      is a stale figure. Decide which before the form is signed.
+- [x] The design-partner order form promised 700 minutes/site at 0.30 €/min
+      against Essential's 500 at 0.35 €, contradicting "the concession is the
+      locked price and the free setup, not a lower rate" two lines above. The
+      form now carries Essential's own allowance: a design partner buys the
+      public offer at a locked 249 € with the setup waived, and nothing else
+      changes when the twelve months end.
 - [ ] Pull exact Meta EUR utility rate from the rate-card CSV.
 - [ ] Verify Twilio Media Streams price in the Twilio console.
 - [ ] Measure real average call duration on tracer bullet; recalc.

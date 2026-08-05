@@ -30,7 +30,7 @@ clients, prise de rendez-vous atelier, historique client par site.
 |---|---|
 | Tarif | **249 € HT / site / mois** — bloqué 12 mois à compter de la mise en service |
 | Sites couverts | [nombre] site(s) : [adresses] |
-| Minutes incluses | 700 min/site/mois, au-delà 0,30 € HT/min (plafond avec accord préalable) |
+| Minutes incluses | 500 min/site/mois, au-delà 0,35 € HT/min (plafond avec accord préalable) — soit exactement l'offre Essentielle |
 | Frais de mise en service | **Offerts** (valeur 390 € HT) |
 | Numéro dédié | 1 numéro français par site, fourni par le Prestataire |
 
