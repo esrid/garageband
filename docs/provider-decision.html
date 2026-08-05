@@ -139,7 +139,17 @@
   <article class="card">
     <h3>Le prix est le même des deux côtés</h3>
     <p>ConversationRelay : <strong>0,07 $/min</strong>, les minutes voix facturées à part sous le plan Twilio existant (0,0100 $/min en entrant France). Retell : 0,055 $/min de plateforme, plus TTS, LLM et téléphonie, pour un exemple publié à 0,13 $/min. Dans les deux cas le LLM est à part et le total réel tourne autour de 0,09–0,13 $/min.</p>
-    <p class="muted">Le support Twilio a confirmé le 5 août 2026 que <strong>les voix ElevenLabs sont comprises dans le prix à la minute</strong>, sans ligne séparée — alors que Retell les facture en supplément. Comme ElevenLabs est le fournisseur TTS par défaut de ConversationRelay et porte la voix fr-FR, la voix française ne coûte rien de plus ici. La page tarifaire publique renvoie toujours à « contact sales » : à revérifier sur la première facture réelle.</p>
+    <p class="muted">L'assistant de la console Twilio indique le 5 août 2026 que <strong>les voix ElevenLabs sont comprises dans le prix à la minute</strong>, sans ligne séparée — alors que Retell les facture en supplément. Comme ElevenLabs est le fournisseur TTS par défaut de ConversationRelay et porte la voix fr-FR, la voix française ne coûterait rien de plus ici. C'est une IA qui lit la doc publique, formulée en « rien n'indique que ce soit facturé à part » : à traiter comme probable et à confirmer sur la première facture, pas comme un engagement tarifaire.</p>
+  </article>
+  <article class="card">
+    <h3>Le SMS français part sous un nom, pas sous un numéro</h3>
+    <p>Les directives SMS France de Twilio sont explicites : « <em>You must use Alphanumeric Sender IDs to send A2P messages</em> », et « <em>French mobile operators do not support message delivery via international Numeric Sender ID</em> ». Un numéro géographique français ne porte donc pas le SMS transactionnel.</p>
+    <p class="muted">Deux conséquences produit. Bonne : le fallback SMS n'a besoin d'aucun numéro à lui, il part sous le nom du garage — un numéro de moins à provisionner, à facturer et à libérer par site. Contraignante : le client ne peut pas répondre à ce SMS. Tout ce qui attend une réponse passe par WhatsApp ou par le téléphone, jamais par le SMS.</p>
+  </article>
+  <article class="card">
+    <h3>Le libre-service n'est pas instantané</h3>
+    <p>L'API permet bien d'acheter un numéro et de câbler les webhooks par code, pour un parcours web où le garage se sert lui-même. Mais un numéro français exige un Regulatory Bundle rattaché à l'identité du <em>client final</em> — K-bis, Siren/Siret, justificatif d'adresse en France — soumis via l'API de conformité puis <strong>examiné</strong>. WhatsApp ajoute par-dessus l'onboarding Meta et sa vérification par code.</p>
+    <p class="muted">Le parcours réaliste est donc « le garage dépose ses documents, puis attend une validation », pas « le garage clique et son numéro est actif ». Délai d'examen non vérifié à ce stade — à mesurer sur le premier dossier réel, car c'est lui qui fixe le délai de mise en service vendu dans le bon de commande.</p>
   </article>
   <article class="card">
     <h3>GA, pas une annonce</h3>

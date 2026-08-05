@@ -24,10 +24,13 @@ That does not threaten the offer: 500 included minutes cost about 55 € against
 a 299 € price. It does mean the margin table has not been rebuilt on this
 basis yet — see the open item.
 
-The ElevenLabs question is settled: Twilio support confirmed on 2026-08-05
-that ElevenLabs voices are covered by the per-minute price, with no separate
-line. The public pricing page still says "contact sales", so this rests on
-support's word — re-check it on the first real invoice. It matters because
+On ElevenLabs: Twilio's console assistant answered on 2026-08-05 that the
+voices are covered by the per-minute price with no separate line — while
+wording it as "there is no indication that ElevenLabs TTS is billed
+separately", which is an absence of evidence rather than a billing commitment,
+and it is an AI assistant reading the same public docs, not a human quoting a
+rate card. The public pricing page still says "contact sales". Treat it as
+probable, plan on it, and confirm it against the first real invoice. It matters because
 ElevenLabs is ConversationRelay's default TTS provider and carries the fr-FR
 voice: the French voice costs nothing extra here, where renting the agent
 layer elsewhere prices the same voices as an add-on.
@@ -224,9 +227,10 @@ triggers a quantity change, and when any of it is worth automating — is in
       0.06 €/min for a hand-assembled cascade; the platform fee roughly
       doubles it. Do it together with the tracer-bullet measurement rather
       than twice.
-- [x] ElevenLabs voices are included in ConversationRelay's $0.07/min, per
-      Twilio support on 2026-08-05. The pricing page still defers to sales, so
-      confirm it against the first real invoice.
+- [x] ElevenLabs voices are included in ConversationRelay's $0.07/min — per
+      Twilio's console assistant on 2026-08-05, which is an AI reading the
+      public docs rather than a rate card. Plan on it, confirm on the first
+      real invoice.
 - [ ] Price the forward itself for an overseas customer. Twilio has no
       Martinique number, so a Martinique garage forwards its own 0596 line to a
       metropolitan number and its carrier bills that leg. If Orange Caraïbe,

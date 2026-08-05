@@ -117,6 +117,14 @@ interfaces.
   not an unlimited substitute for WhatsApp: the platform checks consent,
   delivery status, country, segment count, and the location's remaining SMS
   allowance before sending.
+- **SMS to France is one-way and sent under a name, not a number.** French
+  operators require an Alphanumeric Sender ID for A2P traffic and do not
+  deliver international numeric sender IDs, so a French geographic number
+  cannot carry these messages (Twilio France SMS guidelines, checked
+  2026-08-05). Two consequences: the SMS fallback needs no phone number of its
+  own — it carries the garage's name as the sender — and a customer cannot
+  reply to it. Anything expecting an answer belongs on WhatsApp or on the
+  telephone, never on the SMS path.
 - Outbound confirmations and reminders that require WhatsApp opt-in use an
   explicit, non-preselected consent. The consent text, response, source, and
   timestamp are retained as evidence, and opt-out is respected.
