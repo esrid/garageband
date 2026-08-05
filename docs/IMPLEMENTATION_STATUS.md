@@ -162,15 +162,42 @@ absent.
    performs — tool registry, authorization, previews, confirmations, audits —
    so the phone gets one agent loop shared with the screen rather than a
    second one rented elsewhere. Renting it from Retell stays the fallback if
-   the loop proves harder than expected. What remains before adapter code is
-   an account and a real French number, not another comparison. The same
-   document lists what must be proven on a live account before any contract:
-   a metropolitan French number receiving a no-answer forward, including one
-   forwarded from a real Martinique line, since Twilio sells no +596 and does
-   not port one either; the fr-FR voice with human transfer and transcription
-   — the
-   transfer being plain TwiML on the same call now, with no SIP trunk to
-   configure — a WhatsApp sender with
+   the loop proves harder than expected.
+
+   **Two pieces of it are built** (`internal/features/voice`). The loop itself:
+   `POST /voice/incoming` answers with the TwiML that hands the audio to
+   ConversationRelay, `GET /voice/relay` carries the socket, and `Session`
+   holds one call's transcript — answering only the final transcription,
+   keeping the spoken greeting in the history, and truncating an interrupted
+   sentence to `utteranceUntilInterrupt` so the next answer never builds on
+   words nobody heard. Neither endpoint sits behind `RequireTenant`, because a
+   caller is anonymous: the webhook is Twilio-signed and the site travels in
+   that signed URL rather than being looked up, and the socket carries a
+   two-minute HMAC token minted in the TwiML. Missing `TWILIO_AUTH_TOKEN`
+   registers no routes at all — that token is the key both proofs rest on. The
+   responder is a fixed sentence on purpose, since no model may be connected
+   before its tools, authorization, confirmations and audits are complete.
+
+   And the provisioning state (migration 0031): `telephony_accounts` holds one
+   subaccount per organization and refuses a second, `regulatory_bundles`
+   records the compliance file with the submission and review timestamps that
+   measure time to activation, and `phone_numbers` gained the bundle it was
+   bought under, a WhatsApp sender flag, a `provisioning` status and a release
+   that frees the E.164 for the next customer. `internal/platform/twilio`
+   implements the provisioning port with the official SDK.
+
+   What is missing on this slice is the write path: nothing in the application
+   calls `AttachNumber`, `ActivateNumber` or `RecordBundle` yet, so a number is
+   bought in the Twilio console rather than through Garageband. Calls persist
+   nothing either — the `calls` inbox stays empty after a real call.
+
+   What remains before the rest is an account and a real French number, not
+   another comparison. The same document lists what must be proven on a live
+   account before any contract: a metropolitan French number receiving a
+   no-answer forward, including one forwarded from a real Martinique line,
+   since Twilio sells no +596 and does not port one either; the fr-FR voice
+   with human transfer and transcription — the transfer being plain TwiML on
+   the same call now, with no SIP trunk to configure — a WhatsApp sender with
    opt-in and SMS fallback, full removal of a site followed by reassignment of
    a Garageband-owned number to another one with no call, message, or data
    leakage, and the real cost at 700 and 1 800 minutes.
