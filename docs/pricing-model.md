@@ -3,7 +3,33 @@
 Verified against official sources 2026-08-03. Re-verify before any contract
 or public price list. FX assumption: 1 EUR ≈ 1.07 USD.
 
-## Per-minute call cost (cascaded pipeline: STT → LLM → TTS)
+## Per-minute call cost with Retell (the chosen runtime)
+
+Checked against retellai.com/pricing on 2026-08-05. Retell bills its own voice
+infrastructure on top of the model and voice it runs, which the table further
+down does not account for — that one prices a cascade assembled by hand, and
+the provider decision chose Retell instead.
+
+| Item | Rate | Source |
+|---|---|---|
+| Retell voice infrastructure | $0.055/min | retellai.com/pricing |
+| LLM | $0.045/min in Retell's own GPT-4.1 example, less on a cheaper model | idem |
+| TTS, Retell voice | $0.015/min | idem |
+| TTS, ElevenLabs instead | +$0.040/min | idem |
+| Telephony | $0.015/min US in their example; FR inbound is $0.0100 (below) | idem |
+| **Retell's published example** | **≈ $0.13/min** | idem |
+| Concurrency | 20 simultaneous calls free, then $8/concurrent/month | idem |
+
+Retell also advertises a $0.07–$0.31/min range depending on the components
+selected. With French telephony and a cheap model, a realistic figure is
+**$0.09–0.10/min ≈ 0.085 €**, so **plan on 0.11 €/min** with the same 25%
+buffer — close to double the 0.06 € the scenarios below still use.
+
+That does not threaten the offer: 500 included minutes cost about 55 € against
+a 299 € price. It does mean the margin table has not been rebuilt on this
+basis yet — see the open item.
+
+## Per-minute cost of a hand-assembled cascade (not the chosen path)
 
 | Item | Provider | Rate | Cost / call-minute | Source |
 |---|---|---|---|---|
@@ -190,6 +216,10 @@ triggers a quantity change, and when any of it is worth automating — is in
       form now carries Essential's own allowance: a design partner buys the
       public offer at a locked 249 € with the setup waived, and nothing else
       changes when the twelve months end.
+- [ ] Rebuild the margin scenarios on Retell's per-minute cost. Every
+      "provider+infra" figure in the table above was computed at 0.06 €/min for
+      a hand-assembled cascade; Retell's platform fee roughly doubles it. Do it
+      together with the tracer-bullet measurement rather than twice.
 - [ ] Pull exact Meta EUR utility rate from the rate-card CSV.
 - [ ] Verify Twilio Media Streams price in the Twilio console.
 - [ ] Measure real average call duration on tracer bullet; recalc.

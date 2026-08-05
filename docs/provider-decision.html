@@ -108,6 +108,21 @@
     <li>Le coût réel à 700 et 1 800 minutes, incluant téléphonie, LLM, TTS, stockage, support et frais Meta.</li>
   </ol>
 
+  <h2>Contraintes de montage vérifiées le 5 août 2026</h2>
+  <article class="card">
+    <h3>Le transfert humain impose l'elastic SIP trunking</h3>
+    <p>Deux façons de relier un numéro Twilio à Retell. Avec <strong>elastic SIP trunking</strong>, on crée un trunk, on y pointe le numéro et on l'importe dans Retell (format E.164, termination URI en <code>.pstn.twilio.com</code>) : le transfert d'appel de Retell fonctionne. Avec <strong>dial to SIP URI</strong>, la doc est explicite — « you will not be able to use Retell's transfer call feature », il faudrait réimplémenter le transfert soi-même. Puisque l'agent doit passer l'appelant sur le fixe de l'atelier, l'elastic SIP trunking n'est pas une préférence, c'est la seule option. Le transfert froid (SIP REFER) se configure en plus côté trunk.</p>
+  </article>
+  <article class="card">
+    <h3>Un numéro français exige une adresse française</h3>
+    <p>Twilio demande, pour un numéro local FR : extrait K-bis nommant le représentant, preuve d'adresse locale (pas de boîte postale), numéro RCS ou Siren/Siret, site de l'entreprise. L'adresse doit être « within France ».</p>
+    <p class="muted">La page réglementaire France de Twilio <strong>ne mentionne aucun DOM</strong> — ni Martinique, ni Guadeloupe, ni Réunion. Rien dans la documentation publique ne confirme que du 0596 est achetable : la page tarifaire Martinique couvre le coût des appels vers l'île, pas l'inventaire des numéros. À vérifier en console ou auprès du commercial avant de promettre un numéro Garageband à un garage martiniquais. Si la réponse est non, l'architecture tient quand même — le renvoi sur non-réponse depuis le fixe existant du garage reste le chemin recommandé — mais l'offre « numéro fourni » ne serait vendable qu'en métropole.</p>
+  </article>
+  <article class="card">
+    <h3>Retell facture sa plateforme en plus du modèle</h3>
+    <p>0,055 $/min d'infrastructure vocale s'ajoutent au LLM, au TTS et à la téléphonie ; l'exemple publié par Retell atteint 0,13 $/min. Vingt appels simultanés sont inclus, puis 8 $/appel simultané/mois. Le modèle de coûts de <code>pricing-model.md</code> chiffrait une cascade assemblée à la main à 0,044 € : avec Retell il faut tabler sur environ le double.</p>
+  </article>
+
   <h2>Sources principales</h2>
   <ul class="sources">
     <li><a href="https://www.twilio.com/en-us/voice/pricing/fr">Twilio Voice France</a></li>
@@ -118,6 +133,8 @@
     <li><a href="https://www.retellai.com/pricing">Retell pricing</a></li>
     <li><a href="https://www.bland.ai/pricing">Bland pricing</a></li>
     <li><a href="https://elevenlabs.io/docs/reception-ai/billing/plans-and-pricing">ElevenLabs Reception pricing</a></li>
+    <li><a href="https://docs.retellai.com/deploy/custom-telephony">Retell — connecter sa propre téléphonie</a></li>
+    <li><a href="https://www.twilio.com/en-us/guidelines/fr/regulatory">Twilio — exigences réglementaires France</a></li>
     <li><a href="https://docs.vapi.ai/phone-calling">Vapi phone calling</a></li>
     <li><a href="https://telnyx.com/resources/how-to-port-phone-number">Telnyx porting</a></li>
     <li><a href="https://www.tala-assistant.com/pricing">Tala pricing</a></li>
