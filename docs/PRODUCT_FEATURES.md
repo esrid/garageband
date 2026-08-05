@@ -504,7 +504,19 @@ These are database contracts and ports, not working provider integrations.
 - Caller recognition and safe customer disambiguation.
 - Tool calls for customer lookup, memory proposals, vehicle lookup,
   availability, appointment creation, rescheduling, and cancellation.
-- Human transfer and fallback behavior.
+- Human transfer and fallback behavior. **The agent transfers to one number
+  per location** — the workshop's own landline, already on the desk and
+  already known to the team. A location therefore carries a transfer number,
+  and the telephony port gains a transfer primitive; nothing else is stored.
+  Staff phone numbers are deliberately not held: they are employee personal
+  data on accounts that today have neither an email nor a password, they
+  would require a per-person availability notion to avoid ringing into the
+  void during leave, and they buy "put me through to Marc" — a request no
+  garage has asked for yet. Consequence to accept: the agent transfers to the
+  garage, not to a named person. When nobody picks up, the caller is not
+  dropped — the agent takes the message and the call lands in the staff work
+  queue, the same shape as the appointment-reminder queue, which is the only
+  handling model this product has committed to so far.
 - Per-location prompt, greeting, language, voice, business hours, and escalation
   configuration.
 - Call summaries, outcomes, searchable transcripts, and quality review.

@@ -186,9 +186,12 @@ make unilaterally. Slice 1 no longer does.
 - Live call handling, recordings/retention workflow, automated reminders,
   no-show flows, human handoff, and cross-channel telephone/WhatsApp
   continuity. Transferring a caller to a person — "je veux parler à un
-  mécanicien" — is unbuilt and unspecified: the app knows staff as accounts
-  and as bookable resources, but holds no phone number for a human, and the
-  telephony port has no transfer primitive.
+  mécanicien" — is unbuilt, but no longer unspecified: the target is the
+  location's own landline, one transfer number per site, and the telephony
+  port needs a transfer primitive it does not have. Staff phone numbers stay
+  out of the schema on purpose (see PRODUCT_FEATURES.md), so the agent
+  transfers to the garage rather than to a named mechanic, and an unanswered
+  transfer becomes a message in the staff work queue instead of a lost call.
 - Signing a staff device out without removing the person from the
   organization, and showing an owner whether and when someone signed in.
   Today revoking is all-or-nothing and the team screen only distinguishes
