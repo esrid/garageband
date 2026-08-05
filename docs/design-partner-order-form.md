@@ -36,6 +36,15 @@ clients, prise de rendez-vous atelier, historique client par site.
 
 TVA : [franchise en base, art. 293 B du CGI — À VALIDER selon statut] .
 
+Deux réserves avant de signer quoi que ce soit avec cette mention, détaillées
+dans `billing-model.md` : le seuil de franchise pour les prestations de
+services est de 37 500 € (41 250 € en cours d'année), donc la mention cesse
+d'être vraie avant la fin de la première année si l'offre trouve son marché ;
+et la référence « art. 293 B » change au 1er septembre 2026 avec la
+recodification. Prévoir la clause de bascule : le prix est convenu **hors
+taxes**, la TVA s'ajoute au taux légal dès que le Prestataire y est assujetti
+(8,5 % pour un client établi en Martinique, 20 % en métropole).
+
 ## 3. Démarrage et facturation
 
 - **Aucune facturation à la signature.** La facturation démarre à la
