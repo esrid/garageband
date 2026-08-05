@@ -159,6 +159,11 @@
     <p class="muted">Deux conséquences produit. Bonne : le fallback SMS n'a besoin d'aucun numéro à lui, il part sous le nom du garage — un numéro de moins à provisionner, à facturer et à libérer par site. Contraignante : le client ne peut pas répondre à ce SMS. Tout ce qui attend une réponse passe par WhatsApp ou par le téléphone, jamais par le SMS.</p>
   </article>
   <article class="card">
+    <h3>Un sous-compte par garage</h3>
+    <p>C'est le montage que Twilio recommande explicitement aux éditeurs : « <em>each of your customers should be mapped to an individual subaccount for their exclusive use</em> », chacun portant son propre profil client, ses propres numéros et son propre usage. Les sous-comptes se créent par API, et la facturation reste consolidée sur le compte parent — un seul solde.</p>
+    <p class="muted">Trois conséquences qui tombent juste. La fermeture d'un sous-compte <strong>libère automatiquement tous ses numéros</strong> : le flux de sortie client s'appuie sur un mécanisme fourni plutôt que sur une checklist. La suspension coupe appels et messages <strong>mais continue de facturer les numéros</strong>, ce qui est exactement la politique de site en pause déjà écrite au bon de commande. Et déplacer un numéro d'un sous-compte à un autre <strong>échoue si le sous-compte destinataire n'a pas son propre bundle réglementaire</strong> — la réattribution d'un numéro à un autre garage est donc bloquée par la conformité avant de pouvoir fuiter.</p>
+  </article>
+  <article class="card">
     <h3>Le libre-service n'est pas instantané</h3>
     <p>L'API permet bien d'acheter un numéro et de câbler les webhooks par code, pour un parcours web où le garage se sert lui-même. Mais un numéro français exige un Regulatory Bundle rattaché à l'identité du <em>client final</em> — K-bis, Siren/Siret, justificatif d'adresse en France — soumis via l'API de conformité puis <strong>examiné</strong>. WhatsApp ajoute par-dessus l'onboarding Meta et sa vérification par code.</p>
     <p class="muted">Le parcours réaliste est donc « le garage dépose ses documents, puis attend une validation », pas « le garage clique et son numéro est actif ». Délai d'examen non vérifié à ce stade — à mesurer sur le premier dossier réel, car c'est lui qui fixe le délai de mise en service vendu dans le bon de commande.</p>

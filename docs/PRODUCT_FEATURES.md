@@ -104,6 +104,18 @@ interfaces.
   never silently reassigned. A Garageband-owned newly provisioned number may
   be released, transferred, or reallocated only after the customer exit flow
   completes its telephony and WhatsApp cleanup.
+- **One organization is one Twilio subaccount**, the arrangement Twilio
+  prescribes for software vendors: each customer gets its own subaccount, its
+  own compliance profile, and its own numbers, with usage consolidated on one
+  parent balance (checked 2026-08-05). Three product rules then rest on
+  provider mechanics instead of on a checklist someone has to remember.
+  Closing a subaccount releases every number it holds, so offboarding has a
+  single irreversible step rather than a list. Suspending one stops calls and
+  messages while number charges continue, which is exactly the paused-site
+  policy the order form already sells. And moving a number to another
+  subaccount fails unless that subaccount carries its own regulatory bundle,
+  so a number cannot reach the next garage before that garage is itself
+  compliant.
 - A multi-location organization may share one WhatsApp sender, while telephone
   routes and Garageband-owned numbers remain location-scoped by default.
   Before answering a location-dependent question about prices, services,
