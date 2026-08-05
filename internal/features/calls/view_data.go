@@ -1,7 +1,7 @@
 // Package calls renders the telephone call inbox and one call's transcript.
 //
-// It owns no data and talks to no database: a handler builds these view models
-// from the store. The contract is written down in docs/calls-ui-contract.md.
+// The views never query anything and never decide permissions: a handler
+// builds these view models from the store, and views_test.go is the contract.
 // The models are local on purpose — a feature never imports another feature.
 //
 // Every time handed to this package is already in the workshop's timezone;

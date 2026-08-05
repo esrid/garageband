@@ -1,8 +1,8 @@
 // Package team renders the screen where an organization decides which staff
 // reach which physical locations.
 //
-// It owns no data and talks to no database: a handler builds these view models
-// from the store. The contract is written down in docs/team-ui-contract.md.
+// The views never query anything and never decide permissions: a handler
+// builds these view models from the store, and views_test.go is the contract.
 // The models are local on purpose — a feature never imports another feature —
 // so LocationRef carries only what this screen displays.
 package team

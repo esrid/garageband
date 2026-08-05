@@ -1,8 +1,8 @@
 // Package catalog renders the priced offering of an organization — what the
 // telephone agent is allowed to quote — and the staged imports that fill it.
 //
-// It owns no data and talks to no database: a handler builds these view models
-// from the store. The contract is written down in docs/catalog-ui-contract.md.
+// The views never query anything and never decide permissions: a handler
+// builds these view models from the store, and views_test.go is the contract.
 // The models are local on purpose — a feature never imports another feature.
 //
 // Every derived state takes the current time as an argument instead of calling
