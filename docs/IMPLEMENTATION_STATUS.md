@@ -152,14 +152,23 @@ absent.
    verification, caller disambiguation, transcription, model/tool orchestration,
    voice output, fallback, and observability, while reusing the same customer,
    catalog, and scheduling tools. **The vendor decision is made**:
-   [provider-decision.html](provider-decision.html) records Twilio for numbers,
-   voice routing, WhatsApp, and portability, with Retell for the voice-agent
-   runtime — each site keeping its own fixed number routed to its own
-   Garageband context. What remains before adapter code is an account and a
-   real French number, not another comparison. The same document lists what
-   must be proven on a live account before any contract: fixed numbers in
-   Martinique and metropolitan France with no-answer forwarding, a French
-   Retell voice with human transfer and transcription, a WhatsApp sender with
+   [provider-decision.html](provider-decision.html) records Twilio alone, with
+   ConversationRelay — numbers, voice routing, WhatsApp, portability, speech
+   recognition, voice, and interruption handling from one provider, each site
+   keeping its own fixed number routed to its own Garageband context.
+   Garageband writes the agent loop itself: a WebSocket server that receives
+   transcribed text, calls the model and the product's own tools, and returns
+   what to say. That is the same orchestration the internal assistant already
+   performs — tool registry, authorization, previews, confirmations, audits —
+   so the phone gets one agent loop shared with the screen rather than a
+   second one rented elsewhere. Renting it from Retell stays the fallback if
+   the loop proves harder than expected. What remains before adapter code is
+   an account and a real French number, not another comparison. The same
+   document lists what must be proven on a live account before any contract:
+   fixed numbers in Martinique and metropolitan France with no-answer
+   forwarding, the fr-FR voice with human transfer and transcription — the
+   transfer being plain TwiML on the same call now, with no SIP trunk to
+   configure — a WhatsApp sender with
    opt-in and SMS fallback, full removal of a site followed by reassignment of
    a Garageband-owned number to another one with no call, message, or data
    leakage, and the real cost at 700 and 1 800 minutes.

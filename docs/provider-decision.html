@@ -47,14 +47,15 @@
 
   <section class="decision">
     <h2>Décision recommandée</h2>
-    <p><strong>Commencer avec Twilio + Retell.</strong> Twilio porte les numéros, le routage Voice, WhatsApp et la portabilité. Retell porte le runtime de l’agent vocal, les voix et la conversation. Chaque site conserve son propre numéro fixe et son propre routage vers un contexte Garageband distinct. WhatsApp peut être partagé ou séparé selon le niveau d'isolation souhaité.</p>
+    <p><strong>Twilio seul, avec ConversationRelay.</strong> Numéros, routage Voice, WhatsApp, portabilité, et la couche parole de l'agent — écoute, voix, interruptions — chez un seul fournisseur. Garageband écrit la boucle de l'agent : un serveur WebSocket qui reçoit le texte transcrit, appelle le modèle et les outils du produit, et renvoie ce qu'il faut dire. Chaque site conserve son propre numéro fixe et son propre routage vers un contexte Garageband distinct. WhatsApp peut être partagé ou séparé selon le niveau d'isolation souhaité.</p>
+    <p class="muted">Révisé le 5 août 2026. La version précédente recommandait Twilio + Retell en s'appuyant sur l'idée que Retell apportait des capacités vocales que Twilio n'avait pas. Vérification faite sur les docs Twilio, c'est faux : le barge-in est natif et réglable, le français est disponible, et ConversationRelay est GA depuis le 14 mai 2025. Le seul écart réel était le travail de développement — et ce travail-là, le repo l'a déjà fait pour l'assistant interne.</p>
   </section>
 
   <h2>Pourquoi ce choix</h2>
   <div class="grid">
-    <article class="card recommended"><span class="tag">Choix V1</span><h3>Twilio + Retell</h3><div class="price">Le meilleur compromis</div><p>Numéros, SIP/Voice, WhatsApp et portabilité chez Twilio ; agent prêt à déployer et choix de voix/LLM chez Retell.</p><p class="muted">Deux fournisseurs, mais chacun reste remplaçable derrière les ports Garageband.</p></article>
-    <article class="card"><span class="tag">Alternative</span><h3>Twilio + Vapi</h3><div class="price">Plus flexible</div><p>Meilleur si l’équipe veut contrôler le LLM, STT, TTS et les coûts. Plus de configuration et plus de responsabilités opérationnelles.</p></article>
-    <article class="card"><span class="tag">Plus tard</span><h3>Twilio ConversationRelay</h3><div class="price">Plus de contrôle</div><p>Bonne base pour internaliser l’orchestration, mais trop de développement pour le premier pilote.</p></article>
+    <article class="card recommended"><span class="tag">Choix V1</span><h3>Twilio ConversationRelay</h3><div class="price">Un seul fournisseur</div><p>Numéros, SIP/Voice, WhatsApp, portabilité, STT, TTS et gestion des interruptions au même endroit. Un seul contrat, une seule facture, une seule console, un seul support à appeler quand un appel se passe mal.</p><p class="muted">Garageband écrit le serveur WebSocket. C'est le même travail d'orchestration que l'assistant interne fait déjà : registre d'outils, autorisations, aperçus, confirmations, audits. Une seule boucle d'agent pour le téléphone et pour l'écran, pas deux.</p></article>
+    <article class="card"><span class="tag">Repli</span><h3>Twilio + Retell</h3><div class="price">Si la boucle coince</div><p>Retell fournit l'agent clé en main : configuration, tests, transcriptions, transfert. Reste le repli si écrire la boucle prend plus de temps que prévu, ou si un comportement conversationnel se révèle plus dur à tenir qu'attendu.</p><p class="muted">Impose l'elastic SIP trunking : en « dial to SIP URI », la fonction de transfert de Retell est indisponible.</p></article>
+    <article class="card"><span class="tag">Écarté</span><h3>Twilio + Vapi</h3><div class="price">Redondant</div><p>Même nature que Retell — une couche agent louée — sans avantage identifié sur elle pour ce produit.</p></article>
   </div>
 
   <h2>Comparaison vérifiée</h2>
@@ -110,8 +111,18 @@
 
   <h2>Contraintes de montage vérifiées le 5 août 2026</h2>
   <article class="card">
-    <h3>Le transfert humain impose l'elastic SIP trunking</h3>
-    <p>Deux façons de relier un numéro Twilio à Retell. Avec <strong>elastic SIP trunking</strong>, on crée un trunk, on y pointe le numéro et on l'importe dans Retell (format E.164, termination URI en <code>.pstn.twilio.com</code>) : le transfert d'appel de Retell fonctionne. Avec <strong>dial to SIP URI</strong>, la doc est explicite — « you will not be able to use Retell's transfer call feature », il faudrait réimplémenter le transfert soi-même. Puisque l'agent doit passer l'appelant sur le fixe de l'atelier, l'elastic SIP trunking n'est pas une préférence, c'est la seule option. Le transfert froid (SIP REFER) se configure en plus côté trunk.</p>
+    <h3>Le barge-in est natif et réglable</h3>
+    <p>Sur <code>&lt;ConversationRelay&gt;</code> : <code>interruptible</code> (<code>none</code>/<code>dtmf</code>/<code>speech</code>/<code>any</code>, défaut <code>any</code>), <code>interruptSensitivity</code> (<code>high</code>/<code>medium</code>/<code>low</code>) pour un atelier bruyant, <code>ignoreBackchannel</code> pour que « mmh, ouais » ne coupe pas l'agent, plus <code>welcomeGreetingInterruptible</code>, <code>preemptible</code> et <code>reportInputDuringAgentSpeech</code>.</p>
+    <p class="muted">Le message WebSocket <code>interrupt</code> renvoie <code>utteranceUntilInterrupt</code> et <code>durationUntilInterruptMs</code> : on sait ce que l'appelant a réellement entendu avant de couper. Sans ça, l'historique contient une phrase que l'agent croit avoir dite en entier et la suite part sur un malentendu — c'est le champ qui rend l'interruption correcte, pas seulement possible.</p>
+  </article>
+  <article class="card">
+    <h3>Français disponible, mais figé au décrochage</h3>
+    <p>Voix ElevenLabs listées par Twilio, modèle <code>telephony</code> : <strong>fr-FR</strong> <code>a5n9pJUnAhX4fn7lx3uo</code> et <strong>fr-CA</strong> <code>IPgYtHTNLjC7Bq7IPHrm</code>. ElevenLabs est le fournisseur TTS par défaut (Flash 2.5), Google et Amazon en alternative ; 35 langues documentées.</p>
+    <p class="muted">Contrainte de conception : « you can't modify voice and language configurations set in TwiML through WebSocket messages ». La voix et la langue se choisissent dans le TwiML avant le décrochage. Un site francophone est donc un TwiML, pas un réglage d'exécution. Et il faut streamer les tokens du modèle au fil de l'eau (<code>"last": false</code> puis <code>true</code>), sinon l'agent attend la fin de la génération pour ouvrir la bouche.</p>
+  </article>
+  <article class="card">
+    <h3>Le transfert humain ne demande plus de trunk</h3>
+    <p>Avec un numéro Twilio et ConversationRelay, passer l'appelant sur le fixe de l'atelier se fait dans le TwiML du même appel. L'elastic SIP trunking — obligatoire pour que le transfert de Retell fonctionne, la doc Retell étant explicite : « you will not be able to use Retell's transfer call feature » en dial to SIP URI — n'a plus lieu d'être. Une brique de moins à configurer et à déboguer.</p>
   </article>
   <article class="card">
     <h3>Un numéro français exige une adresse française</h3>
@@ -119,8 +130,13 @@
     <p class="muted">La page réglementaire France de Twilio <strong>ne mentionne aucun DOM</strong> — ni Martinique, ni Guadeloupe, ni Réunion. Rien dans la documentation publique ne confirme que du 0596 est achetable : la page tarifaire Martinique couvre le coût des appels vers l'île, pas l'inventaire des numéros. À vérifier en console ou auprès du commercial avant de promettre un numéro Garageband à un garage martiniquais. Si la réponse est non, l'architecture tient quand même — le renvoi sur non-réponse depuis le fixe existant du garage reste le chemin recommandé — mais l'offre « numéro fourni » ne serait vendable qu'en métropole.</p>
   </article>
   <article class="card">
-    <h3>Retell facture sa plateforme en plus du modèle</h3>
-    <p>0,055 $/min d'infrastructure vocale s'ajoutent au LLM, au TTS et à la téléphonie ; l'exemple publié par Retell atteint 0,13 $/min. Vingt appels simultanés sont inclus, puis 8 $/appel simultané/mois. Le modèle de coûts de <code>pricing-model.md</code> chiffrait une cascade assemblée à la main à 0,044 € : avec Retell il faut tabler sur environ le double.</p>
+    <h3>Le prix est le même des deux côtés</h3>
+    <p>ConversationRelay : <strong>0,07 $/min</strong>, les minutes voix facturées à part sous le plan Twilio existant (0,0100 $/min en entrant France). Retell : 0,055 $/min de plateforme, plus TTS, LLM et téléphonie, pour un exemple publié à 0,13 $/min. Dans les deux cas le LLM est à part et le total réel tourne autour de 0,09–0,13 $/min.</p>
+    <p class="muted">Le choix ne se joue donc pas sur le prix mais sur ce qu'on écrit soi-même. Zone d'ombre à lever en console : la page tarifaire de ConversationRelay ne dit pas si les voix ElevenLabs sont comprises dans les 0,07 $ ou facturées en plus, et renvoie à « contact sales ». Chez Retell c'est explicite : +0,040 $/min.</p>
+  </article>
+  <article class="card">
+    <h3>GA, pas une annonce</h3>
+    <p>ConversationRelay est GA depuis le 14 mai 2025. Conversation Relay Insights — l'observabilité des agents vocaux, qui couvre une partie de ce que le tracer bullet doit prouver — est GA depuis le 6 mai 2026. S'y ajoutent le modèle Deepgram Flux pour la détection de tour de parole, la conformité PCI et un widget Studio.</p>
   </article>
 
   <h2>Sources principales</h2>
