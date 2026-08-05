@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/esrid/garageband/internal/features/locations"
 	"github.com/esrid/garageband/internal/features/onboarding"
 	"github.com/esrid/garageband/internal/features/team"
+	"github.com/esrid/garageband/internal/features/voice"
 	"github.com/esrid/garageband/internal/platform/assistanttools"
 	"github.com/esrid/garageband/internal/platform/businesslookup"
 	"github.com/esrid/garageband/internal/platform/db"
@@ -283,6 +285,22 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			))
 		},
 	})
+
+	// The two endpoints a call needs. Neither is behind RequireTenant: a
+	// caller is anonymous. Both prove their own origin instead — Twilio's
+	// signature on the webhook, and a token we minted in the TwiML on the
+	// socket. Until a model is wired to the permitted tools, the agent picks
+	// up and says so rather than leaving the line ringing into nothing.
+	voice.Register(
+		mux,
+		voice.Config{
+			PublicBaseURL: cfg.BaseURL,
+			AuthToken:     cfg.TwilioAuthToken,
+			Greeting:      cfg.VoiceGreeting,
+		},
+		voice.StaticResponder{Sentence: cfg.VoiceGreeting},
+		slog.Default(),
+	)
 
 	// Stdlib CSRF protection (Go 1.25+): blocks cross-origin non-safe methods
 	// via Sec-Fetch-Site/Origin; requests without those headers pass.

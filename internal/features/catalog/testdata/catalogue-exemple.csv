@@ -1,0 +1,8 @@
+Nom;Type;Reference;Description;Type de prix;Prix;Prix max;TVA;Duree;Base taxe
+Vidange complète;Prestation;VID-01;Huile et filtre inclus;Fixe;89,90;;20;60;TTC
+Plaquettes de frein avant;Prestation;FRE-01;Remplacement des deux plaquettes;A partir de;120,00;;20;90;TTC
+Révision complète;Forfait;REV-01;Vidange, filtres, contrôle 30 points;Fixe;249,00;;20;120;TTC
+Diagnostic électronique;Prestation;DIAG-01;Lecture des codes défaut;Fourchette;39,00;79,00;20;30;TTC
+Forfait embrayage;Forfait;EMB-01;Remplacement kit embrayage complet;Sur devis;;;20;240;TTC
+Batterie 12V;Piece;BAT-12V;Batterie standard posée;Fixe;149,00;;20;;TTC
+Taux horaire atelier;Taux horaire;TH-01;Main d'œuvre standard;Fixe;75,00;;20;;TTC

@@ -31,6 +31,15 @@ type Config struct {
 	// BusinessLookupURL can target a compatible stub in development. Empty
 	// means the official Recherche d'entreprises API.
 	BusinessLookupURL string
+	// TwilioAccountSID and TwilioAuthToken belong to the parent account. The
+	// token also validates inbound webhooks and signs the relay socket's
+	// short-lived token, so an empty one leaves both endpoints refusing
+	// everything rather than trusting anything.
+	TwilioAccountSID string
+	TwilioAuthToken  string
+	// VoiceGreeting is what the agent says before the socket carries
+	// anything; ConversationRelay speaks it itself.
+	VoiceGreeting string
 }
 
 func ConfigFromEnv() Config {
@@ -50,6 +59,10 @@ func ConfigFromEnv() Config {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		EncryptionKey:      key,
 		BusinessLookupURL:  os.Getenv("BUSINESS_LOOKUP_URL"),
+		TwilioAccountSID:   os.Getenv("TWILIO_ACCOUNT_SID"),
+		TwilioAuthToken:    os.Getenv("TWILIO_AUTH_TOKEN"),
+		VoiceGreeting: envOr("VOICE_GREETING",
+			"Bonjour, vous êtes en relation avec l'assistant du garage. Que puis-je faire pour vous ?"),
 	}
 }
 
