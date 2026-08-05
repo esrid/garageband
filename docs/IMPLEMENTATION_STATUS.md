@@ -186,10 +186,22 @@ absent.
    that frees the E.164 for the next customer. `internal/platform/twilio`
    implements the provisioning port with the official SDK.
 
-   What is missing on this slice is the write path: nothing in the application
-   calls `AttachNumber`, `ActivateNumber` or `RecordBundle` yet, so a number is
-   bought in the Twilio console rather than through Garageband. Calls persist
-   nothing either — the `calls` inbox stays empty after a real call.
+   A call now saves itself as it happens, into the `calls` and `call_messages`
+   tables the inbox already reads. The runtime writes with a tenant and no
+   user, since the caller is anonymous, which migration 0032 recognises with
+   policies narrow enough that a user-less reader reaches its own conversation
+   and no customer dossier — asserted by a test. Turns are written only once
+   they can no longer change, because an interrupt truncates the agent's last
+   sentence, and the closing writes run on a context detached from the socket,
+   which is already cancelled by the time someone hangs up. `summary` and
+   `outcome` stay empty: they are the model's work, and no model is connected.
+
+   What is missing on this slice is the write path for provisioning: nothing in
+   the application calls `AttachNumber`, `ActivateNumber` or `RecordBundle`,
+   and `internal/platform/twilio` has no caller either, so a number is bought
+   in the Twilio console rather than through Garageband. The screen that closes
+   that gap is the next piece, and it is what makes the order form's activation
+   promise and the offer's clean exit real rather than manual.
 
    What remains before the rest is an account and a real French number, not
    another comparison. The same document lists what must be proven on a live
