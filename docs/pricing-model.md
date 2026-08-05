@@ -210,53 +210,37 @@ How that is actually collected — one Stripe subscription with a quantity, what
 triggers a quantity change, and when any of it is worth automating — is in
 `billing-model.md`.
 
+## Settled
+
+- Design partners get the public Essential allowance, 500 minutes at 0.35 €/min
+  overage. The concession is the locked 249 € and the waived setup, nothing
+  else, so nothing degrades when the twelve months end.
+- Included minutes pool across a group's sites. Pro and Network are sold on it,
+  so neither can be invoiced before usage metering exists — an implementation
+  dependency now, not a question.
+- No volume discount at any number of locations. Seven garages pay seven times
+  299 €, and the answer to "what do you do for a network?" is the tier.
+- ElevenLabs voices are inside ConversationRelay's $0.07/min, per Twilio's
+  console assistant on 2026-08-05 — an AI reading the public docs, not a rate
+  card. Confirm on the first real invoice.
+
 ## Open items
 
 - [ ] Settle VAT with an accountant. The franchise en base written on the order
       form stops being true at 41 250 € of annual turnover, which this offer
       reaches at roughly a dozen single-site customers — the sourced reading is
-      in `billing-model.md`. Every figure on this page is stated excluding tax.
-- [x] The design-partner order form promised 700 minutes/site at 0.30 €/min
-      against Essential's 500 at 0.35 €, contradicting "the concession is the
-      locked price and the free setup, not a lower rate" two lines above. The
-      form now carries Essential's own allowance: a design partner buys the
-      public offer at a locked 249 € with the setup waived, and nothing else
-      changes when the twelve months end.
+      in `billing-model.md`. Every figure on this page excludes tax.
 - [ ] Rebuild the margin scenarios on ConversationRelay's per-minute cost.
-      Every "provider+infra" figure in the table above was computed at
-      0.06 €/min for a hand-assembled cascade; the platform fee roughly
-      doubles it. Do it together with the tracer-bullet measurement rather
-      than twice.
-- [x] ElevenLabs voices are included in ConversationRelay's $0.07/min — per
-      Twilio's console assistant on 2026-08-05, which is an AI reading the
-      public docs rather than a rate card. Plan on it, confirm on the first
-      real invoice.
+      Every "provider+infra" figure above was computed at 0.06 €/min for a
+      hand-assembled cascade; the platform fee roughly doubles it. Do it with
+      the tracer-bullet measurement rather than twice.
 - [ ] Price the forward itself for an overseas customer. Twilio has no
       Martinique number, so a Martinique garage forwards its own 0596 line to a
       metropolitan number and its carrier bills that leg. If Orange Caraïbe,
-      SFR Caraïbe, or Digicel meter it per minute, every AI-answered call costs
+      SFR Caraïbe or Digicel meter it per minute, every AI-answered call costs
       the customer something on top of the subscription, and that belongs in
       the pitch rather than in their first phone bill.
-- [ ] Pull exact Meta EUR utility rate from the rate-card CSV.
-- [ ] Verify Twilio Media Streams price in the Twilio console.
-- [ ] Measure real average call duration on tracer bullet; recalc.
-- [ ] Willingness-to-pay: 5 garage owner conversations (see prospecting script).
-- [x] Included minutes pool across a group's sites. It is what a multi-site
-      buyer asks for first (a quiet site subsidising a busy one) and it costs
-      nothing extra, because the provider bill is per minute, not per site.
-      Pro and Network are sold on it, so neither can be sold before usage
-      metering exists — that is now an implementation dependency, not an open
-      question.
-- [x] No group discount, at any number of locations. A six-site group pays
-      1 794 €/month and a seven-site one 2 093 €, the same 299 € per garage as
-      a solo shop. The reason is the same one that fixes the tiers: one
-      sentence to hold in a meeting, no arithmetic in front of the customer,
-      and no precedent created for the next prospect who hears about it. At
-      five customers, a euro conceded costs double — social charges are
-      levied on turnover, not on profit. A discount stays available to unblock
-      a hard signature, case by case, precisely because it was never promised.
-- [x] The network tier was a flat 2 490 € for 4–7 locations, which its own
-      per-location price beat at every site count in that range: seven sites
-      bought one by one cost 2 093 € and carried 3 500 included minutes
-      against the tier's 2 500. It is now anchored to 299 €/site like the
-      others, with allowances scaling per site and pooled.
+- [ ] Pull the exact Meta EUR utility rate from the rate-card CSV.
+- [ ] Verify the Twilio Media Streams price in the console.
+- [ ] Measure real average call duration on the tracer bullet; recalculate.
+- [ ] Willingness-to-pay: five garage owner conversations.

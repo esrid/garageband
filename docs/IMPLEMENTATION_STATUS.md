@@ -6,12 +6,46 @@ This is the pause-and-resume snapshot for the project. The detailed product
 scope and accepted decisions remain in [PRODUCT_FEATURES.md](PRODUCT_FEATURES.md);
 the code and migrations remain the implementation source of truth.
 
+## Read this first
+
+**Where the project stands.** The application is a working multi-tenant garage
+back office — customers, agenda, catalogue, team, internal assistant — and the
+telephone agent now answers a call and saves the conversation. What it cannot
+do is buy the number that call arrives on: provisioning has a data model, a
+carrier adapter and no screen, so a number is bought by hand in the Twilio
+console.
+
+**What is waiting on someone else.** A Twilio regulatory bundle submitted on
+2026-08-05 with a Martinique address, in review. Its verdict decides whether a
+French number can be bought at all under this identity; the fallback, if it is
+refused, is BYOC with a number from a carrier that serves the overseas
+departments. Nothing else is blocked by it — see
+[provider-decision.html](provider-decision.html).
+
+**What the team owes before the first paying client.** VAT, settled with an
+accountant, because the franchise en base written on the order form stops being
+true well inside the first year — the sourced reading is in
+[billing-model.md](billing-model.md). Then a Meta Business account for
+WhatsApp, and a vehicle-data provider, neither of which this repo can choose.
+
+**Where to pick the work back up.** The provisioning screen, which makes the
+store and `internal/platform/twilio` reachable and turns the order form's
+activation promise and the offer's clean exit into something the application
+does. After that, transferring a caller to the workshop's landline: decided,
+specified, not written.
+
 ## Repository state at pause
 
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
 - The working tree is clean, and `main` is pushed to `origin/main` — this
   record commit included.
+- Two things to know before the first deployment. `BASE_URL` must match the
+  public origin exactly, or every Twilio signature fails and the failure looks
+  like the carrier's fault. And the test suite showed three intermittent HTTP
+  failures under parallel load on 2026-08-05, green in isolation and on a
+  rerun; if it recurs, it is container contention to fix in CI, not product
+  code.
 
 ## Row-level security is only real under an unprivileged role
 

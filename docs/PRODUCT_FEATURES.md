@@ -1,6 +1,6 @@
 # Garageband product and feature ledger
 
-Last updated: 2026-08-01
+Last updated: 2026-08-05
 
 This document is the durable product reference for humans and agents. Update it
 when a feature is accepted, implemented, deferred, or materially redesigned.
@@ -587,9 +587,11 @@ These are database contracts and ports, not working provider integrations.
   a Garageband-owned number, receive voice and WhatsApp traffic, configure the
   business profile, send a consented template, remove the sender, and verify
   reassignment to a second test business without message or call leakage.
-- Open provider questions include French number inventory and regulatory
-  eligibility, combined voice/WhatsApp capability, Meta and provider approval
-  lead times, pricing, sender migration, and number portability.
+- Answered since (console and carrier documentation, 2026-08-05): no Martinique
+  number is sold or ported, one provisioned number carries both the calls and
+  the WhatsApp sender, and Meta business verification runs in weeks. What stays
+  open is the review time of a regulatory bundle, measurable only on a real
+  file, and sender migration for a garage that already uses WhatsApp Business.
 
 ### Garage operations assistant
 

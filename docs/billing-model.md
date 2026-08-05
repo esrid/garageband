@@ -14,7 +14,8 @@ subscription whose quantity is three:
 
 ```
 customer            = the organization, not the site
-items[0][price]     = the single 249 €/month Price
+items[0][price]     = the per-location Price (299 €, or 249 € locked for a
+                      design partner)
 items[0][quantity]  = 3        # number of sites in service
 ```
 
@@ -26,7 +27,8 @@ Requirements and limits from the Stripe doc:
 - Maximum 20 products per subscription. Irrelevant at 2–6 sites, but it is the
   ceiling if per-site line items are ever introduced instead of a quantity.
 
-Stripe issues **one invoice** for the whole group (3 × 249 = 747 €) and
+Stripe issues **one invoice** for the whole group (3 × 299 = 897 €, or 747 €
+at the design-partner rate) and
 **prorates automatically** whenever the quantity changes mid-period. A site
 added on the 15th produces a partial line, not a full month — say so when a
 client asks why an invoice moved.
@@ -98,20 +100,19 @@ The subscription id belongs to the organization, so it is stored on the tenant
 row, and every read of it stays inside the tenant transaction boundary like
 everything else.
 
+## Settled
+
+- A paused location keeps being billed in full. What the price buys during a
+  pause is the number staying reserved and the site's configuration intact for
+  an immediate restart, not the minutes. Removing the site is how a customer
+  stops paying, and it releases the number for good. Article 4 of the order
+  form. Nothing to model in Stripe: a paused site is still one unit of
+  quantity.
+- Included minutes pool across a group's sites; Pro and Network are sold on it,
+  and neither can be invoiced before usage metering exists.
+
 ## Open decisions
 
-- [x] A paused location keeps being billed in full. What the price buys during
-      a pause is the number staying reserved and the site's configuration
-      staying intact for an immediate restart — not the minutes. A client who
-      wants to stop paying removes the site, which releases the number for
-      good. Written into the order form's article 4, so it is agreed before it
-      is charged. Nothing to model in Stripe either: with no standby price, a
-      paused site is still one unit of subscription quantity, and only removing
-      it changes the invoice.
-- [x] Included minutes pool across a group's sites — Pro and Network are sold
-      on it. Costs nothing, since the provider bill is per minute, not per
-      site, but it cannot be invoiced before usage metering exists. Also
-      tracked in `pricing-model.md`.
 - [ ] VAT. The order form says franchise en base (art. 293 B) marked
       À VALIDER. It changes what the client actually pays and how Stripe Tax is
       configured. Settle it before the first signature, not after. What the
