@@ -40,8 +40,9 @@ type handler struct {
 }
 
 const (
-	relayTokenTTL = 2 * time.Minute
-	rejectTwiML   = `<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>`
+	relayTokenTTL   = 2 * time.Minute
+	maxCallDuration = time.Hour
+	rejectTwiML     = `<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>`
 )
 
 // incoming answers a call Twilio just received. It resolves the dialled number
@@ -171,7 +172,11 @@ func (h *handler) relay(w http.ResponseWriter, r *http.Request) {
 		h.responder,
 	)
 
-	ctx := r.Context()
+	// A garage call that is still open after an hour is a socket nobody hung
+	// up, not a conversation. The cap bounds the goroutine and the carrier
+	// bill; it is far above any real call.
+	ctx, cancel := context.WithTimeout(r.Context(), maxCallDuration)
+	defer cancel()
 	for {
 		var in Inbound
 		if err := wsjson.Read(ctx, conn, &in); err != nil {

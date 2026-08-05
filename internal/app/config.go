@@ -40,6 +40,10 @@ type Config struct {
 	// VoiceGreeting is what the agent says before the socket carries
 	// anything; ConversationRelay speaks it itself.
 	VoiceGreeting string
+	// VoiceFallback is every answer until a model is wired to the permitted
+	// tools. It has to differ from the greeting, or the agent greets the
+	// caller and then greets them again for every question they ask.
+	VoiceFallback string
 }
 
 func ConfigFromEnv() Config {
@@ -63,6 +67,8 @@ func ConfigFromEnv() Config {
 		TwilioAuthToken:    os.Getenv("TWILIO_AUTH_TOKEN"),
 		VoiceGreeting: envOr("VOICE_GREETING",
 			"Bonjour, vous êtes en relation avec l'assistant du garage. Que puis-je faire pour vous ?"),
+		VoiceFallback: envOr("VOICE_FALLBACK",
+			"Je ne peux pas encore traiter cette demande. L'atelier vous rappelle dès que possible."),
 	}
 }
 

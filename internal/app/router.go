@@ -298,7 +298,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			AuthToken:     cfg.TwilioAuthToken,
 			Greeting:      cfg.VoiceGreeting,
 		},
-		voice.StaticResponder{Sentence: cfg.VoiceGreeting},
+		voice.StaticResponder{Sentence: cfg.VoiceFallback},
 		slog.Default(),
 	)
 

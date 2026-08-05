@@ -3,6 +3,7 @@ package voice
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,16 @@ func Register(
 	responder Responder,
 	logger *slog.Logger,
 ) {
+	// Without the carrier's auth token neither door can prove anything. The
+	// webhook would reject every call, which is merely useless — but the relay
+	// token would be an HMAC keyed on the empty string, which anyone can
+	// compute, so a stranger could open a socket as any garage. Registering
+	// nothing is the only safe reading of "telephony is not configured".
+	if strings.TrimSpace(config.AuthToken) == "" {
+		logger.Warn("telephony disabled: TWILIO_AUTH_TOKEN is not set")
+		return
+	}
+
 	h := &handler{
 		config:    config,
 		responder: responder,
