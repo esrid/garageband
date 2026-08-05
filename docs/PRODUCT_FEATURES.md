@@ -89,10 +89,17 @@ interfaces.
   2026-08-05). An overseas garage therefore keeps its own line and forwards to
   a metropolitan number, and a Garageband-owned sender for it would carry a
   +33 prefix.
-- Using one number for both telephone and WhatsApp is an opt-in advanced path,
-  subject to number eligibility, OTP verification, Meta onboarding, and whether
-  an existing WhatsApp Business App account must be migrated or can coexist.
-  It is not a V1 promise.
+- **The Garageband-provisioned number carries both the calls and WhatsApp.** A
+  Twilio number with voice capability can be registered as a WhatsApp sender;
+  for a Twilio number without SMS, Twilio verifies it manually and delivers the
+  one-time password by email, so the usual "an IVR cannot receive the OTP"
+  trap does not apply (Twilio sender-registration docs, checked 2026-08-05).
+  One number per location covers the forwarded calls and the WhatsApp sender.
+- Reusing **the garage's own existing landline** for WhatsApp is a different
+  question and stays an opt-in advanced path, subject to number eligibility,
+  OTP verification on a line that may sit behind an IVR, Meta onboarding, and
+  whether an existing WhatsApp Business App account must be migrated or can
+  coexist. It is not a V1 promise.
 - Number ownership is explicit: a customer-owned existing or ported number is
   never silently reassigned. A Garageband-owned newly provisioned number may
   be released, transferred, or reallocated only after the customer exit flow
@@ -153,6 +160,16 @@ interfaces.
   provider integration and must support an exit path without provider lock-in.
   Embedded provider onboarding should reuse SIRET, business, location, website,
   and logo data already collected by Garageband to minimize manual input.
+- The garage's name and logo appear on its WhatsApp messages through the
+  WhatsApp Business profile — display name, category, description, website,
+  profile picture — and the display name is reviewed by Meta against its own
+  naming guidelines. Two facts shape onboarding rather than surprise it: a
+  rejected display name caps the sender at **250 business-initiated messages
+  per 24 hours** until it is approved, and Meta business verification "can take
+  several weeks" depending on the region. The Meta Business Portfolio must be
+  under the garage's own admin control, which is the same requirement as the
+  ownership rule above rather than a competing one. This is why WhatsApp never
+  gates the start of service (checked 2026-08-05).
 - Garageband owns the channel-neutral conversation, message, consent,
   attachment, assignment, tool-execution, and audit records. A provider such as
   Twilio is an adapter and must not define the application data model.
