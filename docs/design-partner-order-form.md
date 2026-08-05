@@ -32,7 +32,7 @@ clients, prise de rendez-vous atelier, historique client par site.
 | Sites couverts | [nombre] site(s) : [adresses] |
 | Minutes incluses | 500 min/site/mois, au-delà 0,35 € HT/min (plafond avec accord préalable) — soit exactement l'offre Essentielle |
 | Frais de mise en service | **Offerts** (valeur 390 € HT) |
-| Numéro dédié | 1 numéro français par site, fourni par le Prestataire |
+| Numéro dédié | 1 numéro français **métropolitain** par site, fourni par le Prestataire. Aucun numéro local n'est disponible en Martinique : un site martiniquais conserve sa propre ligne et active un renvoi sur non-réponse vers ce numéro. Le coût de ce renvoi est facturé au Client par son opérateur. |
 
 TVA : [franchise en base, art. 293 B du CGI — À VALIDER selon statut] .
 

@@ -592,7 +592,14 @@ These are database contracts and ports, not working provider integrations.
 ### Compliance and operations
 
 - Finalize French call-recording notice, lawful-purpose, access, deletion, and
-  retention workflows.
+  retention workflows. Where a call is recorded or transcribed, the garage owes
+  its caller the existence of the recording, its purpose, its recipients, its
+  retention period, and their rights; the CNIL asks for spoken notice at the
+  start of the call, backed by detailed information available elsewhere. The
+  product has to make that notice a property of the location's agent rather
+  than something each garage improvises.
+  ([CNIL — informer](https://www.cnil.fr/fr/cnil-direct/question/enregistrement-ou-ecoute-des-conversations-telephoniques-faut-il-informer-ses),
+  [CNIL — preuve du contrat](https://www.cnil.fr/fr/lenregistrement-des-conversations-telephoniques-afin-detablir-la-preuve-de-la-formation-dun-contrat))
 - Data export and deletion workflows.
 - Secrets-provider implementation and credential rotation.
 - Provider webhook replay protection and audit trail.
