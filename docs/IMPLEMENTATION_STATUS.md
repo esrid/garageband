@@ -10,8 +10,8 @@ the code and migrations remain the implementation source of truth.
 
 - All local work is merged into `main`; no local `staging`, backend, or
   frontend branches/worktrees remain.
-- The working tree is clean at the tip of `main`, which is ahead of
-  `origin/main` (`771fc14`). Nothing since that push has left this machine.
+- The working tree is clean, and `main` is pushed to `origin/main` — this
+  record commit included.
 
 ## Row-level security is only real under an unprivileged role
 
