@@ -223,6 +223,12 @@ triggers a quantity change, and when any of it is worth automating — is in
       than twice.
 - [ ] Confirm in the Twilio console whether ElevenLabs voices are included in
       ConversationRelay's $0.07/min or billed on top.
+- [ ] Price the forward itself for an overseas customer. Twilio has no
+      Martinique number, so a Martinique garage forwards its own 0596 line to a
+      metropolitan number and its carrier bills that leg. If Orange Caraïbe,
+      SFR Caraïbe, or Digicel meter it per minute, every AI-answered call costs
+      the customer something on top of the subscription, and that belongs in
+      the pitch rather than in their first phone bill.
 - [ ] Pull exact Meta EUR utility rate from the rate-card CSV.
 - [ ] Verify Twilio Media Streams price in the Twilio console.
 - [ ] Measure real average call duration on tracer bullet; recalc.

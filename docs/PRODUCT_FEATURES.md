@@ -83,7 +83,12 @@ interfaces.
 - Each location has a public telephone route and an optional WhatsApp sender.
   The garage's existing fixed number may remain with its current carrier and
   forward unanswered calls to the AI. A Garageband-owned AI/WhatsApp number
-  may be provisioned separately when the customer needs a clean sender.
+  may be provisioned separately when the customer needs a clean sender —
+  **in metropolitan France only**. Twilio sells no Martinique number and its
+  France porting guidelines cover +331–+335 and +339, not +596 (console check,
+  2026-08-05). An overseas garage therefore keeps its own line and forwards to
+  a metropolitan number, and a Garageband-owned sender for it would carry a
+  +33 prefix.
 - Using one number for both telephone and WhatsApp is an opt-in advanced path,
   subject to number eligibility, OTP verification, Meta onboarding, and whether
   an existing WhatsApp Business App account must be migrated or can coexist.

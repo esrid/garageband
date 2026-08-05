@@ -165,8 +165,10 @@ absent.
    the loop proves harder than expected. What remains before adapter code is
    an account and a real French number, not another comparison. The same
    document lists what must be proven on a live account before any contract:
-   fixed numbers in Martinique and metropolitan France with no-answer
-   forwarding, the fr-FR voice with human transfer and transcription — the
+   a metropolitan French number receiving a no-answer forward, including one
+   forwarded from a real Martinique line, since Twilio sells no +596 and does
+   not port one either; the fr-FR voice with human transfer and transcription
+   — the
    transfer being plain TwiML on the same call now, with no SIP trunk to
    configure — a WhatsApp sender with
    opt-in and SMS fallback, full removal of a site followed by reassignment of

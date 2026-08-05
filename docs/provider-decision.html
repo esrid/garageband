@@ -124,6 +124,13 @@
     <h3>Le transfert humain ne demande plus de trunk</h3>
     <p>Avec un numéro Twilio et ConversationRelay, passer l'appelant sur le fixe de l'atelier se fait dans le TwiML du même appel. L'elastic SIP trunking — obligatoire pour que le transfert de Retell fonctionne, la doc Retell étant explicite : « you will not be able to use Retell's transfer call feature » en dial to SIP URI — n'a plus lieu d'être. Une brique de moins à configurer et à déboguer.</p>
   </article>
+  <article class="card" style="border-color:var(--orange)">
+    <span class="tag" style="background:var(--orange)">Vérifié en console</span>
+    <h3>Aucun numéro martiniquais chez Twilio</h3>
+    <p>Recherche faite dans la console le 5 août 2026 : seuls des numéros France métropolitaine sont achetables, rien en Martinique. La portabilité ne rattrape pas le coup — les directives France listent le géographique <code>+331</code> à <code>+335</code> et le non-géographique <code>+339</code>, les mobiles étant en pause ; le <code>+596</code> n'y figure pas et sortirait du catalogue standard.</p>
+    <p><strong>Conséquence sur l'offre :</strong> pour un garage martiniquais, « numéro Garageband fourni » n'est pas vendable. La seule architecture est celle déjà recommandée — le garage garde son 0596 chez son opérateur et renvoie sur non-réponse vers un numéro Twilio métropolitain. Le sender WhatsApp d'un client martiniquais serait lui aussi un <code>+33</code>.</p>
+    <p class="muted">Risque à lever avant de vendre en Martinique : ce renvoi 0596 → <code>+33</code> est facturé au garage par son propre opérateur. S'il est compté à la minute, chaque appel pris par l'agent coûte quelque chose au client, en plus de l'abonnement. À vérifier chez Orange Caraïbe, SFR Caraïbe et Digicel avant le premier rendez-vous, pas après.</p>
+  </article>
   <article class="card">
     <h3>Un numéro français exige une adresse française</h3>
     <p>Twilio demande, pour un numéro local FR : extrait K-bis nommant le représentant, preuve d'adresse locale (pas de boîte postale), numéro RCS ou Siren/Siret, site de l'entreprise. L'adresse doit être « within France ».</p>
