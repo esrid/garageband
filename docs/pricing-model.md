@@ -77,10 +77,12 @@ This is the floor, not the ambition.
 
 ## Launch offer — one price per location, three managed tiers
 
-Every tier bills the same 299 € per location. A tier is a packaging of that
-same unit — pooling, overage rate, support — never a discount and never a
-penalty, so no group can ever be better off buying its sites one by one or
-worse off growing into the next tier.
+Every tier bills the same 299 € per location, at any number of locations. A
+tier is a packaging of that same unit — pooling, overage rate, support — never
+a discount and never a penalty, so no group can ever be better off buying its
+sites one by one or worse off growing into the next tier. There is no volume
+discount either: seven garages pay seven times 299 €, and the answer to
+"what do you do for a network?" is the tier, not a rebate.
 
 **Target: organizations with 2–6 locations.** Solo-garage deals are accepted
 opportunistically at the same price, but they are not what the pitch is built
@@ -198,8 +200,14 @@ triggers a quantity change, and when any of it is worth automating — is in
       Pro and Network are sold on it, so neither can be sold before usage
       metering exists — that is now an implementation dependency, not an open
       question.
-- [ ] Decide whether a group discount applies past ~4 sites. None today: the
-      price is flat per location, and a 6-site group pays 1 794 €/month.
+- [x] No group discount, at any number of locations. A six-site group pays
+      1 794 €/month and a seven-site one 2 093 €, the same 299 € per garage as
+      a solo shop. The reason is the same one that fixes the tiers: one
+      sentence to hold in a meeting, no arithmetic in front of the customer,
+      and no precedent created for the next prospect who hears about it. At
+      five customers, a euro conceded costs double — social charges are
+      levied on turnover, not on profit. A discount stays available to unblock
+      a hard signature, case by case, precisely because it was never promised.
 - [x] The network tier was a flat 2 490 € for 4–7 locations, which its own
       per-location price beat at every site count in that range: seven sites
       bought one by one cost 2 093 € and carried 3 500 included minutes
