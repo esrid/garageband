@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/esrid/garageband/internal/features/voice"
@@ -15,6 +16,7 @@ import (
 
 type fixture struct {
 	fixtures     *db.DB
+	runtime      *db.DB
 	store        *voice.Store
 	tenantID     string
 	ownerID      string
@@ -193,10 +195,109 @@ func TestBundleRecordsTheReviewItIsWaitingOn(t *testing.T) {
 	}
 }
 
+// The runtime writes a call while it is happening: a tenant is set, no user
+// is, because the caller is anonymous and no employee is signed in. Migration
+// 0032 is what lets that write land at all.
+func TestCallIsRecordedWithoutASignedInUser(t *testing.T) {
+	f := newFixture(t)
+	route := f.route(t)
+	started := time.Now().UTC().Truncate(time.Second)
+
+	callID, err := f.store.StartCall(
+		t.Context(), route, "CA-1", "+596696000000", "+33123456789", started,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A socket that reconnects for the same call must find its row, not open a
+	// second one.
+	again, err := f.store.StartCall(
+		t.Context(), route, "CA-1", "+596696000000", "+33123456789", started,
+	)
+	if err != nil || again != callID {
+		t.Fatalf("reconnect opened %q instead of %q (err %v)", again, callID, err)
+	}
+
+	if err := f.store.AppendTurns(t.Context(), route.TenantID, callID, []voice.Turn{
+		{Role: voice.RoleAgent, Text: "Bonjour, garage Central."},
+		{Role: voice.RoleCaller, Text: "Vous fermez à quelle heure ?"},
+	}, started); err != nil {
+		t.Fatal(err)
+	}
+	// A second flush continues the numbering rather than colliding with it.
+	if err := f.store.AppendTurns(t.Context(), route.TenantID, callID, []voice.Turn{
+		{Role: voice.RoleAgent, Text: "Jusqu'à 18 heures."},
+	}, started.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	var stored int
+	if err := f.fixtures.QueryRow(t.Context(), `
+		SELECT count(*) FROM call_messages WHERE call_id = $1`, callID,
+	).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != 3 {
+		t.Fatalf("stored %d turns, want 3", stored)
+	}
+
+	if err := f.store.EndCall(
+		t.Context(), route.TenantID, callID, "completed", started.Add(time.Minute),
+	); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	if err := f.fixtures.QueryRow(t.Context(),
+		`SELECT status FROM calls WHERE id = $1`, callID,
+	).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "completed" {
+		t.Fatalf("status = %q", status)
+	}
+	// Ending twice is not a second ending.
+	if err := f.store.EndCall(
+		t.Context(), route.TenantID, callID, "failed", started.Add(2*time.Minute),
+	); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("second end = %v", err)
+	}
+}
+
+// The runtime may read the conversation it is holding — RETURNING and the
+// sequence lookup need it — and nothing else. A dossier stays out of reach
+// without a signed-in user, which is the whole point of the narrow policy.
+func TestCallRuntimeReachesItsCallAndNothingElse(t *testing.T) {
+	f := newFixture(t)
+	route := f.route(t)
+	if _, err := f.store.StartCall(
+		t.Context(), route, "CA-2", "+596696000000", "+33123456789", time.Now(),
+	); err != nil {
+		t.Fatal(err)
+	}
+	f.insertCustomer(t)
+
+	var calls, customers int
+	if err := f.runtime.WithinTenant(t.Context(), route.TenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(t.Context(), `SELECT count(*) FROM calls`).Scan(&calls); err != nil {
+			return err
+		}
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM customers`).Scan(&customers)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("the runtime sees %d of its own calls, want 1", calls)
+	}
+	if customers != 0 {
+		t.Fatalf("a user-less reader reached %d customer dossiers", customers)
+	}
+}
+
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)
-	f := fixture{fixtures: fixtures, store: voice.NewStore(runtime)}
+	f := fixture{fixtures: fixtures, runtime: runtime, store: voice.NewStore(runtime)}
 	f.ownerID = insertID(t, fixtures, `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', 'voice-owner', 'voice-owner@example.com', 'Voice Owner')
@@ -227,6 +328,38 @@ func newFixture(t *testing.T) fixture {
 		) VALUES ($1, $2, 'telephony', 'twilio', 'AC123', 'secret/test')
 		RETURNING id::text`, f.tenantID, f.locationID)
 	return f
+}
+
+// route provisions an active number for the site and returns everything a call
+// carries in its signed webhook URL.
+func (f fixture) route(t *testing.T) voice.Route {
+	t.Helper()
+	numberID := insertID(t, f.fixtures, `
+		INSERT INTO phone_numbers (
+		    tenant_id, location_id, telephony_connection_id,
+		    phone_e164, external_number_id, status
+		) VALUES ($1, $2, $3, '+33123456789', 'PN-route', 'active')
+		RETURNING id::text`, f.tenantID, f.locationID, f.connectionID)
+	var agentID string
+	if err := f.fixtures.QueryRow(t.Context(), `
+		SELECT id::text FROM agents WHERE tenant_id = $1 AND location_id = $2`,
+		f.tenantID, f.locationID,
+	).Scan(&agentID); err != nil {
+		t.Fatal(err)
+	}
+	return voice.Route{
+		TenantID:   f.tenantID,
+		LocationID: f.locationID,
+		AgentID:    agentID,
+		NumberID:   numberID,
+	}
+}
+
+func (f fixture) insertCustomer(t *testing.T) {
+	t.Helper()
+	exec(t, f.fixtures, `
+		INSERT INTO customers (tenant_id, home_location_id, first_name, last_name)
+		VALUES ($1, $2, 'Test', 'Client')`, f.tenantID, f.locationID)
 }
 
 func (f fixture) approvedBundle(t *testing.T) string {

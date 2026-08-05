@@ -33,6 +33,7 @@ type Config struct {
 }
 
 type handler struct {
+	store     *Store
 	config    Config
 	responder Responder
 	logger    *slog.Logger
@@ -58,14 +59,11 @@ func (h *handler) incoming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The site comes from the number's own webhook URL, which Twilio signed in
-	// full a few lines above. A number whose URL carries no site is one we did
-	// not provision: reject rather than answer for a garage we cannot name.
-	route := Route{
-		TenantID:   r.URL.Query().Get("tenant"),
-		LocationID: r.URL.Query().Get("location"),
-	}
-	if route.TenantID == "" || route.LocationID == "" {
+	// The route comes from the number's own webhook URL, which Twilio signed in
+	// full a few lines above. A number whose URL is missing any of it is one we
+	// did not provision: reject rather than answer for a garage we cannot name.
+	route := routeFromQuery(r.URL.Query())
+	if !route.complete() {
 		h.writeTwiML(w, []byte(rejectTwiML))
 		return
 	}
@@ -110,6 +108,8 @@ func (h *handler) socketURL(route Route) string {
 	query := url.Values{}
 	query.Set("tenant", route.TenantID)
 	query.Set("location", route.LocationID)
+	query.Set("agent", route.AgentID)
+	query.Set("number", route.NumberID)
 	query.Set("exp", strconv.FormatInt(expiry, 10))
 	query.Set("token", h.relayToken(route, expiry))
 
@@ -121,17 +121,34 @@ func (h *handler) socketURL(route Route) string {
 	return scheme + socket + "/voice/relay?" + query.Encode()
 }
 
+func routeFromQuery(query url.Values) Route {
+	return Route{
+		TenantID:   query.Get("tenant"),
+		LocationID: query.Get("location"),
+		AgentID:    query.Get("agent"),
+		NumberID:   query.Get("number"),
+	}
+}
+
 func (h *handler) relayToken(route Route, expiry int64) string {
 	mac := hmac.New(sha256.New, []byte(h.config.AuthToken))
-	// Written errors are impossible on hash.Hash, whose Write never fails.
-	mac.Write([]byte(route.TenantID + "|" + route.LocationID + "|" + strconv.FormatInt(expiry, 10)))
+	// Every field is signed, separated: swapping the agent or the number of a
+	// call is as much an impersonation as swapping its tenant.
+	// Write on a hash.Hash never returns an error.
+	mac.Write([]byte(strings.Join([]string{
+		route.TenantID, route.LocationID, route.AgentID, route.NumberID,
+		strconv.FormatInt(expiry, 10),
+	}, "|")))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 // authorizeRelay rebuilds the token and compares it in constant time.
 func (h *handler) authorizeRelay(r *http.Request) (Route, bool) {
 	query := r.URL.Query()
-	route := Route{TenantID: query.Get("tenant"), LocationID: query.Get("location")}
+	route := routeFromQuery(query)
+	if !route.complete() {
+		return Route{}, false
+	}
 	expiry, err := strconv.ParseInt(query.Get("exp"), 10, 64)
 	if err != nil || h.now().Unix() > expiry {
 		return Route{}, false
@@ -177,6 +194,13 @@ func (h *handler) relay(w http.ResponseWriter, r *http.Request) {
 	// bill; it is far above any real call.
 	ctx, cancel := context.WithTimeout(r.Context(), maxCallDuration)
 	defer cancel()
+
+	record := &callRecord{store: h.store, route: route, logger: h.logger, now: h.now}
+	// The closing writes must survive the socket's own context: it is already
+	// cancelled by the time a caller hangs up, which is exactly when the last
+	// words and the end of the call have to be saved.
+	defer record.close(context.WithoutCancel(ctx), session)
+
 	for {
 		var in Inbound
 		if err := wsjson.Read(ctx, conn, &in); err != nil {
@@ -191,11 +215,17 @@ func (h *handler) relay(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.logger.Error("handling relay message",
 				"error", err, "type", in.Type, "call", session.Call().CallSid)
+			record.fail()
 			if err := conn.Close(websocket.StatusInternalError, "agent failed"); err != nil {
 				h.logger.Debug("closing after failure", "error", err)
 			}
 			return
 		}
+		if in.Type == messageSetup {
+			record.start(ctx, session.Call())
+		}
+		record.flush(ctx, session)
+
 		for _, reply := range replies {
 			if err := wsjson.Write(ctx, conn, reply); err != nil {
 				h.logger.Error("writing relay message", "error", err)
@@ -203,4 +233,79 @@ func (h *handler) relay(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// callRecord persists a call as it happens. Every failure here is logged and
+// swallowed on purpose: losing the transcript of a call is bad, dropping the
+// call itself because the database hiccuped is worse. The caller is on the
+// line either way.
+type callRecord struct {
+	store  *Store
+	route  Route
+	logger *slog.Logger
+	now    func() time.Time
+
+	callID  string
+	flushed int
+	status  string
+}
+
+func (c *callRecord) start(ctx context.Context, call Call) {
+	if c.callID != "" || call.CallSid == "" {
+		return
+	}
+	callID, err := c.store.StartCall(
+		ctx, c.route, call.CallSid, call.FromE164, call.ToE164, c.now(),
+	)
+	if err != nil {
+		c.logger.Error("opening call record", "error", err, "call", call.CallSid)
+		return
+	}
+	c.callID = callID
+	c.status = "completed"
+}
+
+// flush writes the turns that can no longer change. The agent's last sentence
+// is held back because an interrupt truncates it to what the caller actually
+// heard; writing it early would store words nobody received.
+func (c *callRecord) flush(ctx context.Context, session *Session) {
+	if c.callID == "" {
+		return
+	}
+	c.write(ctx, session.Transcript(), false)
+}
+
+func (c *callRecord) fail() { c.status = "failed" }
+
+func (c *callRecord) close(ctx context.Context, session *Session) {
+	if c.callID == "" {
+		return
+	}
+	c.write(ctx, session.Transcript(), true)
+	if c.status == "" {
+		c.status = "completed"
+	}
+	if err := c.store.EndCall(
+		ctx, c.route.TenantID, c.callID, c.status, c.now(),
+	); err != nil {
+		c.logger.Error("closing call record", "error", err, "call", c.callID)
+	}
+}
+
+func (c *callRecord) write(ctx context.Context, transcript []Turn, final bool) {
+	end := len(transcript)
+	if !final && end > 0 && transcript[end-1].Role == RoleAgent {
+		end--
+	}
+	if end <= c.flushed {
+		return
+	}
+	pending := transcript[c.flushed:end]
+	if err := c.store.AppendTurns(
+		ctx, c.route.TenantID, c.callID, pending, c.now(),
+	); err != nil {
+		c.logger.Error("saving call turns", "error", err, "call", c.callID)
+		return
+	}
+	c.flushed = end
 }

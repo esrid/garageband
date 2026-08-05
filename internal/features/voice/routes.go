@@ -13,6 +13,7 @@ import (
 // minted in the TwiML that opened it.
 func Register(
 	mux *http.ServeMux,
+	store *Store,
 	config Config,
 	responder Responder,
 	logger *slog.Logger,
@@ -28,6 +29,7 @@ func Register(
 	}
 
 	h := &handler{
+		store:     store,
 		config:    config,
 		responder: responder,
 		logger:    logger,

@@ -45,7 +45,12 @@ func TestRelayTokenRejectsTamperingAndExpiry(t *testing.T) {
 		config: Config{PublicBaseURL: "https://app.test", AuthToken: "secret"},
 		now:    func() time.Time { return now },
 	}
-	route := Route{TenantID: "tenant-1", LocationID: "location-1"}
+	route := Route{
+		TenantID:   "tenant-1",
+		LocationID: "location-1",
+		AgentID:    "agent-1",
+		NumberID:   "number-1",
+	}
 
 	socketURL := h.socketURL(route)
 	if !strings.HasPrefix(socketURL, "wss://app.test/voice/relay?") {
@@ -76,6 +81,24 @@ func TestRelayTokenRejectsTamperingAndExpiry(t *testing.T) {
 		httptest.NewRequest("GET", "/voice/relay?"+query.Encode(), nil),
 	); ok {
 		t.Fatal("accepted an expired token")
+	}
+
+	// Swapping the agent is as much an impersonation as swapping the tenant.
+	swapped := cloneValues(query)
+	swapped.Set("agent", "agent-2")
+	if _, ok := h.authorizeRelay(
+		httptest.NewRequest("GET", "/voice/relay?"+swapped.Encode(), nil),
+	); ok {
+		t.Fatal("accepted a token minted for another agent")
+	}
+
+	// A route missing a field describes a number we never provisioned.
+	incomplete := cloneValues(query)
+	incomplete.Del("number")
+	if _, ok := h.authorizeRelay(
+		httptest.NewRequest("GET", "/voice/relay?"+incomplete.Encode(), nil),
+	); ok {
+		t.Fatal("accepted a route with no number")
 	}
 
 	// A different auth token must not validate our signature.

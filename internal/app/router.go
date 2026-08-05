@@ -293,6 +293,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 	// up and says so rather than leaving the line ringing into nothing.
 	voice.Register(
 		mux,
+		voice.NewStore(database),
 		voice.Config{
 			PublicBaseURL: cfg.BaseURL,
 			AuthToken:     cfg.TwilioAuthToken,
