@@ -131,6 +131,18 @@
     <p><strong>Conséquence sur l'offre :</strong> pour un garage martiniquais, « numéro Garageband fourni » n'est pas vendable. La seule architecture est celle déjà recommandée — le garage garde son 0596 chez son opérateur et renvoie sur non-réponse vers un numéro Twilio métropolitain. Le sender WhatsApp d'un client martiniquais serait lui aussi un <code>+33</code>.</p>
     <p class="muted">Risque à lever avant de vendre en Martinique : ce renvoi 0596 → <code>+33</code> est facturé au garage par son propre opérateur. S'il est compté à la minute, chaque appel pris par l'agent coûte quelque chose au client, en plus de l'abonnement. À vérifier chez Orange Caraïbe, SFR Caraïbe et Digicel avant le premier rendez-vous, pas après.</p>
   </article>
+  <article class="card" style="border-color:var(--orange)">
+    <span class="tag" style="background:var(--orange)">Risque ouvert</span>
+    <h3>Une adresse martiniquaise suffit-elle à acheter un +33 ?</h3>
+    <p>L'assistant de la console a répondu le 5 août 2026 qu'une adresse en Martinique n'est « généralement pas acceptée » pour un numéro métropolitain, au motif que les DOM ne seraient pas « locaux ». La page réglementaire écrite dit pourtant « <em>Must be within France</em> », sans mention de métropole — et la Martinique est la France. Le même assistant a recommandé Autopilot, retiré en août 2023 : sa réponse ne fait pas foi.</p>
+    <p><strong>Si elle se confirme, plus aucun numéro Twilio n'est achetable</strong> : ni +596 (inexistant), ni +33 (adresse refusée). C'est le seul risque identifié qui arrête le projet, pas seulement une fonctionnalité.</p>
+    <p class="muted">Deux vérifications, dans cet ordre : monter un Regulatory Bundle dans Trust Hub avec l'adresse réelle et voir s'il est accepté — gratuit, définitif, sans achat ; et demander une réponse écrite à un agent humain, pas à l'assistant.</p>
+  </article>
+  <article class="card">
+    <h3>Le repli si l'adresse est refusée : BYOC</h3>
+    <p>Le <em>Bring Your Own Carrier</em> de Twilio accepte les appels entrants arrivant sur un numéro acheté <strong>ailleurs</strong> : l'opérateur route vers un trunk BYOC, Twilio appelle le webhook et l'application répond en TwiML. Le numéro s'achète alors chez un opérateur français servant les DOM — OVH Telecom, Keyyo, Ringover — et la conformité réglementaire reste chez lui.</p>
+    <p class="muted">L'architecture entière survit donc au refus : ConversationRelay est un verbe TwiML, et un appel BYOC est traité en TwiML. Le seul point non documenté explicitement est la combinaison BYOC + ConversationRelay — à confirmer avant de s'y engager, pas à supposer. BYOC Trunking pour Programmable Voice est GA.</p>
+  </article>
   <article class="card">
     <h3>Un numéro français exige une adresse française</h3>
     <p>Twilio demande, pour un numéro local FR : extrait K-bis nommant le représentant, preuve d'adresse locale (pas de boîte postale), numéro RCS ou Siren/Siret, site de l'entreprise. L'adresse doit être « within France ».</p>
