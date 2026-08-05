@@ -75,16 +75,21 @@ A single-site client at 299 € nets roughly ~200 €/month after costs and char
 which is why solo garages are taken opportunistically but are not the pitch.
 This is the floor, not the ambition.
 
-## Launch offer — two managed tiers
+## Launch offer — one price per location, three managed tiers
+
+Every tier bills the same 299 € per location. A tier is a packaging of that
+same unit — pooling, overage rate, support — never a discount and never a
+penalty, so no group can ever be better off buying its sites one by one or
+worse off growing into the next tier.
 
 **Target: organizations with 2–6 locations.** Solo-garage deals are accepted
 opportunistically at the same price, but they are not what the pitch is built
 around — see the competitive landscape below for why.
 
-- **299 €/month per location**, 500 included minutes, 1 000 WhatsApp
-  transactional messages, 100 SMS fallback messages, overage 0.35 €/min,
-  hard cap with auto-upgrade prompt.
-- **899 €/month per organization**, 1 500 included minutes shared across up
+- Essential — **299 €/month per location**, 500 included minutes, 1 000
+  WhatsApp transactional messages, 100 SMS fallback messages, overage
+  0.35 €/min, hard cap with auto-upgrade prompt.
+- Pro — **899 €/month per organization**, 1 500 included minutes shared across up
   to three locations, 3 000 WhatsApp transactional messages, 400 SMS fallback
   messages, overage 0.25 €/min, separate telephone routes and site contexts,
   and priority support. That is exactly 3 × 299 €: the upper tier is never
@@ -92,10 +97,13 @@ around — see the competitive landscape below for why.
   the same price is pooling (a quiet site's unused minutes cover a busy one),
   a lower overage rate, 100 extra SMS, and priority support — none of which
   costs more to serve, because the provider bill is per minute, not per site.
-- **2 490 €/month per organization**, 4–7 locations, 2 500 shared minutes,
-  5 000 WhatsApp transactional messages, 1 000 SMS fallback messages, and
-  0.35 €/min above the included minutes. At 5 000 minutes, the billed amount
-  is 3 365 € HT.
+- Network — **299 €/month per location for 4–7 locations**, 1 196 € at four sites,
+  2 093 € at seven, with every allowance scaling per site and pooled across
+  the group: 500 minutes, 1 000 WhatsApp transactional messages, and 100 SMS
+  fallback messages each, so seven sites share 3 500 minutes, 7 000 WhatsApp
+  messages, and 700 SMS. Overage 0.25 €/min as on Pro, plus routing, priority
+  support, and supervision. A seven-site group running 5 000 minutes is billed
+  2 093 € + 1 500 × 0.25 € = **2 468 € HT**.
 - WhatsApp is sold with a reasonable-use allowance, not literal unlimited
   messaging. Marketing campaigns and usage above the allowance are billed at
   cost plus a handling margin.
@@ -181,9 +189,8 @@ triggers a quantity change, and when any of it is worth automating — is in
       Pro cannot be sold before metering does.
 - [ ] Decide whether a group discount applies past ~4 sites. None today: the
       price is flat per location, and a 6-site group pays 1 794 €/month.
-- [ ] The 2 490 € network tier is dominated by its own per-location price and
-      has to move. Seven sites bought one by one cost 2 093 € and carry 3 500
-      included minutes; the network tier asks 2 490 € for 2 500 shared minutes,
-      so it is both dearer and smaller at every site count in its 4–7 range.
-      Either anchor it to 299 €/site like the others (1 196–2 093 €) or raise
-      what it includes until the premium buys something. Not decided here.
+- [x] The network tier was a flat 2 490 € for 4–7 locations, which its own
+      per-location price beat at every site count in that range: seven sites
+      bought one by one cost 2 093 € and carried 3 500 included minutes
+      against the tier's 2 500. It is now anchored to 299 €/site like the
+      others, with allowances scaling per site and pooled.
