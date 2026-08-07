@@ -2,12 +2,10 @@ package app
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/esrid/garageband/internal/features/accesscontrol"
 	"github.com/esrid/garageband/internal/features/agenda"
 	"github.com/esrid/garageband/internal/features/agents"
 	"github.com/esrid/garageband/internal/features/assistant"
@@ -191,100 +189,19 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 			}, userOK && tenantOK
 		},
 	)
-	accessStore := accesscontrol.NewStore(database)
-	team.Register(mux, auth.RequireTenant, team.Deps{
-		Principal: func(ctx context.Context) (team.Principal, bool) {
+	team.Register(
+		mux,
+		team.NewStore(database),
+		auth.RequireTenant,
+		func(ctx context.Context) (team.Principal, bool) {
 			user, userOK := auth.UserFrom(ctx)
 			tenantID, tenantOK := auth.TenantFrom(ctx)
 			return team.Principal{
 				UserID: user.ID, TenantID: tenantID,
 			}, userOK && tenantOK
 		},
-		LoadPage: func(ctx context.Context, principal team.Principal) (team.Page, error) {
-			overview, err := accessStore.TeamOverview(
-				ctx, principal.TenantID, principal.UserID,
-			)
-			if err != nil {
-				return team.Page{}, err
-			}
-			page := team.Page{
-				Organization: overview.Organization,
-				CanManage:    overview.CanManage,
-				Locations:    make([]team.LocationRef, 0, len(overview.Locations)),
-				Members:      make([]team.Member, 0, len(overview.Members)),
-			}
-			for _, location := range overview.Locations {
-				page.Locations = append(page.Locations, team.LocationRef{
-					ID: location.ID, Name: location.Name, Active: location.Active,
-				})
-			}
-			for _, member := range overview.Members {
-				page.Members = append(page.Members, team.Member{
-					UserID: member.UserID, Name: member.Name, Email: member.Email,
-					Role: member.Role, LocationIDs: member.LocationIDs,
-					InviteState: member.InviteState,
-				})
-			}
-			return page, nil
-		},
-		ReplaceAssignments: func(
-			ctx context.Context,
-			principal team.Principal,
-			targetUserID string,
-			locationIDs []string,
-		) error {
-			return teamError(accessStore.ReplaceLocationAssignments(
-				ctx, principal.TenantID, principal.UserID,
-				targetUserID, locationIDs,
-			))
-		},
-		InviteStaff: func(
-			ctx context.Context,
-			principal team.Principal,
-			name string,
-			locationIDs []string,
-		) (team.Invitation, error) {
-			invite, err := accessStore.InviteStaff(
-				ctx, principal.TenantID, principal.UserID, name, locationIDs,
-			)
-			if err != nil {
-				return team.Invitation{}, teamError(err)
-			}
-			return staffInvitation(cfg.BaseURL, invite.Token), nil
-		},
-		ReissueInvite: func(
-			ctx context.Context,
-			principal team.Principal,
-			targetUserID string,
-		) (team.Invitation, error) {
-			invite, err := accessStore.ReissueInvite(
-				ctx, principal.TenantID, principal.UserID, targetUserID,
-			)
-			if err != nil {
-				return team.Invitation{}, teamError(err)
-			}
-			return staffInvitation(cfg.BaseURL, invite.Token), nil
-		},
-		RenameStaff: func(
-			ctx context.Context,
-			principal team.Principal,
-			targetUserID string,
-			name string,
-		) error {
-			return teamError(accessStore.RenameStaff(
-				ctx, principal.TenantID, principal.UserID, targetUserID, name,
-			))
-		},
-		RemoveStaff: func(
-			ctx context.Context,
-			principal team.Principal,
-			targetUserID string,
-		) error {
-			return teamError(accessStore.RevokeStaff(
-				ctx, principal.TenantID, principal.UserID, targetUserID,
-			))
-		},
-	})
+		cfg.BaseURL,
+	)
 
 	// The two endpoints a call needs. Neither is behind RequireTenant: a
 	// caller is anonymous. Both prove their own origin instead — Twilio's
@@ -308,23 +225,4 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 	csrf := http.NewCrossOriginProtection()
 
 	return withRecover(withLogging(csrf.Handler(authStore.WithUser(mux))))
-}
-
-// teamError maps store refusals onto the team screen's own errors, so the
-// feature never has to know which package rejected it.
-func teamError(err error) error {
-	switch {
-	case errors.Is(err, accesscontrol.ErrForbidden):
-		return team.ErrForbidden
-	case errors.Is(err, accesscontrol.ErrNameRequired):
-		return team.ErrNameRequired
-	default:
-		return err
-	}
-}
-
-// staffInvitation presents one credential two ways: a code to type on a shop
-// computer, and the same secret as a link to tap on a phone.
-func staffInvitation(baseURL, token string) team.Invitation {
-	return team.Invitation{Link: baseURL + "/rejoindre/" + token, Code: token}
 }

@@ -101,6 +101,14 @@ func (m Member) Unassigned() bool {
 	return !m.ReachesEveryLocation() && len(m.LocationIDs) == 0
 }
 
+// Invitation is the one-time credential this screen hands over. Code is what a
+// person types on a machine nobody can send a link to; Link is the same secret
+// as something to tap.
+type Invitation struct {
+	Link string
+	Code string
+}
+
 // Page backs the "Accès aux sites" screen.
 type Page struct {
 	Organization string

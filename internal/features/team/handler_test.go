@@ -2,144 +2,320 @@ package team_test
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/esrid/garageband/internal/features/team"
+	"github.com/esrid/garageband/internal/platform/dbtest"
 )
 
-const (
-	actorID   = "01980000-0000-7000-8000-000000000001"
-	tenantID  = "01980000-0000-7000-8000-000000000002"
-	memberID  = "01980000-0000-7000-8000-000000000003"
-	locationA = "01980000-0000-7000-8000-000000000004"
-	locationB = "01980000-0000-7000-8000-000000000005"
-)
+// baseURL is what the screen builds an invitation link from.
+const baseURL = "https://app.example"
+
+// unknownUserID is well-formed but belongs to nobody, which is how the screen
+// tells "not yours to change" apart from "not a user id at all".
+const unknownUserID = "01980000-0000-7000-8000-0000000000ff"
+
+type teamFixture struct {
+	store                       *team.Store
+	tenantID, ownerID, memberID string
+	locationA, locationB        string
+}
+
+func newTeamFixture(t *testing.T) teamFixture {
+	t.Helper()
+	fixtures, runtime := dbtest.OpenRuntime(t)
+	ownerID := createUser(t, fixtures, "http-owner@example.com")
+	memberID := createUser(t, fixtures, "http-member@example.com")
+	tenantID := createTenant(t, fixtures, ownerID)
+	addMembership(t, fixtures, tenantID, memberID, "member")
+	return teamFixture{
+		store:     team.NewStore(runtime),
+		tenantID:  tenantID,
+		ownerID:   ownerID,
+		memberID:  memberID,
+		locationA: createLocation(t, fixtures, tenantID, "http-a"),
+		locationB: createLocation(t, fixtures, tenantID, "http-b"),
+	}
+}
+
+// teamMux serves the feature as the given user, which is the only difference
+// between an owner who may change access and a member who may not.
+func teamMux(fixture teamFixture, userID string) *http.ServeMux {
+	mux := http.NewServeMux()
+	team.Register(
+		mux,
+		fixture.store,
+		func(next http.Handler) http.Handler { return next },
+		func(context.Context) (team.Principal, bool) {
+			return team.Principal{UserID: userID, TenantID: fixture.tenantID}, true
+		},
+		baseURL,
+	)
+	return mux
+}
 
 func TestTeamHTTPFlow(t *testing.T) {
-	var gotTarget string
-	var gotLocations []string
-	handler := teamHandler(
-		func(context.Context, team.Principal) (team.Page, error) {
-			return team.Page{Organization: "Garage Central", CanManage: true}, nil
-		},
-		func(_ context.Context, _ team.Principal, target string, locations []string) error {
-			gotTarget = target
-			gotLocations = slices.Clone(locations)
-			return nil
-		},
-	)
+	fixture := newTeamFixture(t)
+	mux := teamMux(fixture, fixture.ownerID)
 
-	response := request(handler, http.MethodGet, "/team?saved=1", nil)
+	response := request(mux, http.MethodGet, "/team?saved=1", nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET /team = %d, want 200", response.Code)
 	}
-	for _, want := range []string{"Garage Central", "Les accès aux sites ont été enregistrés."} {
+	for _, want := range []string{"Team Garage", "Les accès aux sites ont été enregistrés."} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Errorf("GET /team body is missing %q", want)
 		}
 	}
 
-	form := url.Values{team.FieldLocations: {locationA, locationB}}
-	response = request(handler, http.MethodPost, "/team/"+memberID+"/locations", form)
+	form := url.Values{team.FieldLocations: {fixture.locationA, fixture.locationB}}
+	response = request(mux, http.MethodPost, "/team/"+fixture.memberID+"/locations", form)
 	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/team?saved=1" {
 		t.Fatalf("POST = %d location %q", response.Code, response.Header().Get("Location"))
 	}
-	if gotTarget != memberID || !slices.Equal(gotLocations, []string{locationA, locationB}) {
-		t.Fatalf("replacement = target %q locations %v", gotTarget, gotLocations)
+	if got := memberLocations(t, fixture); !slices.Equal(
+		got, sorted(fixture.locationA, fixture.locationB),
+	) {
+		t.Fatalf("assignments after POST = %v", got)
 	}
 
-	response = request(handler, http.MethodPost, "/team/"+memberID+"/locations", nil)
-	if response.Code != http.StatusSeeOther || len(gotLocations) != 0 {
-		t.Fatalf("empty replacement = %d locations %v", response.Code, gotLocations)
+	response = request(mux, http.MethodPost, "/team/"+fixture.memberID+"/locations", nil)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("empty replacement = %d", response.Code)
+	}
+	if got := memberLocations(t, fixture); len(got) != 0 {
+		t.Fatalf("empty replacement left %v", got)
 	}
 }
 
 func TestTeamHTTPValidationAndAuthorization(t *testing.T) {
+	fixture := newTeamFixture(t)
+	if err := fixture.store.ReplaceLocationAssignments(
+		t.Context(), fixture.tenantID, fixture.ownerID, fixture.memberID,
+		[]string{fixture.locationA},
+	); err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name       string
+		actorID    string
 		target     string
 		form       url.Values
-		replaceErr error
 		wantStatus int
 	}{
-		{name: "invalid target", target: "/team/not-a-uuid/locations", wantStatus: http.StatusNotFound},
 		{
-			name: "invalid location", target: "/team/" + memberID + "/locations",
+			name: "invalid target", target: "/team/not-a-uuid/locations",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "invalid location", target: "/team/" + fixture.memberID + "/locations",
 			form:       url.Values{team.FieldLocations: {"not-a-uuid"}},
 			wantStatus: http.StatusUnprocessableEntity,
 		},
 		{
-			name: "forbidden", target: "/team/" + memberID + "/locations",
-			replaceErr: team.ErrForbidden, wantStatus: http.StatusForbidden,
+			name: "unknown location", target: "/team/" + fixture.memberID + "/locations",
+			form:       url.Values{team.FieldLocations: {unknownUserID}},
+			wantStatus: http.StatusNotFound,
 		},
 		{
-			name: "missing member", target: "/team/" + memberID + "/locations",
-			replaceErr: sql.ErrNoRows, wantStatus: http.StatusNotFound,
+			name: "member cannot assign", actorID: fixture.memberID,
+			target:     "/team/" + fixture.memberID + "/locations",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "owner is not staff", target: "/team/" + fixture.ownerID + "/locations",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "missing member", target: "/team/" + unknownUserID + "/locations",
+			wantStatus: http.StatusNotFound,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			called := false
-			handler := teamHandler(
-				func(context.Context, team.Principal) (team.Page, error) { return team.Page{}, nil },
-				func(context.Context, team.Principal, string, []string) error {
-					called = true
-					return test.replaceErr
-				},
-			)
-			response := request(handler, http.MethodPost, test.target, test.form)
+			actorID := test.actorID
+			if actorID == "" {
+				actorID = fixture.ownerID
+			}
+			response := request(teamMux(fixture, actorID), http.MethodPost, test.target, test.form)
 			if response.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
 			}
-			if (test.name == "invalid target" || test.name == "invalid location") && called {
-				t.Fatal("replacement called after invalid input")
+			// Whatever was refused, the assignment it aimed at must survive.
+			if got := memberLocations(t, fixture); !slices.Equal(got, []string{fixture.locationA}) {
+				t.Fatalf("a refused request changed assignments to %v", got)
 			}
 		})
 	}
 }
 
-func TestTeamHTTPPageFailure(t *testing.T) {
-	handler := teamHandler(
-		func(context.Context, team.Principal) (team.Page, error) {
-			return team.Page{}, errors.New("load failed")
-		},
-		func(context.Context, team.Principal, string, []string) error { return nil },
-	)
-	response := request(handler, http.MethodGet, "/team", nil)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("GET failure = %d, want 500", response.Code)
+// TestTeamInviteRendersCodeOnce pins the one thing this screen must never get
+// wrong: the invitation exists only in the response that created it.
+func TestTeamInviteRendersCodeOnce(t *testing.T) {
+	fixture := newTeamFixture(t)
+	mux := teamMux(fixture, fixture.ownerID)
+
+	form := url.Values{
+		team.FieldName:      {"  Karim Mécano  "},
+		team.FieldLocations: {fixture.locationA},
+	}
+	response := request(mux, http.MethodPost, "/team/invite", form)
+	if response.Code != http.StatusOK {
+		t.Fatalf("POST /team/invite = %d, want 200", response.Code)
+	}
+	body := response.Body.String()
+	match := regexp.MustCompile(
+		regexp.QuoteMeta(baseURL) + `/rejoindre/([A-Z2-7]{12})`,
+	).FindStringSubmatch(body)
+	if match == nil {
+		t.Fatalf("no invitation link in the page that minted it: %q", body)
+	}
+	code := match[1]
+	// The code is shown grouped too, because it gets read out loud.
+	if grouped := code[:4] + "-" + code[4:8] + "-" + code[8:]; !strings.Contains(body, grouped) {
+		t.Fatalf("the typed code %q is missing from the page that minted it", grouped)
+	}
+	// The trimmed name is what was enrolled, and the invitation is theirs.
+	if !strings.Contains(body, "Karim Mécano") {
+		t.Fatal("the invited person is not named on the page")
+	}
+
+	// A later view of the screen cannot show the code again: only its hash
+	// was stored.
+	response = request(mux, http.MethodGet, "/team", nil)
+	if strings.Contains(response.Body.String(), code) {
+		t.Fatal("the invitation code came back on a later page load")
+	}
+	if !strings.Contains(response.Body.String(), "Karim Mécano") {
+		t.Fatal("the invited person is missing from the team list")
+	}
+
+	// A nameless employee is rejected without ever reaching the database.
+	before := memberCount(t, fixture)
+	response = request(mux, http.MethodPost, "/team/invite", url.Values{team.FieldName: {"   "}})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank name = %d, want 422", response.Code)
+	}
+	if after := memberCount(t, fixture); after != before {
+		t.Fatalf("a blank name enrolled someone: %d members, want %d", after, before)
 	}
 }
 
-func teamHandler(load team.PageLoader, replace team.AssignmentReplacer) http.Handler {
-	mux := http.NewServeMux()
-	team.Register(
-		mux,
-		func(next http.Handler) http.Handler { return next },
-		team.Deps{
-			Principal: func(context.Context) (team.Principal, bool) {
-				return team.Principal{UserID: actorID, TenantID: tenantID}, true
-			},
-			LoadPage:           load,
-			ReplaceAssignments: replace,
-			InviteStaff: func(context.Context, team.Principal, string, []string) (team.Invitation, error) {
-				return team.Invitation{}, nil
-			},
-			ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
-				return team.Invitation{}, nil
-			},
-			RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
-			RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
-		},
+// TestTeamReissueRendersANewCode covers the second screen and the lost code.
+func TestTeamReissueRendersANewCode(t *testing.T) {
+	fixture := newTeamFixture(t)
+	mux := teamMux(fixture, fixture.ownerID)
+	invite, err := fixture.store.InviteStaff(
+		t.Context(), fixture.tenantID, fixture.ownerID, "Sophie Accueil", nil,
 	)
-	return mux
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := request(mux, http.MethodPost, "/team/"+invite.UserID+"/code", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("POST code = %d, want 200", response.Code)
+	}
+	body := response.Body.String()
+	if strings.Contains(body, invite.Token) {
+		t.Fatal("reissuing showed the code it just replaced")
+	}
+	if !regexp.MustCompile(
+		regexp.QuoteMeta(baseURL) + `/rejoindre/[A-Z2-7]{12}`,
+	).MatchString(body) {
+		t.Fatalf("no new invitation link after reissuing: %q", body)
+	}
+	// Reissuing knows an id, not a person: the page must still name them.
+	if !strings.Contains(body, "Sophie Accueil") {
+		t.Fatal("the reissued code is not attributed to anyone")
+	}
+
+	// The owner signs in through Google; a staff code would be a way in.
+	response = request(mux, http.MethodPost, "/team/"+fixture.ownerID+"/code", nil)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("reissuing for the owner = %d, want 403", response.Code)
+	}
+}
+
+func TestTeamRenameAndRevokeRoundTrip(t *testing.T) {
+	fixture := newTeamFixture(t)
+	mux := teamMux(fixture, fixture.ownerID)
+	invite, err := fixture.store.InviteStaff(
+		t.Context(), fixture.tenantID, fixture.ownerID, "acceuil", nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := request(mux, http.MethodPost, "/team/"+invite.UserID+"/name",
+		url.Values{team.FieldName: {"  Accueil  "}})
+	if response.Code != http.StatusSeeOther ||
+		response.Header().Get("Location") != "/team?saved=renamed" {
+		t.Fatalf("rename = %d location %q", response.Code, response.Header().Get("Location"))
+	}
+	response = request(mux, http.MethodPost, "/team/"+invite.UserID+"/name",
+		url.Values{team.FieldName: {"   "}})
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank rename = %d, want 422", response.Code)
+	}
+
+	for _, test := range []struct {
+		name       string
+		target     string
+		wantStatus int
+	}{
+		{name: "owner", target: fixture.ownerID, wantStatus: http.StatusForbidden},
+		{name: "unknown", target: unknownUserID, wantStatus: http.StatusNotFound},
+		{name: "staff", target: invite.UserID, wantStatus: http.StatusSeeOther},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := request(mux, http.MethodPost, "/team/"+test.target+"/revoke", nil)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+		})
+	}
+
+	page, err := fixture.store.Page(t.Context(), fixture.tenantID, fixture.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, member := range page.Members {
+		if member.UserID == invite.UserID {
+			t.Fatal("the removed person is still on the team")
+		}
+	}
+}
+
+// memberLocations reads back what the fixture's member actually reaches.
+func memberLocations(t *testing.T, fixture teamFixture) []string {
+	t.Helper()
+	page, err := fixture.store.Page(t.Context(), fixture.tenantID, fixture.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return findMember(t, page.Members, fixture.memberID).LocationIDs
+}
+
+func memberCount(t *testing.T, fixture teamFixture) int {
+	t.Helper()
+	page, err := fixture.store.Page(t.Context(), fixture.tenantID, fixture.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(page.Members)
+}
+
+func sorted(ids ...string) []string {
+	slices.Sort(ids)
+	return ids
 }
 
 func request(handler http.Handler, method, target string, form url.Values) *httptest.ResponseRecorder {
@@ -152,115 +328,4 @@ func request(handler http.Handler, method, target string, form url.Values) *http
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
-}
-
-// TestTeamInviteRendersLinkOnce pins the one thing this screen must never get
-// wrong: the invitation link exists only in the response that created it.
-func TestTeamInviteRendersLinkOnce(t *testing.T) {
-	var gotName string
-	var gotLocations []string
-	mux := http.NewServeMux()
-	team.Register(mux, func(next http.Handler) http.Handler { return next }, team.Deps{
-		Principal: func(context.Context) (team.Principal, bool) {
-			return team.Principal{UserID: actorID, TenantID: tenantID}, true
-		},
-		LoadPage: func(context.Context, team.Principal) (team.Page, error) {
-			return team.Page{Organization: "Garage Central", CanManage: true}, nil
-		},
-		ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
-		InviteStaff: func(_ context.Context, _ team.Principal, name string, locations []string) (team.Invitation, error) {
-			gotName = name
-			gotLocations = slices.Clone(locations)
-			return team.Invitation{
-				Link: "https://app.example/rejoindre/SECRETCODE12",
-				Code: "SECRETCODE12",
-			}, nil
-		},
-		ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
-			return team.Invitation{}, nil
-		},
-		RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
-		RemoveStaff: func(context.Context, team.Principal, string) error { return nil },
-	})
-
-	form := url.Values{
-		team.FieldName:      {"  Karim Mécano  "},
-		team.FieldLocations: {locationA},
-	}
-	response := request(mux, http.MethodPost, "/team/invite", form)
-	if response.Code != http.StatusOK {
-		t.Fatalf("POST /team/invite = %d, want 200", response.Code)
-	}
-	if gotName != "Karim Mécano" || !slices.Equal(gotLocations, []string{locationA}) {
-		t.Fatalf("invite = name %q locations %v", gotName, gotLocations)
-	}
-	if !strings.Contains(response.Body.String(), "https://app.example/rejoindre/SECRETCODE12") {
-		t.Fatal("the invitation link is missing from the page that minted it")
-	}
-	// The code is shown grouped, because it gets read out loud.
-	if !strings.Contains(response.Body.String(), "SECR-ETCO-DE12") {
-		t.Fatal("the typed code is missing from the page that minted it")
-	}
-
-	// A later view of the screen cannot show it again: it was never stored.
-	response = request(mux, http.MethodGet, "/team", nil)
-	if strings.Contains(response.Body.String(), "SECRETCODE12") {
-		t.Fatal("the invitation code came back on a later page load")
-	}
-
-	// A nameless employee is rejected without ever reaching the store.
-	gotName = "unchanged"
-	response = request(mux, http.MethodPost, "/team/invite", url.Values{team.FieldName: {"   "}})
-	if response.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("blank name = %d, want 422", response.Code)
-	}
-	if gotName != "unchanged" {
-		t.Fatal("the store was called with a blank name")
-	}
-}
-
-// TestTeamRevokeRoundTrip covers removal, including the refusals the store
-// reports for the owner and for someone who no longer exists.
-func TestTeamRevokeRoundTrip(t *testing.T) {
-	for _, test := range []struct {
-		name       string
-		removeErr  error
-		wantStatus int
-	}{
-		{name: "removed", wantStatus: http.StatusSeeOther},
-		{name: "forbidden", removeErr: team.ErrForbidden, wantStatus: http.StatusForbidden},
-		{name: "unknown", removeErr: sql.ErrNoRows, wantStatus: http.StatusNotFound},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			var gotTarget string
-			mux := http.NewServeMux()
-			team.Register(mux, func(next http.Handler) http.Handler { return next }, team.Deps{
-				Principal: func(context.Context) (team.Principal, bool) {
-					return team.Principal{UserID: actorID, TenantID: tenantID}, true
-				},
-				LoadPage: func(context.Context, team.Principal) (team.Page, error) {
-					return team.Page{}, nil
-				},
-				ReplaceAssignments: func(context.Context, team.Principal, string, []string) error { return nil },
-				InviteStaff: func(context.Context, team.Principal, string, []string) (team.Invitation, error) {
-					return team.Invitation{}, nil
-				},
-				ReissueInvite: func(context.Context, team.Principal, string) (team.Invitation, error) {
-					return team.Invitation{}, nil
-				},
-				RenameStaff: func(context.Context, team.Principal, string, string) error { return nil },
-				RemoveStaff: func(_ context.Context, _ team.Principal, target string) error {
-					gotTarget = target
-					return test.removeErr
-				},
-			})
-			response := request(mux, http.MethodPost, "/team/"+memberID+"/revoke", nil)
-			if response.Code != test.wantStatus {
-				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
-			}
-			if gotTarget != memberID {
-				t.Fatalf("target = %q, want %q", gotTarget, memberID)
-			}
-		})
-	}
 }

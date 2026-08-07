@@ -16,7 +16,21 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab
 const nameLimit = 120
 
 type handler struct {
-	deps Deps
+	store     *Store
+	principal PrincipalResolver
+	baseURL   string
+}
+
+// page reads the screen for the signed-in principal. Every render goes through
+// it, so the store is asked the same question the same way everywhere.
+func (h *handler) page(r *http.Request, principal Principal) (Page, error) {
+	return h.store.Page(r.Context(), principal.TenantID, principal.UserID)
+}
+
+// invitation presents one credential two ways: a code to type on a shop
+// computer, and the same secret as a link to tap on a phone.
+func (h *handler) invitation(invite StaffInvite) Invitation {
+	return Invitation{Link: h.baseURL + "/rejoindre/" + invite.Token, Code: invite.Token}
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +38,7 @@ func (h *handler) index(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, err := h.deps.LoadPage(r.Context(), principal)
+	page, err := h.page(r, principal)
 	if err != nil {
 		h.fail(w, err)
 		return
@@ -67,7 +81,9 @@ func (h *handler) invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invitation, err := h.deps.InviteStaff(r.Context(), principal, name, locationIDs)
+	invite, err := h.store.InviteStaff(
+		r.Context(), principal.TenantID, principal.UserID, name, locationIDs,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrForbidden):
@@ -85,7 +101,7 @@ func (h *handler) invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.renderInvitation(w, r, principal, invitation, name)
+	h.renderInvitation(w, r, principal, h.invitation(invite), name)
 }
 
 // reissue mints a new code for someone already on the team: a second screen to
@@ -100,12 +116,14 @@ func (h *handler) reissue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	invitation, err := h.deps.ReissueInvite(r.Context(), principal, targetUserID)
+	invite, err := h.store.ReissueInvite(
+		r.Context(), principal.TenantID, principal.UserID, targetUserID,
+	)
 	if err != nil {
 		h.failWrite(w, r, err)
 		return
 	}
-	h.renderInvitation(w, r, principal, invitation, "")
+	h.renderInvitation(w, r, principal, h.invitation(invite), "")
 }
 
 // renderInvitation shows a credential exactly once. name may be empty, in which
@@ -117,7 +135,7 @@ func (h *handler) renderInvitation(
 	invitation Invitation,
 	name string,
 ) {
-	page, err := h.deps.LoadPage(r.Context(), principal)
+	page, err := h.page(r, principal)
 	if err != nil {
 		h.fail(w, err)
 		return
@@ -158,7 +176,9 @@ func (h *handler) rename(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusUnprocessableEntity)
 		return
 	}
-	if err := h.deps.RenameStaff(r.Context(), principal, targetUserID, name); err != nil {
+	if err := h.store.RenameStaff(
+		r.Context(), principal.TenantID, principal.UserID, targetUserID, name,
+	); err != nil {
 		h.failWrite(w, r, err)
 		return
 	}
@@ -178,8 +198,8 @@ func (h *handler) replace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.deps.ReplaceAssignments(
-		r.Context(), principal, targetUserID, locationIDs,
+	if err := h.store.ReplaceLocationAssignments(
+		r.Context(), principal.TenantID, principal.UserID, targetUserID, locationIDs,
 	); err != nil {
 		h.failWrite(w, r, err)
 		return
@@ -196,7 +216,9 @@ func (h *handler) revoke(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.deps.RemoveStaff(r.Context(), principal, targetUserID); err != nil {
+	if err := h.store.RevokeStaff(
+		r.Context(), principal.TenantID, principal.UserID, targetUserID,
+	); err != nil {
 		h.failWrite(w, r, err)
 		return
 	}
@@ -249,7 +271,7 @@ func (h *handler) renderNotice(
 	notice Notice,
 	status int,
 ) {
-	page, err := h.deps.LoadPage(r.Context(), principal)
+	page, err := h.page(r, principal)
 	if err != nil {
 		h.fail(w, err)
 		return
@@ -259,7 +281,7 @@ func (h *handler) renderNotice(
 }
 
 func (h *handler) resolve(w http.ResponseWriter, r *http.Request) (Principal, bool) {
-	principal, ok := h.deps.Principal(r.Context())
+	principal, ok := h.principal(r.Context())
 	if !ok || principal.UserID == "" || principal.TenantID == "" {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return Principal{}, false
