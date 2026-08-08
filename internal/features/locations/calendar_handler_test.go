@@ -196,9 +196,52 @@ func TestCalendarCallbackRefusesATokenWithoutOfflineAccess(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "durable") {
 		t.Fatalf("body = %q, want it to name the missing lasting access", response.Body.String())
 	}
-	// ponytail: the success path ends in a call to Google's userinfo endpoint
-	// at a hard-coded URL, so it needs a live account and stays out of reach
-	// here. calendar_queries_test.go covers what it would have written.
+}
+
+// TestCalendarCallbackConnectsTheLocationItStartedFrom walks the whole flow
+// through: Google only ever redirects to one fixed path, so which location
+// gets connected is carried by the cookie alone.
+func TestCalendarCallbackConnectsTheLocationItStartedFrom(t *testing.T) {
+	flow := newCalendarFlow(t, func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(
+			`{"access_token":"at","token_type":"Bearer","expires_in":3600,` +
+				`"refresh_token":"rt"}`,
+		)); err != nil {
+			t.Error(err)
+		}
+	})
+	var authorization string
+	userinfo := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			authorization = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := w.Write([]byte(`{"email":"garage@gmail.com"}`)); err != nil {
+				t.Error(err)
+			}
+		}))
+	t.Cleanup(userinfo.Close)
+	locations.SetUserinfoURL(t, userinfo.URL)
+
+	cookie, state := flow.begin(t)
+	response := flow.callback(t, "state="+state+"&code=c", cookie)
+	connected := "/locations/" + flow.locationID + "?calendar=connected"
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != connected {
+		t.Fatalf("callback = %d location %q, want 303 to %q",
+			response.Code, response.Header().Get("Location"), connected)
+	}
+	if authorization != "Bearer at" {
+		t.Fatalf("userinfo authorization = %q, want the token just exchanged", authorization)
+	}
+	// A used state must not be reusable either.
+	if !clearsStateCookie(response) {
+		t.Fatal("the state cookie survived a completed connection")
+	}
+
+	page := getLocationPage(flow.handler, connected)
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "garage@gmail.com") {
+		t.Fatalf("page after connecting = %d %q", page.Code, page.Body.String())
+	}
 }
 
 // clearsStateCookie reports the expiry the callback must always send back.

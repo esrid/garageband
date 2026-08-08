@@ -133,13 +133,17 @@ func clearCalendarStateCookie(w http.ResponseWriter, secure bool) {
 	})
 }
 
-// googleAccountEmail is display-only (which Google account a location is
-// connected to); a failure here must not fail the connection itself.
+// userinfoURL is where the connected account's address is read from. It is a
+// variable so a test can point it at a server it controls: everything after
+// the token exchange is otherwise unreachable without a live Google account.
 // Verified against https://developers.google.com/identity/openid-connect/openid-connect
 // 2026-08-03, same userinfo endpoint the login provider uses.
+var userinfoURL = "https://openidconnect.googleapis.com/v1/userinfo"
+
+// googleAccountEmail is display-only (which Google account a location is
+// connected to); a failure here must not fail the connection itself.
 func googleAccountEmail(ctx context.Context, client *http.Client) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://openidconnect.googleapis.com/v1/userinfo", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
 	if err != nil {
 		return "", err
 	}
