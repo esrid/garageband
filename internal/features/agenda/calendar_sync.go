@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -29,20 +30,41 @@ type CalendarConfig struct {
 // already makes - there is no per-location secondary-calendar picker.
 const googleCalendarID = "primary"
 
-// SyncAppointmentCalendar pushes the appointment's current state to the
+// newCalendarProvider builds the provider a push goes through. It is a
+// variable so an in-package test can watch what the lifecycle sends without a
+// live Google account; production always gets the real one.
+var newCalendarProvider = calendar.NewGoogle
+
+// reconcileCalendar pushes an appointment that has just been written, and
+// reports the outcome in the log only: the write is already committed, and a
+// calendar that refuses the push must not turn a booking the customer was
+// promised into an error. The failure itself survives in
+// appointment_calendar_events, which is what a later retry reads.
+func (s *Store) reconcileCalendar(ctx context.Context, tenantID, userID, appointmentID string) {
+	if err := s.syncAppointmentCalendar(ctx, tenantID, userID, appointmentID); err != nil {
+		slog.Error("sync appointment calendar",
+			"err", err, "appointment_id", appointmentID)
+	}
+}
+
+// reconcileCalendarRemoval is reconcileCalendar for an appointment that no
+// longer exists as far as the customer is concerned, with the same policy.
+func (s *Store) reconcileCalendarRemoval(ctx context.Context, tenantID, userID, appointmentID string) {
+	if err := s.removeAppointmentCalendarEvent(ctx, tenantID, userID, appointmentID); err != nil {
+		slog.Error("remove appointment calendar event",
+			"err", err, "appointment_id", appointmentID)
+	}
+}
+
+// syncAppointmentCalendar pushes the appointment's current state to the
 // location's connected Google Calendar, if any. A location with no
 // connection is a no-op, not an error - most locations will never connect
 // one. Garageband is the source of truth: this only ever pushes: it never
 // reads back edits made directly in Google Calendar.
-//
-// ponytail: assistant-booked appointments (book/reschedule/cancel_appointment
-// tools) don't call this yet - Store has no CalendarConfig of its own and
-// Execute's signature is fixed by the assistanttools.Executor interface.
-// Add when assistant-side booking needs calendar parity too, by threading
-// CalendarConfig through NewStore instead of a per-call parameter.
-func (s *Store) SyncAppointmentCalendar(
-	ctx context.Context, tenantID, userID, appointmentID string, calendarCfg CalendarConfig,
+func (s *Store) syncAppointmentCalendar(
+	ctx context.Context, tenantID, userID, appointmentID string,
 ) error {
+	calendarCfg := s.calendar
 	if !calendarCfg.Enabled {
 		return nil
 	}
@@ -63,7 +85,7 @@ func (s *Store) SyncAppointmentCalendar(
 		event.CalendarID = googleCalendarID
 		event.ExternalID = calendarEventID(appointmentID)
 		client := calendarCfg.OAuth.Client(ctx, &oauth2.Token{RefreshToken: string(refreshToken)})
-		saved, pushed := calendar.NewGoogle(client).UpsertEvent(ctx, event)
+		saved, pushed := newCalendarProvider(client).UpsertEvent(ctx, event)
 		pushErr = pushed
 		return recordCalendarSync(ctx, tx, tenantID, appointmentID, connectionID, googleCalendarID, saved.ExternalID, pushed)
 	})
@@ -73,12 +95,13 @@ func (s *Store) SyncAppointmentCalendar(
 	return pushErr
 }
 
-// RemoveAppointmentCalendarEvent deletes the appointment's event from its
+// removeAppointmentCalendarEvent deletes the appointment's event from its
 // location's connected Google Calendar, if one was ever synced. No synced
 // event (never connected, or never successfully pushed) is a no-op.
-func (s *Store) RemoveAppointmentCalendarEvent(
-	ctx context.Context, tenantID, userID, appointmentID string, calendarCfg CalendarConfig,
+func (s *Store) removeAppointmentCalendarEvent(
+	ctx context.Context, tenantID, userID, appointmentID string,
 ) error {
+	calendarCfg := s.calendar
 	if !calendarCfg.Enabled {
 		return nil
 	}
@@ -93,8 +116,18 @@ func (s *Store) RemoveAppointmentCalendarEvent(
 			return err
 		}
 		client := calendarCfg.OAuth.Client(ctx, &oauth2.Token{RefreshToken: string(refreshToken)})
-		deleteErr = calendar.NewGoogle(client).DeleteEvent(ctx, googleCalendarID, externalEventID)
-		return recordCalendarSync(ctx, tx, tenantID, appointmentID, connectionID, googleCalendarID, externalEventID, deleteErr)
+		deleteErr = newCalendarProvider(client).DeleteEvent(ctx, googleCalendarID, externalEventID)
+		// A deletion that went through is recorded with no event id, which is
+		// what moves the row to 'deleted'. Passing the id back would leave it
+		// reading 'synced' for an event that no longer exists, and the next
+		// cancellation would try to delete it a second time. The id itself
+		// survives in the row: recordCalendarSync only overwrites it with a
+		// non-empty value.
+		recorded := externalEventID
+		if deleteErr == nil {
+			recorded = ""
+		}
+		return recordCalendarSync(ctx, tx, tenantID, appointmentID, connectionID, googleCalendarID, recorded, deleteErr)
 	})
 	if err != nil {
 		return err

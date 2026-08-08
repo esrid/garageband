@@ -62,9 +62,18 @@ type resourceRequirement struct {
 	Quantity int
 }
 
-type Store struct{ db *db.DB }
+// Store owns every appointment mutation, including what has to happen outside
+// the database once one commits. The calendar configuration lives here rather
+// than travelling per call, so a booking reaches the same connected calendar
+// whether it came from the week grid or from the assistant.
+type Store struct {
+	db       *db.DB
+	calendar CalendarConfig
+}
 
-func NewStore(database *db.DB) *Store { return &Store{db: database} }
+func NewStore(database *db.DB, calendarCfg CalendarConfig) *Store {
+	return &Store{db: database, calendar: calendarCfg}
+}
 
 func (s *Store) Availability(
 	ctx context.Context,
@@ -649,7 +658,11 @@ func (s *Store) Save(
 		id, date, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
 		return err
 	})
-	return id, date, err
+	if err != nil {
+		return "", "", err
+	}
+	s.reconcileCalendar(ctx, tenantID, userID, id)
+	return id, date, nil
 }
 
 // saveAppointment is Save's tx-scoped body, factored out so the assistant
@@ -964,7 +977,11 @@ func (s *Store) Cancel(
 		date, locationID, err = cancelAppointment(ctx, tx, tenantID, appointmentID)
 		return err
 	})
-	return date, locationID, err
+	if err != nil {
+		return "", "", err
+	}
+	s.reconcileCalendarRemoval(ctx, tenantID, userID, appointmentID)
+	return date, locationID, nil
 }
 
 // cancelAppointment is Cancel's tx-scoped body, factored out for the same
@@ -1041,7 +1058,11 @@ func (s *Store) Reschedule(
 		_, newDate, err = saveAppointment(ctx, tx, tenantID, appointmentID, input)
 		return err
 	})
-	return newDate, err
+	if err != nil {
+		return "", err
+	}
+	s.reconcileCalendar(ctx, tenantID, userID, appointmentID)
+	return newDate, nil
 }
 
 // loadCurrentSaveInput reads an appointment's current fields as the exact

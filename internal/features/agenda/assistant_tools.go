@@ -383,6 +383,10 @@ func (s *Store) Execute(
 		if err != nil {
 			return assistanttools.Result{}, err
 		}
+		// Same post-commit reconciliation the week grid gets. Reading the id
+		// back from the receipt rather than the closure covers the retry that
+		// short-circuits: a second attempt re-pushes instead of skipping.
+		s.reconcileAffectedCalendar(ctx, scope, affected)
 		return assistanttools.Result{
 			Summary: "Rendez-vous réservé le " + parsed.Date + " à " + parsed.StartTime + ".",
 			Output:  output, AffectedRecords: affected,
@@ -411,6 +415,7 @@ func (s *Store) Execute(
 		if err != nil {
 			return assistanttools.Result{}, err
 		}
+		s.reconcileCalendar(ctx, scope.TenantID, scope.UserID, parsed.AppointmentID)
 		return assistanttools.Result{
 			Summary: "Rendez-vous déplacé au " + parsed.Date + " à " + parsed.StartTime + ".",
 			Output:  output, AffectedRecords: affected,
@@ -430,6 +435,7 @@ func (s *Store) Execute(
 		if err != nil {
 			return assistanttools.Result{}, err
 		}
+		s.reconcileCalendarRemoval(ctx, scope.TenantID, scope.UserID, parsed.AppointmentID)
 		return assistanttools.Result{
 			Summary: "Rendez-vous annulé.", Output: output, AffectedRecords: affected,
 		}, nil
@@ -480,6 +486,19 @@ func (s *Store) withReceipt(
 		return err
 	})
 	return output, affected, err
+}
+
+// reconcileAffectedCalendar pushes every appointment a tool call reports as
+// written, which is the one place the created id is known on both the first
+// attempt and a replayed one.
+func (s *Store) reconcileAffectedCalendar(
+	ctx context.Context, scope assistanttools.Scope, affected []assistanttools.AffectedRecord,
+) {
+	for _, record := range affected {
+		if record.Kind == "appointment" && record.ID != "" {
+			s.reconcileCalendar(ctx, scope.TenantID, scope.UserID, record.ID)
+		}
+	}
 }
 
 func appointmentWriteResult(id string, date string) (json.RawMessage, []assistanttools.AffectedRecord, error) {

@@ -110,7 +110,7 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 	assistantStore := assistant.NewStore(database)
 	catalogStore := catalog.NewStore(database)
 	customerStore := customers.NewStore(database)
-	agendaStore := agenda.NewStore(database)
+	agendaStore := agenda.NewStore(database, agendaCalendarConfig)
 	assistant.Register(
 		mux,
 		assistantStore,
@@ -151,7 +151,6 @@ func NewRouter(cfg Config, database *db.DB) http.Handler {
 				UserID: user.ID, TenantID: tenantID, ActiveLocationID: user.ActiveLocationID,
 			}, userOK && tenantOK
 		},
-		agendaCalendarConfig,
 	)
 	calls.Register(
 		mux,

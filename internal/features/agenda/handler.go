@@ -24,7 +24,6 @@ var uuidPattern = regexp.MustCompile(
 type handler struct {
 	store     *Store
 	principal PrincipalResolver
-	calendar  CalendarConfig
 }
 
 func (h *handler) index(w http.ResponseWriter, r *http.Request) {
@@ -300,7 +299,7 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 		)
 		return
 	}
-	id, date, err := h.store.Save(
+	_, date, err := h.store.Save(
 		r.Context(), principal.TenantID, principal.UserID, appointmentID, input,
 	)
 	if err != nil {
@@ -324,11 +323,6 @@ func (h *handler) save(w http.ResponseWriter, r *http.Request, appointmentID str
 			h.fail(w, "save appointment", err)
 		}
 		return
-	}
-	if pushErr := h.store.SyncAppointmentCalendar(
-		r.Context(), principal.TenantID, principal.UserID, id, h.calendar,
-	); pushErr != nil {
-		slog.Error("sync appointment calendar", "err", pushErr)
 	}
 	http.Redirect(w, r,
 		agendaViewPath(view, input.LocationID, date)+"&saved=1",
@@ -382,11 +376,6 @@ func (h *handler) move(w http.ResponseWriter, r *http.Request) {
 			FieldLocation, locationID, FieldDate, date, kind,
 		), http.StatusSeeOther)
 		return
-	}
-	if pushErr := h.store.SyncAppointmentCalendar(
-		r.Context(), principal.TenantID, principal.UserID, appointmentID, h.calendar,
-	); pushErr != nil {
-		slog.Error("sync appointment calendar", "err", pushErr)
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda/week?%s=%s&%s=%s&moved=1", FieldLocation, locationID, FieldDate, newDate,
@@ -457,11 +446,6 @@ func (h *handler) cancel(w http.ResponseWriter, r *http.Request) {
 			h.fail(w, "cancel appointment", err)
 		}
 		return
-	}
-	if pushErr := h.store.RemoveAppointmentCalendarEvent(
-		r.Context(), principal.TenantID, principal.UserID, appointmentID, h.calendar,
-	); pushErr != nil {
-		slog.Error("remove appointment calendar event", "err", pushErr)
 	}
 	http.Redirect(w, r, fmt.Sprintf(
 		"/agenda?%s=%s&%s=%s&cancelled=1",

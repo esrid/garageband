@@ -223,7 +223,6 @@ func TestServiceRequirementsAllocateResourcesWithoutBrowserIDs(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
@@ -303,7 +302,6 @@ func TestDayListsAppointmentsDueAReminderAndMarkingOneDoneDropsIt(t *testing.T) 
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/agenda/"+soonID+"/remind", nil))
@@ -449,7 +447,6 @@ func TestAgendaHTTPConflictIsNotAValidationError(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation:  {fixture.locationID},
@@ -494,7 +491,6 @@ func TestMoveAppointmentHTTPRedirectsOnSuccessAndSnapsBackOnConflict(t *testing.
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 
 	// Dropping it onto the other appointment's slot conflicts and moves
@@ -557,7 +553,6 @@ func TestSaveHTTPRedirectsToTheRequestedReturnView(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 
 	weekForm := url.Values{
@@ -685,7 +680,6 @@ func TestAvailabilityHTTPDoesNotBookWhileSearching(t *testing.T) {
 		func(_ context.Context) (agenda.Principal, bool) {
 			return agenda.Principal{UserID: fixture.userID, TenantID: fixture.tenantID}, true
 		},
-		agenda.CalendarConfig{},
 	)
 	form := url.Values{
 		agenda.FieldLocation: {fixture.locationID}, agenda.FieldCustomer: {fixture.customerID},
@@ -728,7 +722,6 @@ func TestAgendaIndexDefaultsToTheActiveSiteOverAlphabeticalOrder(t *testing.T) {
 				ActiveLocationID: fixture.locationID,
 			}, true
 		},
-		agenda.CalendarConfig{},
 	)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/agenda", nil))
@@ -869,7 +862,7 @@ func (fixture agendaFixture) input(date string, start string) agenda.SaveInput {
 func newAgendaFixture(t *testing.T) agendaFixture {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)
-	fixture := agendaFixture{fixtures: fixtures, runtime: runtime, store: agenda.NewStore(runtime)}
+	fixture := agendaFixture{fixtures: fixtures, runtime: runtime, store: agenda.NewStore(runtime, agenda.CalendarConfig{})}
 	fixture.userID = insertReturningID(t, fixtures, `
 		INSERT INTO users (provider, provider_id, email, name)
 		VALUES ('test', 'agenda-owner', 'agenda@example.com', 'Agenda Owner')

@@ -43,16 +43,21 @@ func TestCalendarEventIDIsBase32HexSafe(t *testing.T) {
 // under test are reachable without a network call to Google.
 type calendarSyncFixture struct {
 	fixtures      *db.DB // RLS-bypassing pool, admin setup only
+	runtime       *db.DB // the pool the store itself uses, under row security
 	tenantID      string
 	userID        string
 	locationID    string
+	customerID    string
+	vehicleID     string
+	serviceID     string
+	resourceID    string
 	appointmentID string
 }
 
 func newCalendarSyncFixture(t *testing.T) (calendarSyncFixture, *Store) {
 	t.Helper()
 	fixtures, runtime := dbtest.OpenRuntime(t)
-	store := NewStore(runtime)
+	store := NewStore(runtime, CalendarConfig{})
 
 	userID := insertReturningID(t, fixtures, `
 		INSERT INTO users (provider, provider_id, email, name)
@@ -92,8 +97,9 @@ func newCalendarSyncFixture(t *testing.T) (calendarSyncFixture, *Store) {
 	}
 
 	return calendarSyncFixture{
-		fixtures: fixtures, tenantID: tenantID, userID: userID,
-		locationID: locationID, appointmentID: appointmentID,
+		fixtures: fixtures, runtime: runtime, tenantID: tenantID, userID: userID,
+		locationID: locationID, customerID: customerID, vehicleID: vehicleID,
+		serviceID: serviceID, resourceID: resourceID, appointmentID: appointmentID,
 	}, store
 }
 
