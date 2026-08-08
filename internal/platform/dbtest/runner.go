@@ -36,6 +36,18 @@ func RunSuite(
 			postgres.WithDatabase("garage_test"),
 			postgres.WithUsername("garage"),
 			postgres.WithPassword("garage_test"),
+			// Every test builds a whole schema and drops it with CASCADE, which
+			// takes one lock per object inside a single transaction. With the
+			// packages running in parallel the default lock table (64 x
+			// max_connections) runs out and tests fail with "out of shared
+			// memory" (SQLSTATE 53200) - intermittently, which is worse than
+			// always. The option is appended to the module's own postgres
+			// command; verified against testcontainers-go v0.43.0 (postgres
+			// module Run applies user options after its defaults, and
+			// WithCmdArgs appends) 2026-08-08.
+			// ponytail: raise it again if the schema grows another few hundred
+			// objects; the lock table costs about 170 bytes a slot.
+			testcontainers.WithCmdArgs("-c", "max_locks_per_transaction=512"),
 			postgres.BasicWaitStrategies(),
 		)
 		if err != nil {
