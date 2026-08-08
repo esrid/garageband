@@ -293,7 +293,7 @@ templ lifecycleSection(page FormPage) {
 					historique restent intacts, et vous pouvez le remettre en ligne quand
 					vous voulez.
 				</p>
-				<form method="post" action={ templ.URL(pausePath(page)) } data-pending-form>
+				<form method="post" action={ templ.URL(pausePath(page)) } data-pending-form data-confirm="Mettre cet agent en pause ? Les appels ne seront plus pris par l’agent.">
 					<button type="submit" class="btn btn-error min-h-11 w-full sm:w-auto" data-pending-label="Mise en pause…">
 						Mettre en pause
 					</button>

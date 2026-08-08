@@ -47,7 +47,7 @@ func TestLayoutMarksTheCurrentSection(t *testing.T) {
 		t.Error("the dashboard link should be explicitly not current")
 	}
 	// Weight, not just the background colour, carries the current state.
-	if !strings.Contains(locations, "btn-active font-semibold") {
+	if !strings.Contains(locations, "menu-active font-semibold") {
 		t.Error("the current Sites switcher should be emphasised beyond colour")
 	}
 	if !strings.Contains(locations, "Garage Central") {
@@ -91,6 +91,24 @@ func TestLayoutLinksWorkspaceScreensWithoutAName(t *testing.T) {
 	})
 	if !strings.Contains(page, `href="/locations"`) {
 		t.Error("the Sites link should be available on a workspace-scoped screen")
+	}
+}
+
+func TestLayoutShowsTheActiveLocation(t *testing.T) {
+	var buf bytes.Buffer
+	ctx := ui.WithActiveLocationName(context.Background(), "Atelier Gerland")
+	if err := ui.Layout(ui.PageInfo{
+		Title: "Agenda",
+		Nav:   ui.Nav{Section: ui.SectionAgenda, Workspace: "Garage Central", InWorkspace: true},
+	}).Render(ctx, &buf); err != nil {
+		t.Fatalf("render layout: %v", err)
+	}
+	page := html.UnescapeString(buf.String())
+	if !strings.Contains(page, "Site actif") || !strings.Contains(page, "Atelier Gerland") {
+		t.Error("the active location should be visible in the workspace shell")
+	}
+	if !strings.Contains(page, `aria-label="Changer de site"`) {
+		t.Error("the active location should link to the site switcher")
 	}
 }
 

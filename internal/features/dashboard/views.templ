@@ -38,7 +38,7 @@ templ Page(data PageData) {
 				<section class="grid gap-3" aria-labelledby="workspace-heading">
 					<div class="flex items-center justify-between gap-3">
 						<h2 id="workspace-heading" class="text-lg font-semibold">Vos espaces</h2>
-						<a class="btn btn-sm" href="/onboarding">Ajouter un garage</a>
+						<a class="btn btn-sm min-h-11" href="/onboarding">Ajouter un garage</a>
 					</div>
 					<ul class="grid gap-2">
 						for _, workspace := range data.Workspaces {
@@ -52,7 +52,7 @@ templ Page(data PageData) {
 										<span class="badge badge-success">Actif</span>
 									} else {
 										<form method="post" action={ templ.URL("/workspaces/" + workspace.ID + "/activate") }>
-											<button class="btn btn-sm" type="submit">Ouvrir</button>
+											<button class="btn btn-sm min-h-11" type="submit">Ouvrir</button>
 										</form>
 									}
 								</div>

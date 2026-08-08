@@ -105,14 +105,19 @@ templ inviteLink(page Page) {
 					<summary class="min-h-11 cursor-pointer py-2 text-sm font-medium">
 						Envoyer un lien à la place
 					</summary>
-					<input
-						type="text"
-						class="input input-bordered mt-2 w-full font-mono text-xs"
-						value={ page.Invite.Link }
-						readonly
-						aria-label={ "Lien d'invitation de " + page.InvitedName }
-						onfocus="this.select()"
-					/>
+					<div class="mt-2 flex flex-col gap-2 sm:flex-row">
+						<input
+							id="invite-link"
+							type="text"
+							class="input input-bordered min-h-11 w-full font-mono text-xs"
+							value={ page.Invite.Link }
+							readonly
+							aria-label={ "Lien d'invitation de " + page.InvitedName }
+							onfocus="this.select()"
+						/>
+						<button type="button" class="btn min-h-11" data-copy-target="invite-link" data-copy-status="invite-link-status">Copier</button>
+					</div>
+					<p id="invite-link-status" class="text-xs opacity-70" aria-live="polite"></p>
 				</details>
 				<span class="text-xs opacity-70">
 					Le code ne sert qu'une fois et ne sera plus affiché. Pour un deuxième
@@ -284,7 +289,7 @@ templ memberCard(member Member, page Page) {
 							Nouveau code<span class="sr-only">{ " pour " + member.Label() }</span>
 						</button>
 					</form>
-					<form method="post" action={ templ.URL(revokePath(member)) } data-pending-form>
+					<form method="post" action={ templ.URL(revokePath(member)) } data-pending-form data-confirm={ "Retirer « " + member.Label() + " » de l'équipe ? Son accès sera immédiatement coupé." }>
 						<button type="submit" class="btn btn-error btn-sm min-h-11" data-pending-label="Retrait…">
 							Retirer de l'équipe<span class="sr-only">{ " " + member.Label() }</span>
 						</button>

@@ -126,7 +126,7 @@ templ locationCard(location Location, canManage bool, isActiveSite bool) {
 						</form>
 					}
 					if isActive(location) {
-						<form method="post" action={ templ.URL("/locations/" + location.ID + "/deactivate") } data-pending-form>
+						<form method="post" action={ templ.URL("/locations/" + location.ID + "/deactivate") } data-pending-form data-confirm={ "Désactiver « " + location.Name + " » ? Le site ne recevra plus d'appels ni de rendez-vous." }>
 							<button type="submit" class="btn btn-ghost btn-sm min-h-11 w-full sm:min-h-9 sm:w-auto" data-pending-label="Désactivation…">
 								Désactiver<span class="sr-only">{ " " + location.Name }</span>
 							</button>
@@ -165,7 +165,15 @@ templ setupMeter(location Location) {
 			</span>
 		</div>
 		if !setup.Complete() {
-			<p class="text-xs opacity-60">Il manque : { missingLabels(setup.Missing) }.</p>
+			<p class="text-xs opacity-60">
+				Il manque :
+				for index, key := range setup.Missing {
+					if index > 0 {
+						<span aria-hidden="true">{ ", " }</span>
+					}
+					<a class="link link-hover" href={ templ.URL(setupPath(location.ID, key)) }>{ fieldLabel(key) }</a>
+				}
+			</p>
 		}
 	</div>
 }
@@ -195,7 +203,7 @@ templ Form(page FormPage) {
 				@readOnlyLocation(page)
 			} else {
 				<form method="post" action={ templ.URL(formActionPath(page)) } class="grid gap-4" data-pending-form novalidate>
-					<section class="card card-border border-base-300 bg-base-100">
+					<section id="location-identity" class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<h2 class="text-base font-semibold">Identité du site</h2>
 							<div class="grid gap-4 sm:grid-cols-2">
@@ -225,7 +233,7 @@ templ Form(page FormPage) {
 							</div>
 						</div>
 					</section>
-					<section class="card card-border border-base-300 bg-base-100">
+					<section id="location-address" class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<h2 class="text-base font-semibold">Adresse</h2>
 							<div class="grid gap-4 sm:grid-cols-2">
@@ -307,7 +315,7 @@ templ Form(page FormPage) {
 							</div>
 						</div>
 					</section>
-					<section class="card card-border border-base-300 bg-base-100">
+					<section id="location-contact" class="card card-border border-base-300 bg-base-100">
 						<div class="card-body gap-4 p-5">
 							<h2 class="text-base font-semibold">Contact</h2>
 							<p class="text-sm opacity-70">
@@ -426,7 +434,7 @@ templ ScheduleView(page SchedulePage) {
 											<li class="flex flex-wrap items-center justify-between gap-2">
 												<span class="font-mono text-sm">{ opening.OpensAt }–{ opening.ClosesAt }</span>
 												if page.CanManage {
-													<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/hours/delete") }>
+													<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/hours/delete") } data-confirm={ "Retirer la plage du " + day.Label + " de " + opening.OpensAt + " à " + opening.ClosesAt + " ?" }>
 														<input type="hidden" name={ FieldWeekday } value={ strconv.Itoa(opening.Weekday) }/>
 														<input type="hidden" name={ FieldOpensAt } value={ opening.OpensAt }/>
 														<input type="hidden" name={ FieldClosesAt } value={ opening.ClosesAt }/>
@@ -602,7 +610,7 @@ templ ScheduleView(page SchedulePage) {
 															<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/requirements/delete") }>
 																<input type="hidden" name={ FieldRequirementService } value={ service.ID }/>
 																<input type="hidden" name={ FieldRequirementKind } value={ requirement.Kind }/>
-																<button type="submit" class="btn btn-ghost btn-xs" aria-label={ "Retirer " + resourceKindLabel(requirement.Kind) + " de " + service.Name }>×</button>
+																<button type="submit" class="btn btn-ghost btn-xs min-h-11 min-w-11" aria-label={ "Retirer " + resourceKindLabel(requirement.Kind) + " de " + service.Name } formnovalidate>×</button>
 															</form>
 														}
 													</li>
@@ -672,7 +680,7 @@ templ ScheduleView(page SchedulePage) {
 										}
 									</div>
 									if page.CanManage {
-										<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/closures/" + closure.ID + "/delete") }>
+										<form method="post" action={ templ.URL("/locations/" + page.Location.ID + "/schedule/closures/" + closure.ID + "/delete") } data-confirm={ "Retirer la fermeture « " + closurePeriod(closure) + " » ?" }>
 											<button type="submit" class="btn btn-ghost btn-sm min-h-11 sm:min-h-9">Retirer</button>
 										</form>
 									}
@@ -741,7 +749,7 @@ templ calendarSection(page FormPage) {
 					}
 					Les rendez-vous de ce site sont envoyés vers ce calendrier.
 				</p>
-				<form method="post" action={ templ.URL("/locations/" + page.ID + "/calendar/disconnect") } data-pending-form>
+				<form method="post" action={ templ.URL("/locations/" + page.ID + "/calendar/disconnect") } data-pending-form data-confirm="Déconnecter Google Calendar ? Les nouveaux rendez-vous ne seront plus synchronisés.">
 					<button type="submit" class="btn btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Déconnexion…">
 						Déconnecter Google Calendar
 					</button>
@@ -781,7 +789,7 @@ templ lifecycleSection(page FormPage) {
 					reste consultable et vous pouvez le rouvrir quand vous voulez. Rien n'est
 					supprimé.
 				</p>
-				<form method="post" action={ templ.URL("/locations/" + page.ID + "/deactivate") } data-pending-form>
+				<form method="post" action={ templ.URL("/locations/" + page.ID + "/deactivate") } data-pending-form data-confirm={ "Désactiver « " + page.Values.Name + " » ? Le site ne recevra plus d'appels ni de rendez-vous." }>
 					<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Désactivation…">
 						Désactiver ce site
 					</button>

@@ -39,5 +39,18 @@
    reused here rather than a new hard-coded value, so the modal reads as
    part of the theme instead of a bolted-on library default. */
 up-modal-box {
-  border-radius: var(--radius-box);
+	border-radius: var(--radius-box);
+}
+
+/* Keep the interface usable for people who prefer less motion. This applies
+   to daisyUI, Unpoly and any future component animation in one place. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
 }

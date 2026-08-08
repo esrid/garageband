@@ -537,7 +537,7 @@ templ deleteSection(page FormPage) {
 				L'agent cessera immédiatement de l'annoncer. Les rendez-vous déjà pris qui
 				s'y réfèrent ne changent pas.
 			</p>
-			<form method="post" action={ templ.URL(deletePath(page)) } data-pending-form>
+			<form method="post" action={ templ.URL(deletePath(page)) } data-pending-form data-confirm={ "Supprimer « " + page.Values.Name + " » ? L'agent cessera immédiatement de l'annoncer." }>
 				<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Suppression…">
 					Supprimer
 				</button>

@@ -360,6 +360,21 @@ func fieldLabel(key string) string {
 	}
 }
 
+func setupAnchor(key string) string {
+	switch key {
+	case FieldName, FieldSIRET:
+		return "location-identity"
+	case FieldPhone, FieldEmail, FieldWebsite:
+		return "location-contact"
+	default:
+		return "location-address"
+	}
+}
+
+func setupPath(locationID, key string) string {
+	return "/locations/" + locationID + "#" + setupAnchor(key)
+}
+
 // missingLabels turns field keys into a readable French list.
 func missingLabels(missing []string) string {
 	labels := make([]string, 0, len(missing))

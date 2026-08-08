@@ -74,6 +74,7 @@ templ ConfirmationPage(data formData) {
 					Les données du registre peuvent être obsolètes. Tous les champs restent
 					modifiables : ce que vous confirmez crée votre garage et son premier site.
 				</p>
+				<p class="text-xs opacity-60">Les champs marqués « Requis » doivent être remplis pour créer l’espace.</p>
 			</div>
 			@notice(data.ErrorKind, data.Error)
 			<form method="post" action="/onboarding/confirm" class="grid gap-4" data-pending-form>
@@ -81,31 +82,28 @@ templ ConfirmationPage(data formData) {
 				<section class="card card-border border-base-300 bg-base-100">
 					<div class="card-body gap-4">
 						<div>
-							<h2 class="card-title text-base">
-								<span class="badge badge-sm badge-neutral shrink-0">Étape 2</span>
-								Identité de l'entreprise
-							</h2>
+							<h2 class="card-title text-base">Votre entreprise</h2>
 							<p class="text-sm opacity-70">
 								L'entreprise. Elle reste la même quel que soit le nombre d'ateliers.
 							</p>
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
-							@field("name", "Nom commercial du garage", "Le nom sous lequel vos clients vous connaissent.", true) {
+							@field("name", "Nom commercial du garage", "Le nom sous lequel vos clients vous connaissent.", true, true) {
 								<input id="name" name="name" class="input validator min-h-11 w-full" value={ data.Name } autocomplete="organization" aria-describedby="name-hint" required/>
 							}
-							@field("legal_name", "Raison sociale", "Telle qu'enregistrée au registre.", true) {
+							@field("legal_name", "Raison sociale", "Telle qu'enregistrée au registre.", false, true) {
 								<input id="legal_name" name="legal_name" class="input min-h-11 w-full" value={ data.LegalName } aria-describedby="legal_name-hint"/>
 							}
-							@field("slug", "Identifiant de l'espace", "Votre adresse dans Garageband. Lettres minuscules, chiffres et tirets.", true) {
-								<input id="slug" name="slug" class="input validator min-h-11 w-full font-mono" value={ data.Slug } minlength="2" maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="slug-hint" required/>
+							@field("slug", "Adresse de l'espace", "Générée à partir du nom. Vous pouvez la modifier si besoin.", true, true) {
+								<input id="slug" name="slug" class="input validator min-h-11 w-full font-mono" value={ data.Slug } minlength="2" maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="slug-hint" data-auto-slug="true" required/>
 							}
-							@field("siret-confirm", "SIRET", "Verrouillé sur l'établissement recherché. Relancez une recherche pour le changer.", false) {
+							@field("siret-confirm", "SIRET", "Vérifié dans le registre. Relancez une recherche pour le changer.", true, true) {
 								<input id="siret-confirm" name="siret" class="input min-h-11 w-full bg-base-200 font-mono tracking-wider" value={ data.SIRET } inputmode="numeric" minlength="14" maxlength="14" pattern="[0-9]{14}" aria-describedby="siret-confirm-hint" readonly required/>
 							}
-							@field("siren", "SIREN", "Le numéro de l'entreprise, repris des 9 premiers chiffres du SIRET.", false) {
+							@field("siren", "SIREN", "Le numéro de l'entreprise, repris des 9 premiers chiffres du SIRET.", false, false) {
 								<input id="siren" class="input min-h-11 w-full bg-base-200 font-mono tracking-wider" value={ data.SIREN() } aria-describedby="siren-hint" readonly/>
 							}
-							@field("website_url", "Site web", "Enregistré dès maintenant. La reprise des informations depuis le site viendra plus tard.", true) {
+							@field("website_url", "Site web", "Enregistré dès maintenant. La reprise des informations depuis le site viendra plus tard.", false, true) {
 								<input id="website_url" name="website_url" type="url" class="input validator min-h-11 w-full" value={ data.WebsiteURL } placeholder="https://" inputmode="url" aria-describedby="website_url-hint"/>
 							}
 						</div>
@@ -114,35 +112,32 @@ templ ConfirmationPage(data formData) {
 				<section class="card card-border border-base-300 bg-base-100">
 					<div class="card-body gap-4">
 						<div>
-							<h2 class="card-title text-base">
-								<span class="badge badge-sm badge-neutral shrink-0">Étape 3</span>
-								Premier site
-							</h2>
+							<h2 class="card-title text-base">Votre premier site</h2>
 							<p class="text-sm opacity-70">
 								L'atelier où vos clients se rendent. Vous pourrez en ajouter d'autres ensuite.
 							</p>
 						</div>
 						<div class="grid gap-4 sm:grid-cols-2">
-							@field("location_name", "Nom du site", "Par exemple : Atelier principal, ou le nom de la rue.", true) {
+							@field("location_name", "Nom du site", "Par exemple : Atelier principal, ou le nom de la rue.", true, true) {
 								<input id="location_name" name="location_name" class="input validator min-h-11 w-full" value={ data.LocationName } aria-describedby="location_name-hint" required/>
 							}
-							@field("address_line1", "Adresse", "", true) {
+							@field("address_line1", "Adresse", "", false, true) {
 								<input id="address_line1" name="address_line1" class="input min-h-11 w-full" value={ data.AddressLine1 } autocomplete="address-line1"/>
 							}
-							@field("postal_code", "Code postal", "", false) {
+							@field("postal_code", "Code postal", "", false, false) {
 								<input id="postal_code" name="postal_code" class="input min-h-11 w-full" value={ data.PostalCode } inputmode="numeric" autocomplete="postal-code"/>
 							}
-							@field("city", "Ville", "", false) {
+							@field("city", "Ville", "", false, false) {
 								<input id="city" name="city" class="input min-h-11 w-full" value={ data.City } autocomplete="address-level2"/>
 							}
-							@field("country_code", "Code pays", "Deux lettres, par exemple FR.", false) {
+							@field("country_code", "Code pays", "Deux lettres, par exemple FR.", true, false) {
 								<input id="country_code" name="country_code" class="input validator min-h-11 w-24 uppercase" value={ data.CountryCode } minlength="2" maxlength="2" pattern="[A-Za-z]{2}" autocomplete="country" aria-describedby="country_code-hint" required/>
 							}
 						</div>
 						<details class="collapse-arrow collapse border border-base-300 bg-base-200" open?={ data.AddressLine2 != "" }>
 							<summary class="collapse-title min-h-0 py-3 text-sm font-medium">Complément d'adresse</summary>
 							<div class="collapse-content">
-								@field("address_line2", "Bâtiment, étage ou zone d'activité", "Uniquement si l'adresse ci-dessus ne suffit pas à vous localiser.", true) {
+								@field("address_line2", "Bâtiment, étage ou zone d'activité", "Uniquement si l'adresse ci-dessus ne suffit pas à vous localiser.", false, true) {
 									<input id="address_line2" name="address_line2" class="input min-h-11 w-full" value={ data.AddressLine2 } autocomplete="address-line2" aria-describedby="address_line2-hint"/>
 								}
 							</div>
@@ -164,11 +159,11 @@ templ ConfirmationPage(data formData) {
 		@pendingHandle.Once() {
 			@pendingScript()
 		}
+		@slugScript()
 	}
 }
 
-// stepHeader shows where the user stands. Steps 2 and 3 share one page, so both
-// light up once the registry has answered.
+// stepHeader shows the two actual screens in the configuration flow.
 templ stepHeader(current int) {
 	<nav aria-label="Progression de la configuration" class="mb-6">
 		<ol class="steps w-full text-xs sm:text-sm">
@@ -180,10 +175,7 @@ templ stepHeader(current int) {
 				data-content={ stepMarker(2, current) }
 				aria-current={ stepCurrent(2, current) }
 			>
-				Confirmer l'entreprise
-			</li>
-			<li class={ "step", templ.KV("step-primary", current >= 2) } data-content={ stepMarker(3, current) }>
-				Confirmer le premier site
+				Vérifier et créer
 			</li>
 		</ol>
 	</nav>
@@ -191,14 +183,43 @@ templ stepHeader(current int) {
 
 // field pairs a visible label and a hint with its control. The hint id matches
 // the aria-describedby written on the control at the call site.
-templ field(id string, label string, hint string, wide bool) {
+templ field(id string, label string, hint string, required bool, wide bool) {
 	<div class={ "grid content-start gap-1", templ.KV("sm:col-span-2", wide) }>
-		<label class="label font-medium text-base-content" for={ id }>{ label }</label>
+		<label class="label flex-wrap justify-start gap-2 font-medium text-base-content" for={ id }>
+			{ label }
+			if required {
+				<span class="text-xs font-normal opacity-60">Requis</span>
+			} else {
+				<span class="text-xs font-normal opacity-60">Optionnel</span>
+			}
+		</label>
 		{ children... }
 		if hint != "" {
 			<p id={ id + "-hint" } class="label text-xs leading-snug whitespace-normal">{ hint }</p>
 		}
 	</div>
+}
+
+templ slugScript() {
+	<script>
+		(function () {
+			var name = document.getElementById("name");
+			var slug = document.getElementById("slug");
+			if (!name || !slug) {
+				return;
+			}
+			name.addEventListener("input", function () {
+				if (slug.dataset.autoSlug !== "true") {
+					return;
+				}
+				var value = name.value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+				slug.value = value.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63);
+			});
+			slug.addEventListener("input", function () {
+				slug.dataset.autoSlug = "false";
+			});
+		})();
+	</script>
 }
 
 // notice reports a server-side outcome. An icon and a heading carry the meaning,

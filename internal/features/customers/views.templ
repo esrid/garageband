@@ -416,8 +416,8 @@ templ Show(page Profile) {
 												Révoqué par { grant.RevokedByName } le { ui.FormatDate(*grant.RevokedAt) }
 											</p>
 										} else {
-											<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/shares/" + grant.ID + "/revoke") }>
-												<button type="submit" class="btn btn-sm btn-outline">Révoquer</button>
+											<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/shares/" + grant.ID + "/revoke") } data-confirm={ "Révoquer le partage avec « " + grant.ReceivingLocationName + " » ? Ce site ne verra plus les nouvelles données partagées." }>
+												<button type="submit" class="btn btn-sm btn-outline min-h-11">Révoquer</button>
 											</form>
 										}
 									</div>
@@ -447,8 +447,8 @@ templ Show(page Profile) {
 								Ce client est parti : son dossier reste consultable pour l'historique,
 								mais son téléphone et son e-mail se libèrent pour un nouveau client.
 							</p>
-							<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/offboard") } class="self-start">
-								<button type="submit" class="btn btn-sm btn-error">Ce client est parti</button>
+							<form method="post" action={ templ.SafeURL("/customers/" + page.Customer.ID + "/offboard") } class="self-start" data-pending-form data-confirm={ "Marquer « " + page.Customer.Label() + " » comme parti ? Son téléphone et son e-mail seront libérés pour un nouveau dossier." }>
+								<button type="submit" class="btn btn-sm btn-error min-h-11" data-pending-label="Mise à jour…">Ce client est parti</button>
 							</form>
 						</div>
 					</div>

@@ -2,7 +2,10 @@ package auth
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
+
+	"github.com/esrid/garageband/internal/ui"
 )
 
 type ctxKey struct{}
@@ -18,8 +21,14 @@ func (s *Store) WithUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			if u, err := s.UserByToken(r.Context(), c.Value); err == nil {
+				if name, err := s.ActiveLocationName(r.Context(), u.ActiveTenantID, u.ID, u.ActiveLocationID); err != nil {
+					slog.Warn("resolve active location name", "err", err)
+				} else {
+					u.ActiveLocationName = name
+				}
 				identity := requestIdentity{User: u, tokenHash: hashToken(c.Value)}
-				r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, identity))
+				ctx := ui.WithActiveLocationName(r.Context(), u.ActiveLocationName)
+				r = r.WithContext(context.WithValue(ctx, ctxKey{}, identity))
 			}
 		}
 		next.ServeHTTP(w, r)

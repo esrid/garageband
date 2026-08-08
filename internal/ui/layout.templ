@@ -51,7 +51,7 @@ type PageInfo struct {
 	Type        string // og:type; empty means "website"
 	NoIndex     bool   // ask crawlers to skip this page (login, admin…)
 	Nav         Nav    // application shell; zero value renders none
-	// Wide drops the reading-width cap (max-w-2xl) for screens that are a
+	// Wide drops the reading-width cap (max-w-3xl) for screens that are a
 	// data grid rather than prose or a form - the week agenda, for example.
 	// Off by default: most screens read better at a fixed width.
 	Wide bool
@@ -61,7 +61,7 @@ func (p PageInfo) mainWidth() string {
 	if p.Wide {
 		return "max-w-none"
 	}
-	return "max-w-2xl"
+	return "max-w-3xl"
 }
 
 func (p PageInfo) ogType() string {
@@ -114,7 +114,7 @@ templ Layout(page PageInfo) {
 				}
 			} else {
 				<header class="border-b border-base-300 bg-base-100">
-					<div class="mx-auto flex min-h-14 max-w-2xl items-center px-4">
+					<div class="mx-auto flex min-h-14 max-w-3xl items-center px-4">
 						<span class="text-base font-semibold tracking-tight">Garageband</span>
 					</div>
 				</header>
@@ -139,7 +139,12 @@ templ shell(nav Nav, mainWidth string) {
 				<label for="app-drawer" aria-label="Ouvrir le menu" class="btn btn-square btn-ghost">
 					@hamburgerIcon()
 				</label>
-				<a href="/" class="px-2 text-base font-semibold tracking-tight">Garageband</a>
+				<a href="/" class="min-w-0 px-2 text-base font-semibold tracking-tight">Garageband</a>
+				if activeLocation := ActiveLocationName(ctx); activeLocation != "" {
+					<a href="/locations" class="ml-auto min-w-0 max-w-[45%] truncate text-right text-xs opacity-70" aria-label="Changer de site">
+						{ activeLocation }
+					</a>
+				}
 			</div>
 			<main id="main" up-main class={ "mx-auto w-full flex-1 px-4 py-6 sm:py-10", mainWidth }>
 				{ children... }
@@ -153,28 +158,39 @@ templ shell(nav Nav, mainWidth string) {
 					<p class="mb-2 truncate text-sm opacity-60">{ nav.Workspace }</p>
 				}
 				if nav.InWorkspace {
-					<a
-						href="/locations"
-						aria-current={ nav.current(SectionLocations) }
-						class={ "btn btn-ghost btn-block mb-2 justify-start",
-							templ.KV("btn-active font-semibold", nav.Section == SectionLocations) }
-					>
-						Sites
-					</a>
+					if activeLocation := ActiveLocationName(ctx); activeLocation != "" {
+						<a href="/locations" class="mb-2 grid min-h-11 content-center rounded-btn border border-base-300 px-3 py-2 text-left hover:bg-base-200" aria-label="Changer de site">
+							<span class="text-[0.65rem] font-medium uppercase tracking-wide opacity-60">Site actif</span>
+							<span class="truncate text-sm font-semibold">{ activeLocation }</span>
+							<span class="text-xs opacity-60">Changer de site</span>
+						</a>
+					} else {
+						<a href="/locations" class="btn btn-ghost btn-block mb-2 min-h-11 justify-start">Choisir un site</a>
+					}
 				}
 				<nav aria-label="Navigation principale" class="flex-1">
 					<ul class="menu w-full p-0">
 						@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
-						if nav.InWorkspace {
-							@navLink("/team", "Équipe", nav.current(SectionTeam))
-							@navLink("/customers", "Clients", nav.current(SectionCustomers))
-							@navLink("/agenda/week", "Agenda", nav.current(SectionAgenda))
-							@navLink("/calls", "Appels", nav.current(SectionCalls))
-							@navLink("/agents", "Agent IA", nav.current(SectionAgents))
-							@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
-							@navLink("/assistant", "Assistant", nav.current(SectionAssistant))
-						}
 					</ul>
+					if nav.InWorkspace {
+						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Exploitation</p>
+						<ul class="menu w-full p-0">
+							@navLink("/customers", "Clients", nav.current(SectionCustomers))
+							@navLink("/agenda", "Agenda", nav.current(SectionAgenda))
+							@navLink("/calls", "Appels", nav.current(SectionCalls))
+						</ul>
+						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Configuration</p>
+						<ul class="menu w-full p-0">
+							@navLink("/locations", "Sites", nav.current(SectionLocations))
+							@navLink("/team", "Équipe et accès", nav.current(SectionTeam))
+							@navLink("/agents", "Agents téléphoniques", nav.current(SectionAgents))
+							@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
+						</ul>
+						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Outils</p>
+						<ul class="menu w-full p-0">
+							@navLink("/assistant", "Assistant d’atelier", nav.current(SectionAssistant))
+						</ul>
+					}
 				</nav>
 				<form method="post" action="/logout">
 					<button type="submit" class="btn btn-ghost btn-sm btn-block">Déconnexion</button>
@@ -182,6 +198,50 @@ templ shell(nav Nav, mainWidth string) {
 			</aside>
 		</div>
 	</div>
+	<script>
+		document.addEventListener("submit", function (event) {
+			var form = event.target;
+			if (!(form instanceof HTMLFormElement) || !form.dataset.confirm) {
+				return;
+			}
+			if (!window.confirm(form.dataset.confirm)) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true);
+
+		document.addEventListener("click", function (event) {
+			var target = event.target;
+			if (!target || !target.closest) {
+				return;
+			}
+			var button = target.closest("[data-copy-target]");
+			if (!button) {
+				return;
+			}
+			var input = document.getElementById(button.dataset.copyTarget);
+			if (!input) {
+				return;
+			}
+			event.preventDefault();
+			var status = button.dataset.copyStatus ? document.getElementById(button.dataset.copyStatus) : null;
+			var copied = function () {
+				button.textContent = "Copié";
+				if (status) {
+					status.textContent = "Lien copié dans le presse-papiers.";
+				}
+				window.setTimeout(function () { button.textContent = "Copier"; }, 1800);
+			};
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(input.value).then(copied);
+			} else {
+				input.focus();
+				input.select();
+				document.execCommand("copy");
+				copied();
+			}
+		}, true);
+	</script>
 }
 
 // hamburgerIcon toggles the drawer on small screens; the drawer-toggle

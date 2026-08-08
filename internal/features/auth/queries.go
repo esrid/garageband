@@ -28,13 +28,14 @@ const sessionTTL = 7 * 24 * time.Hour
 const staffSessionTTL = 90 * 24 * time.Hour
 
 type User struct {
-	ID               string
-	Provider         string
-	Email            string
-	Name             string
-	ActiveTenantID   string
-	ActiveLocationID string
-	CreatedAt        time.Time
+	ID                 string
+	Provider           string
+	Email              string
+	Name               string
+	ActiveTenantID     string
+	ActiveLocationID   string
+	ActiveLocationName string
+	CreatedAt          time.Time
 }
 
 type Workspace struct {
@@ -106,7 +107,8 @@ func (s *Store) UserByToken(ctx context.Context, token string) (User, error) {
 	err := s.db.QueryRow(ctx, `
 		SELECT u.id, u.provider, u.email, u.name,
 		       COALESCE(se.active_tenant_id::text, ''),
-		       COALESCE(se.active_location_id::text, ''), u.created_at,
+		       COALESCE(se.active_location_id::text, ''),
+		       u.created_at,
 		       se.expires_at
 		FROM sessions se JOIN users u ON u.id = se.user_id
 		WHERE se.token_hash = $1`, hashToken(token),
@@ -124,6 +126,27 @@ func (s *Store) UserByToken(ctx context.Context, token string) (User, error) {
 		return User{}, sql.ErrNoRows
 	}
 	return u, nil
+}
+
+// ActiveLocationName resolves the session's active site inside the same RLS
+// scope as the rest of the tenant-owned data. The session itself is read
+// outside that scope, so its location label cannot safely be joined there.
+func (s *Store) ActiveLocationName(ctx context.Context, tenantID, userID, locationID string) (string, error) {
+	if tenantID == "" || userID == "" || locationID == "" {
+		return "", nil
+	}
+	var name string
+	err := s.db.WithinTenantUser(ctx, tenantID, userID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT name
+			FROM locations
+			WHERE tenant_id = $1 AND id = $2`, tenantID, locationID,
+		).Scan(&name)
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
 }
 
 // Workspaces lists only tenants the user belongs to. WithinUser supplies the

@@ -1268,7 +1268,7 @@ func lifecycleSection(page FormPage) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "\" data-pending-form><button type=\"submit\" class=\"btn btn-error min-h-11 w-full sm:w-auto\" data-pending-label=\"Mise en pause…\">Mettre en pause</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 96, "\" data-pending-form data-confirm=\"Mettre cet agent en pause ? Les appels ne seront plus pris par l’agent.\"><button type=\"submit\" class=\"btn btn-error min-h-11 w-full sm:w-auto\" data-pending-label=\"Mise en pause…\">Mettre en pause</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

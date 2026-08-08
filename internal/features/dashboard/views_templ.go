@@ -93,7 +93,7 @@ func Page(data PageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<section class=\"grid gap-3\" aria-labelledby=\"workspace-heading\"><div class=\"flex items-center justify-between gap-3\"><h2 id=\"workspace-heading\" class=\"text-lg font-semibold\">Vos espaces</h2><a class=\"btn btn-sm\" href=\"/onboarding\">Ajouter un garage</a></div><ul class=\"grid gap-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<section class=\"grid gap-3\" aria-labelledby=\"workspace-heading\"><div class=\"flex items-center justify-between gap-3\"><h2 id=\"workspace-heading\" class=\"text-lg font-semibold\">Vos espaces</h2><a class=\"btn btn-sm min-h-11\" href=\"/onboarding\">Ajouter un garage</a></div><ul class=\"grid gap-2\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -147,7 +147,7 @@ func Page(data PageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\"><button class=\"btn btn-sm\" type=\"submit\">Ouvrir</button></form>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\"><button class=\"btn btn-sm min-h-11\" type=\"submit\">Ouvrir</button></form>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

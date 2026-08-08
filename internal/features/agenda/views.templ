@@ -20,12 +20,12 @@ templ Show(page Day) {
 		<div class="grid gap-5">
 			<header class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
 				<div class="grid gap-1">
-				<h1 class="text-xl font-semibold">{ ui.FormatDayHeading(page.Date) }</h1>
-				<p class="text-sm opacity-70">
-					{ page.LocationName }
-					<span class="opacity-50" aria-hidden="true">{ " · " }</span>
-					{ bookedSummary(page.Booked()) }
-				</p>
+					<h1 class="text-xl font-semibold">{ ui.FormatDayHeading(page.Date) }</h1>
+					<p class="text-sm opacity-70">
+						{ page.LocationName }
+						<span class="opacity-50" aria-hidden="true">{ " · " }</span>
+						{ bookedSummary(page.Booked()) }
+					</p>
 				</div>
 				if len(page.Locations) > 1 {
 					<form method="get" action="/agenda" class="grid gap-1">
@@ -593,7 +593,7 @@ templ Form(page FormPage) {
 								Le créneau est libéré et le rendez-vous reste dans l'historique du
 								client. Rien n'est supprimé.
 							</p>
-							<form method="post" action={ templ.URL(cancelPath(page)) } data-pending-form>
+							<form method="post" action={ templ.URL(cancelPath(page)) } data-pending-form data-confirm={ "Annuler le rendez-vous de « " + page.Customer.Label + " » ? Le créneau sera libéré." }>
 								<button type="submit" class="btn btn-error btn-outline min-h-11 w-full sm:w-auto" data-pending-label="Annulation…">
 									Annuler le rendez-vous
 								</button>
