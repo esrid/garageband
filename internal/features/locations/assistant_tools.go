@@ -120,6 +120,11 @@ func (s *Store) Execute(
 		if err := requireManager(ctx, tx, scope.TenantID, scope.UserID); err != nil {
 			return mapAssistantToolAccess(err)
 		}
+		// This tool keeps its own receipt handling rather than using
+		// assistanttools.WithReceipt, and the order above is the reason:
+		// requireManager runs before the receipt is read, so a replay by
+		// someone who may not edit the site is refused instead of handed the
+		// first caller's answer. The shared runner reads the receipt first.
 		var receiptOutput []byte
 		err := tx.QueryRow(ctx, `
 			SELECT output

@@ -339,7 +339,7 @@ func (s *Store) Execute(
 		if err := strictUnmarshal(input, &prepared); err != nil {
 			return assistanttools.Result{}, correctionInputError(FieldCustomerID, err)
 		}
-		output, affected, err := s.withReceipt(ctx, scope, ToolCorrectCustomer, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
+		output, affected, err := assistanttools.WithReceipt(ctx, s.db, scope, ToolCorrectCustomer, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
 			return s.applyCustomerCorrection(ctx, tx, scope.TenantID, prepared)
 		})
 		if err != nil {
@@ -353,7 +353,7 @@ func (s *Store) Execute(
 		if err := strictUnmarshal(input, &prepared); err != nil {
 			return assistanttools.Result{}, correctionInputError(FieldVehicleID, err)
 		}
-		output, affected, err := s.withReceipt(ctx, scope, ToolCorrectVehicle, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
+		output, affected, err := assistanttools.WithReceipt(ctx, s.db, scope, ToolCorrectVehicle, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
 			return s.applyVehicleCorrection(ctx, tx, scope.TenantID, prepared)
 		})
 		if err != nil {
@@ -367,7 +367,7 @@ func (s *Store) Execute(
 		if err := strictUnmarshal(input, &prepared); err != nil {
 			return assistanttools.Result{}, correctionInputError(FieldMemoryKey, err)
 		}
-		output, affected, err := s.withReceipt(ctx, scope, ToolProposeCustomerMemory, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
+		output, affected, err := assistanttools.WithReceipt(ctx, s.db, scope, ToolProposeCustomerMemory, func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error) {
 			return applyProposeCustomerMemory(ctx, tx, scope.TenantID, scope.LocationID, prepared)
 		})
 		if err != nil {
@@ -379,49 +379,6 @@ func (s *Store) Execute(
 	default:
 		return assistanttools.Result{}, assistanttools.ErrUnknownTool
 	}
-}
-
-// withReceipt runs perform inside the same transaction as the idempotency
-// receipt check-and-record, so a retried Execute call (network blip, model
-// retry) never applies the same correction twice.
-func (s *Store) withReceipt(
-	ctx context.Context,
-	scope assistanttools.Scope,
-	name string,
-	perform func(tx pgx.Tx) (json.RawMessage, []assistanttools.AffectedRecord, error),
-) (output json.RawMessage, affected []assistanttools.AffectedRecord, err error) {
-	err = s.db.WithinTenantUser(ctx, scope.TenantID, scope.UserID, func(tx pgx.Tx) error {
-		var receiptOutput, receiptAffected []byte
-		err := tx.QueryRow(ctx, `
-			SELECT output, affected_records
-			FROM application_tool_receipts
-			WHERE tenant_id = $1 AND location_id = $2 AND idempotency_key = $3
-			  AND tool_name = $4`, scope.TenantID, scope.LocationID,
-			scope.IdempotencyKey, name,
-		).Scan(&receiptOutput, &receiptAffected)
-		if err == nil {
-			output = receiptOutput
-			return json.Unmarshal(receiptAffected, &affected)
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		output, affected, err = perform(tx)
-		if err != nil {
-			return err
-		}
-		affectedJSON, err := json.Marshal(affected)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO application_tool_receipts (
-			    tenant_id, location_id, idempotency_key, tool_name, output, affected_records
-			) VALUES ($1, $2, $3, $4, $5, $6)`,
-			scope.TenantID, scope.LocationID, scope.IdempotencyKey, name, output, affectedJSON)
-		return err
-	})
-	return output, affected, err
 }
 
 const customerCorrectionSelect = `

@@ -65,41 +65,55 @@ type Executor interface {
 }
 
 // Registry combines feature-owned executors without moving their business
-// rules into the composition root or letting features import one another.
+// rules into the composition root or letting features import one another. It
+// is the single answer to "what is this tool, and who runs it": both come from
+// the same entry, so what the model is shown can never describe one tool while
+// another one runs.
 type Registry struct {
-	executors   []Executor
-	definitions map[string]Definition
+	tools map[string]registered
+	names []string // registration order, so listings stay stable
 }
 
+type registered struct {
+	definition Definition
+	executor   Executor
+}
+
+// NewRegistry indexes every executor's tools by name. Two executors claiming
+// the same name is a wiring mistake with no sane resolution - the description
+// shown and the code run would come from different features - so it stops the
+// process at boot rather than surfacing as a wrong answer later. Same call
+// that http.ServeMux makes for a duplicate route pattern.
 func NewRegistry(executors ...Executor) *Registry {
-	registry := &Registry{
-		executors: executors, definitions: make(map[string]Definition),
-	}
+	registry := &Registry{tools: make(map[string]registered)}
 	for _, executor := range executors {
 		for _, definition := range executor.Definitions() {
-			if definition.Name != "" {
-				registry.definitions[definition.Name] = definition
+			if definition.Name == "" {
+				continue
 			}
+			if _, duplicate := registry.tools[definition.Name]; duplicate {
+				panic("assistanttools: two executors registered the tool " + definition.Name)
+			}
+			registry.tools[definition.Name] = registered{
+				definition: definition, executor: executor,
+			}
+			registry.names = append(registry.names, definition.Name)
 		}
 	}
 	return registry
 }
 
 func (r *Registry) Definitions() []Definition {
-	definitions := make([]Definition, 0, len(r.definitions))
-	for _, executor := range r.executors {
-		for _, definition := range executor.Definitions() {
-			if _, exists := r.definitions[definition.Name]; exists {
-				definitions = append(definitions, definition)
-			}
-		}
+	definitions := make([]Definition, 0, len(r.names))
+	for _, name := range r.names {
+		definitions = append(definitions, r.tools[name].definition)
 	}
 	return definitions
 }
 
 func (r *Registry) Definition(name string) (Definition, bool) {
-	definition, ok := r.definitions[name]
-	return definition, ok
+	tool, ok := r.tools[name]
+	return tool.definition, ok
 }
 
 func (r *Registry) Preview(
@@ -108,12 +122,11 @@ func (r *Registry) Preview(
 	name string,
 	input json.RawMessage,
 ) (Preview, error) {
-	for _, executor := range r.executors {
-		if executorOwns(executor, name) {
-			return executor.Preview(ctx, scope, name, input)
-		}
+	tool, ok := r.tools[name]
+	if !ok {
+		return Preview{}, ErrUnknownTool
 	}
-	return Preview{}, ErrUnknownTool
+	return tool.executor.Preview(ctx, scope, name, input)
 }
 
 func (r *Registry) Execute(
@@ -122,19 +135,9 @@ func (r *Registry) Execute(
 	name string,
 	input json.RawMessage,
 ) (Result, error) {
-	for _, executor := range r.executors {
-		if executorOwns(executor, name) {
-			return executor.Execute(ctx, scope, name, input)
-		}
+	tool, ok := r.tools[name]
+	if !ok {
+		return Result{}, ErrUnknownTool
 	}
-	return Result{}, ErrUnknownTool
-}
-
-func executorOwns(executor Executor, name string) bool {
-	for _, definition := range executor.Definitions() {
-		if definition.Name == name {
-			return true
-		}
-	}
-	return false
+	return tool.executor.Execute(ctx, scope, name, input)
 }
