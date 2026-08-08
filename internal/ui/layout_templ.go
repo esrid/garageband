@@ -438,7 +438,7 @@ func shell(nav Nav, mainWidth string) templ.Component {
 		}
 		if nav.InWorkspace {
 			if activeLocation := ActiveLocationName(ctx); activeLocation != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<a href=\"/locations\" class=\"mb-2 grid min-h-11 content-center rounded-btn border border-base-300 px-3 py-2 text-left hover:bg-base-200\" aria-label=\"Changer de site\"><span class=\"text-[0.65rem] font-medium uppercase tracking-wide opacity-60\">Site actif</span> <span class=\"truncate text-sm font-semibold\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<a href=\"/locations\" class=\"mb-2 grid min-h-11 content-center rounded-box border border-base-300 px-3 py-2 text-left hover:bg-base-200\" aria-label=\"Changer de site\"><span class=\"text-[0.65rem] font-medium uppercase tracking-wide opacity-60\">Site actif</span> <span class=\"truncate text-sm font-semibold\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -475,7 +475,7 @@ func shell(nav Nav, mainWidth string) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if nav.InWorkspace {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<p class=\"px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50\">Exploitation</p><ul class=\"menu w-full p-0\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<ul class=\"menu w-full p-0\"><li class=\"menu-title text-xs uppercase tracking-wide\">Exploitation</li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -491,7 +491,7 @@ func shell(nav Nav, mainWidth string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</ul><p class=\"px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50\">Configuration</p><ul class=\"menu w-full p-0\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</ul><ul class=\"menu w-full p-0\"><li class=\"menu-title text-xs uppercase tracking-wide\">Configuration</li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -511,7 +511,7 @@ func shell(nav Nav, mainWidth string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</ul><p class=\"px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50\">Outils</p><ul class=\"menu w-full p-0\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</ul><ul class=\"menu w-full p-0\"><li class=\"menu-title text-xs uppercase tracking-wide\">Outils</li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

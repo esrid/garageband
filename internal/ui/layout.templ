@@ -159,7 +159,7 @@ templ shell(nav Nav, mainWidth string) {
 				}
 				if nav.InWorkspace {
 					if activeLocation := ActiveLocationName(ctx); activeLocation != "" {
-						<a href="/locations" class="mb-2 grid min-h-11 content-center rounded-btn border border-base-300 px-3 py-2 text-left hover:bg-base-200" aria-label="Changer de site">
+						<a href="/locations" class="mb-2 grid min-h-11 content-center rounded-box border border-base-300 px-3 py-2 text-left hover:bg-base-200" aria-label="Changer de site">
 							<span class="text-[0.65rem] font-medium uppercase tracking-wide opacity-60">Site actif</span>
 							<span class="truncate text-sm font-semibold">{ activeLocation }</span>
 							<span class="text-xs opacity-60">Changer de site</span>
@@ -173,21 +173,21 @@ templ shell(nav Nav, mainWidth string) {
 						@navLink("/", "Tableau de bord", nav.current(SectionDashboard))
 					</ul>
 					if nav.InWorkspace {
-						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Exploitation</p>
 						<ul class="menu w-full p-0">
+							<li class="menu-title text-xs uppercase tracking-wide">Exploitation</li>
 							@navLink("/customers", "Clients", nav.current(SectionCustomers))
 							@navLink("/agenda", "Agenda", nav.current(SectionAgenda))
 							@navLink("/calls", "Appels", nav.current(SectionCalls))
 						</ul>
-						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Configuration</p>
 						<ul class="menu w-full p-0">
+							<li class="menu-title text-xs uppercase tracking-wide">Configuration</li>
 							@navLink("/locations", "Sites", nav.current(SectionLocations))
 							@navLink("/team", "Équipe et accès", nav.current(SectionTeam))
 							@navLink("/agents", "Agents téléphoniques", nav.current(SectionAgents))
 							@navLink("/catalog", "Catalogue", nav.current(SectionCatalog))
 						</ul>
-						<p class="px-3 pb-1 pt-4 text-[0.65rem] font-semibold uppercase tracking-wide opacity-50">Outils</p>
 						<ul class="menu w-full p-0">
+							<li class="menu-title text-xs uppercase tracking-wide">Outils</li>
 							@navLink("/assistant", "Assistant d’atelier", nav.current(SectionAssistant))
 						</ul>
 					}

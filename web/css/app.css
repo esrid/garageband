@@ -33,6 +33,17 @@
   --color-error-content: oklch(32% 0.13 27.518);
 }
 
+/* Second accessibility correction, same rule as the block above. daisyUI paints
+   `menu-title` at 40% of base-content, which lands at 2.55:1 on base-100 -
+   measured in the browser, not estimated. These are the labels that tell a
+   mechanic which part of the app a link belongs to, at 14px, so they need the
+   4.5:1 body-text floor rather than the 3:1 one for large text. Raising the
+   alpha is the whole fix: the hue stays daisyUI's.
+   Ratio after: 6.69:1, measured the same way 2026-08-08. */
+.menu :where(li).menu-title {
+	color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}
+
 /* Unpoly's overlay panel (a custom element, not a daisyUI component) ships
    square corners. --radius-box is the same corner radius daisyUI already
    gives every card/box in this theme (web/static/app.css, pastel theme) -
