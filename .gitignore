@@ -11,3 +11,7 @@ bin/
 
 # test artifacts
 *.out
+
+# paperwork dropped in the working tree: carrier compliance bundles, signed
+# forms. Business documents, often with identity data in them — not code.
+*.pdf
